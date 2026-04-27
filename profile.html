@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <title>FATFIT - Meu Perfil</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="app-page">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-left">
+            <button class="icon-btn" onclick="window.location.href='dashboard.html'" aria-label="Voltar">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h1 class="app-title">Meu Perfil</h1>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Perfil -->
+        <section class="section profile-section">
+            <div class="profile-header">
+                <div class="avatar-container" id="avatarContainer">
+                    <img id="avatarImg" src="https://via.placeholder.com/150" alt="Avatar" class="avatar">
+                    <button class="avatar-upload-btn" id="avatarUploadBtn">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                    <input type="file" id="avatarInput" accept="image/*" hidden>
+                </div>
+                <h2 id="profileName">Usuário</h2>
+                <p id="profileEmail">email@exemplo.com</p>
+            </div>
+
+            <form id="profileForm" class="profile-form">
+                <div class="input-group">
+                    <label for="editName">Nome</label>
+                    <input type="text" id="editName" required maxlength="100">
+                </div>
+                
+                <div class="input-group">
+                    <label for="editPixKey">Chave Pix (opcional)</label>
+                    <input type="text" id="editPixKey" maxlength="100" placeholder="Deixe em branco se não quiser">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </form>
+        </section>
+
+        <!-- Trocar Senha -->
+        <section class="section">
+            <div class="section-header">
+                <h2>Trocar Senha</h2>
+            </div>
+            <form id="changePasswordForm" class="form-card">
+                <div class="input-group">
+                    <label for="currentPassword">Senha Atual</label>
+                    <input type="password" id="currentPassword" required placeholder="Digite sua senha atual">
+                </div>
+                <div class="input-group">
+                    <label for="newPassword">Nova Senha</label>
+                    <input type="password" id="newPassword" required minlength="6" placeholder="Mínimo 6 caracteres">
+                </div>
+                <button type="submit" class="btn btn-secondary btn-block">
+                    <i class="fas fa-key"></i> Trocar Senha
+                </button>
+            </form>
+        </section>
+
+        <!-- Histórico de Vitórias -->
+        <section class="section">
+            <div class="section-header">
+                <h2>Minhas Vitórias</h2>
+            </div>
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalChallenges">0</div>
+                    <div class="stat-label">Desafios</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalWins">0</div>
+                    <div class="stat-label">Vitórias</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalEarnings">R$ 0,00</div>
+                    <div class="stat-label">Ganhos</div>
+                </div>
+            </div>
+
+            <div class="wins-list" id="winsList">
+                <p class="empty-state">Nenhuma vitória ainda</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts na ordem correta -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

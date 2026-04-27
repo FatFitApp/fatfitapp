@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <title>FATFIT - Login</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="auth-page">
+    <div class="auth-container">
+        <!-- Logo -->
+        <div class="auth-logo">
+            <div class="logo-icon">
+                <i class="fas fa-fire"></i>
+            </div>
+            <h1>FATFIT</h1>
+            <p class="logo-subtitle">Transforme seu esforço em conquista</p>
+        </div>
+
+        <!-- Container dos formulários -->
+        <div class="auth-card" id="authCard">
+            <!-- Formulário de Login -->
+            <form id="loginForm" class="auth-form active">
+                <h2>Entrar</h2>
+                
+                <div class="input-group">
+                    <label for="loginEmail">
+                        <i class="fas fa-envelope"></i> E-mail
+                    </label>
+                    <input type="email" id="loginEmail" placeholder="seu@email.com" required autocomplete="email">
+                </div>
+
+                <div class="input-group">
+                    <label for="loginPassword">
+                        <i class="fas fa-lock"></i> Senha
+                    </label>
+                    <div class="password-wrapper">
+                        <input type="password" id="loginPassword" placeholder="Sua senha" required autocomplete="current-password">
+                        <button type="button" class="toggle-password" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+
+                <div class="auth-links">
+                    <button type="button" class="link-btn" onclick="showForm('registerForm')">
+                        Criar conta
+                    </button>
+                    <button type="button" class="link-btn" onclick="showForm('recoverForm')">
+                        Esqueceu a senha?
+                    </button>
+                </div>
+            </form>
+
+            <!-- Formulário de Cadastro -->
+            <form id="registerForm" class="auth-form">
+                <h2>Criar Conta</h2>
+                
+                <div class="input-group">
+                    <label for="registerName">
+                        <i class="fas fa-user"></i> Nome
+                    </label>
+                    <input type="text" id="registerName" placeholder="Seu nome" required autocomplete="name">
+                </div>
+
+                <div class="input-group">
+                    <label for="registerEmail">
+                        <i class="fas fa-envelope"></i> E-mail
+                    </label>
+                    <input type="email" id="registerEmail" placeholder="seu@email.com" required autocomplete="email">
+                </div>
+
+                <div class="input-group">
+                    <label for="registerPassword">
+                        <i class="fas fa-lock"></i> Senha
+                    </label>
+                    <div class="password-wrapper">
+                        <input type="password" id="registerPassword" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password">
+                        <button type="button" class="toggle-password" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-user-plus"></i> Cadastrar
+                </button>
+
+                <div class="auth-links">
+                    <button type="button" class="link-btn" onclick="showForm('loginForm')">
+                        Já tenho conta
+                    </button>
+                </div>
+            </form>
+
+            <!-- Formulário de Recuperação de Senha -->
+            <form id="recoverForm" class="auth-form">
+                <h2>Recuperar Senha</h2>
+                <p class="form-description">Enviaremos um link para seu e-mail</p>
+                
+                <div class="input-group">
+                    <label for="recoverEmail">
+                        <i class="fas fa-envelope"></i> E-mail
+                    </label>
+                    <input type="email" id="recoverEmail" placeholder="seu@email.com" required autocomplete="email">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-paper-plane"></i> Enviar link
+                </button>
+
+                <div class="auth-links">
+                    <button type="button" class="link-btn" onclick="showForm('loginForm')">
+                        Voltar ao login
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Toast container -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <!-- Scripts na ordem correta -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <title>FATFIT - Registrar Atividade</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div class="header-left">
+            <button class="icon-btn" onclick="window.location.href='dashboard.html'" aria-label="Voltar">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h1 class="app-title">Registrar Atividade</h1>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="section">
+            <div class="camera-container" id="cameraContainer">
+                <video id="cameraPreview" autoplay playsinline></video>
+                <img id="photoResult" style="display:none;" alt="Foto capturada">
+                <canvas id="photoCanvas" hidden></canvas>
+                <div class="camera-overlay">
+                    <button class="camera-btn" id="captureBtn">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                    <button class="camera-btn" id="retakeBtn" style="display:none;">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="card">
+                <div class="flex-between mb-1">
+                    <span>📍 Localização</span>
+                    <span id="locationStatus">Não capturada</span>
+                </div>
+                <div class="flex-between">
+                    <button class="btn btn-outline btn-sm" id="getLocationBtn">
+                        <i class="fas fa-map-marker-alt"></i> Capturar
+                    </button>
+                    <button class="btn btn-text btn-sm" id="skipLocationBtn">
+                        Pular
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <form id="activityForm">
+                <div class="input-group">
+                    <label for="activityComment">Comentário (opcional)</label>
+                    <textarea id="activityComment" rows="3" placeholder="Como foi seu treino hoje?" maxlength="500"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-check-circle"></i> Registrar Atividade
+                </button>
+            </form>
+        </section>
+    </main>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts na ordem correta -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
