@@ -4,21 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>FATFIT - Registrar Atividade</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="app-page">
     <header class="app-header">
-        <div class="header-left">
-            <button class="icon-btn" onclick="window.location.href='dashboard.html'" aria-label="Voltar">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <h1 class="app-title">Registrar Atividade</h1>
-        </div>
+        <button class="icon-btn" onclick="history.back()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="app-title">Registrar Atividade</h1>
+        <div></div>
     </header>
 
     <main class="main-content">
+        <!-- Grupos selecionados -->
+        <section class="section">
+            <div class="section-header">
+                <h2>📋 Grupos</h2>
+            </div>
+            <div id="selectedGroups" class="mb-2"></div>
+            <p class="text-xs text-muted" id="registerInfo"></p>
+        </section>
+
+        <!-- Câmera -->
         <section class="section">
             <div class="camera-container" id="cameraContainer">
                 <video id="cameraPreview" autoplay playsinline></video>
@@ -35,6 +45,7 @@
             </div>
         </section>
 
+        <!-- Localização -->
         <section class="section">
             <div class="card">
                 <div class="flex-between mb-1">
@@ -52,23 +63,24 @@
             </div>
         </section>
 
+        <!-- Comentário e envio -->
         <section class="section">
             <form id="activityForm">
                 <div class="input-group">
-                    <label for="activityComment">Comentário (opcional)</label>
+                    <label for="activityComment">💬 Comentário (opcional)</label>
                     <textarea id="activityComment" rows="3" placeholder="Como foi seu treino hoje?" maxlength="500"></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">
+                <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
                     <i class="fas fa-check-circle"></i> Registrar Atividade
                 </button>
+                <p class="text-xs text-muted text-center mt-1" id="submitInfo"></p>
             </form>
         </section>
     </main>
 
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Scripts na ordem correta -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
 </body>

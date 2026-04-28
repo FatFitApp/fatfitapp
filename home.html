@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>FATFIT</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="app-page">
+    <!-- Header -->
+    <header class="app-header">
+        <button class="icon-btn" id="menuBtn">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="app-title" id="headerGroupName">FATFIT</h1>
+        <button class="icon-btn" id="headerAvatar">
+            <img id="headerAvatarImg" src="https://via.placeholder.com/32" alt="Perfil" class="header-avatar">
+        </button>
+    </header>
+
+    <!-- Menu Lateral -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-profile" id="sidebarProfile">
+            <img id="sidebarAvatar" src="https://via.placeholder.com/48" alt="Avatar" class="sidebar-avatar">
+            <div class="sidebar-user-info">
+                <strong id="sidebarName">Usuário</strong>
+                <span class="text-xs text-muted" id="sidebarEmail">email</span>
+            </div>
+        </div>
+        
+        <a href="profile.html" class="sidebar-item">
+            <i class="fas fa-user"></i> Meu Perfil
+        </a>
+        
+        <div class="sidebar-section-title">MEUS GRUPOS</div>
+        <div class="sidebar-groups" id="sidebarGroups">
+            <div class="loading-state" style="padding:10px;">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+        </div>
+        
+        <button class="sidebar-item" id="createGroupSidebarBtn">
+            <i class="fas fa-plus-circle"></i> Criar Novo Grupo
+        </button>
+        
+        <button class="sidebar-item" onclick="window.location.href='search.html'">
+            <i class="fas fa-search"></i> Buscar Grupos
+        </button>
+        
+        <button class="sidebar-item sidebar-logout" id="logoutBtn">
+            <i class="fas fa-sign-out-alt"></i> Sair
+        </button>
+    </nav>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content">
+        <!-- Estado: Nenhum grupo selecionado -->
+        <div id="noGroupState" class="empty-state" style="display:none;">
+            <i class="fas fa-users fa-3x"></i>
+            <h3>Nenhum grupo selecionado</h3>
+            <p>Abra o menu ☰ e escolha um grupo</p>
+        </div>
+
+        <!-- Aba: Timeline -->
+        <div id="tabTimeline" class="tab-content active">
+            <div class="timeline" id="timelineFeed">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Carregando atividades...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aba: Detalhes -->
+        <div id="tabDetalhes" class="tab-content">
+            <div id="detalhesContent"></div>
+        </div>
+
+        <!-- Aba: Classificação -->
+        <div id="tabRanking" class="tab-content">
+            <div id="rankingContent"></div>
+        </div>
+
+        <!-- Aba: Chat -->
+        <div id="tabChat" class="tab-content">
+            <div id="chatContent">
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Carregando mensagens...</p>
+                        </div>
+                    </div>
+                    <form class="chat-input-form" id="chatForm">
+                        <input type="text" id="chatInput" placeholder="Digite sua mensagem..." autocomplete="off">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Navegação Inferior -->
+    <nav class="bottom-nav" id="bottomNav" style="display:none;">
+        <button class="bottom-nav-item active" data-tab="tabTimeline">
+            <i class="fas fa-home"></i>
+            <span>Timeline</span>
+        </button>
+        <button class="bottom-nav-item" data-tab="tabDetalhes">
+            <i class="fas fa-info-circle"></i>
+            <span>Detalhes</span>
+        </button>
+        <button class="bottom-nav-item" data-tab="tabRanking">
+            <i class="fas fa-trophy"></i>
+            <span>Ranking</span>
+        </button>
+        <button class="bottom-nav-item" data-tab="tabChat">
+            <i class="fas fa-comments"></i>
+            <span>Chat</span>
+        </button>
+    </nav>
+
+    <!-- Modal Criar Grupo -->
+    <div class="modal" id="createGroupModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Criar Novo Grupo</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="createGroupForm">
+                <div class="input-group">
+                    <label>Nome do Grupo *</label>
+                    <input type="text" id="groupName" required maxlength="100" placeholder="Ex: Emagrecimento Time A">
+                </div>
+                <div class="input-group">
+                    <label>Descrição</label>
+                    <textarea id="groupDescription" rows="3" maxlength="500" placeholder="Descreva o propósito do grupo..."></textarea>
+                </div>
+                <div class="input-group">
+                    <label>Limite de Participantes *</label>
+                    <input type="number" id="groupMaxMembers" required min="2" max="100" value="10">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Criar Grupo</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+
+
+    <!-- FAB - Botão Flutuante de Registro -->
+    <button class="fab" id="fabRegister" title="Registrar Atividade">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Modal de Seleção de Grupos para Registro -->
+    <div class="modal" id="registerSelectModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Selecionar Grupos</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-sm text-muted mb-2">Selecione os grupos para registrar atividade:</p>
+                <div id="groupsChecklist"></div>
+                <button class="btn btn-primary btn-block mt-2" id="confirmRegisterBtn">
+                    <i class="fas fa-camera"></i> Ir para Registro
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

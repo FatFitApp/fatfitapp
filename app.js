@@ -1,20 +1,11 @@
 // ============================================
-// FATFIT - Aplicação Principal
+// FATFIT - Aplicação Principal v2.0
 // ============================================
 
-// Referência ao cliente Supabase
 const db = window.db;
-
-// Função para obter o db (caso necessário)
-function getDb() {
-    return window.db;
-}
-
-// Verifica se o db está disponível
-if (!db) {
-    console.error('ERRO: Supabase não foi inicializado!');
-    alert('Erro de conexão. Recarregue a página.');
-}
+let currentGroup = null;
+let currentUserRole = null;
+let chatSubscription = null;
 
 // ============================================
 // UTILITÁRIOS
@@ -23,22 +14,12 @@ if (!db) {
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
-    
-    const icons = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-    
+    const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> ${message}`;
     container.appendChild(toast);
-    
-    setTimeout(() => {
-        if (toast.parentElement) toast.remove();
-    }, 4000);
+    setTimeout(() => { if (toast.parentElement) toast.remove(); }, 4000);
 }
 
 function formatCurrency(value) {
@@ -49,6 +30,12 @@ function formatDate(dateStr) {
     if (!dateStr) return '';
     const d = dateStr.split('T')[0].split('-');
     return d[2] + '/' + d[1] + '/' + d[0];
+}
+
+function formatTime(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function getToday() {
@@ -63,44 +50,36 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function showForm(formId) {
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    document.getElementById(formId)?.classList.add('active');
+}
+
 // ============================================
 // AUTENTICAÇÃO
 // ============================================
 
 async function checkAuth() {
-    try {
-        const { data: { session } } = await db.auth.getSession();
-        return session;
-    } catch (e) {
-        console.error('Erro auth:', e);
-        return null;
-    }
+    if (!db) return null;
+    try { const { data } = await db.auth.getSession(); return data.session; } 
+    catch (e) { return null; }
 }
 
 async function requireAuth() {
     const session = await checkAuth();
-    if (!session) {
-        window.location.href = 'index.html';
-        return null;
-    }
+    if (!session) { window.location.href = 'index.html'; return null; }
     return session;
 }
 
 async function getCurrentUser() {
-    try {
-        const { data: { user } } = await db.auth.getUser();
-        return user;
-    } catch (e) {
-        return null;
-    }
+    if (!db) return null;
+    try { const { data } = await db.auth.getUser(); return data.user; } 
+    catch (e) { return null; }
 }
 
-// ============================================
-// FUNÇÃO GLOBAL showForm
-// ============================================
-function showForm(formId) {
-    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-    document.getElementById(formId).classList.add('active');
+async function getProfile(userId) {
+    const { data } = await db.from('profiles').select('*').eq('id', userId).single();
+    return data;
 }
 
 // ============================================
@@ -109,577 +88,746 @@ function showForm(formId) {
 if (document.querySelector('.auth-page')) {
     document.addEventListener('DOMContentLoaded', async () => {
         const session = await checkAuth();
-        if (session) {
-            window.location.href = 'dashboard.html';
-            return;
-        }
+        if (session) { window.location.href = 'home.html'; return; }
         setupAuthForms();
     });
 }
 
 function setupAuthForms() {
-    // Toggle password
     document.querySelectorAll('.toggle-password').forEach(btn => {
         btn.addEventListener('click', () => {
-            const input = btn.closest('.password-wrapper').querySelector('input');
+            const wrapper = btn.closest('.password-wrapper');
+            if (!wrapper) return;
+            const input = wrapper.querySelector('input');
             const icon = btn.querySelector('i');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
-            }
+            if (!input || !icon) return;
+            if (input.type === 'password') { input.type = 'text'; icon.classList.replace('fa-eye', 'fa-eye-slash'); }
+            else { input.type = 'password'; icon.classList.replace('fa-eye-slash', 'fa-eye'); }
         });
     });
 
-    // Login
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
-        
         const { error } = await db.auth.signInWithPassword({ email, password });
-        
         if (error) {
-            const msg = error.message.includes('Invalid login') ? 'E-mail ou senha incorretos' : error.message;
-            showToast(msg, 'error');
+            showToast(error.message.includes('Invalid login') ? 'E-mail ou senha incorretos' : error.message, 'error');
         } else {
             showToast('Login realizado!', 'success');
-            setTimeout(() => window.location.href = 'dashboard.html', 500);
+            setTimeout(() => window.location.href = 'home.html', 500);
         }
     });
 
-    // Cadastro
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    document.getElementById('registerForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('registerName').value.trim();
         const email = document.getElementById('registerEmail').value.trim();
         const password = document.getElementById('registerPassword').value;
-        
-        if (password.length < 6) {
-            showToast('Senha deve ter no mínimo 6 caracteres', 'error');
-            return;
-        }
-        
-        const { error } = await db.auth.signUp({
-            email,
-            password,
-            options: { data: { name } }
-        });
-        
-        if (error) {
-            showToast(error.message, 'error');
-        } else {
-            showToast('Conta criada! Agora faça login.', 'success');
-            setTimeout(() => showForm('loginForm'), 2000);
-        }
+        if (password.length < 6) { showToast('Senha deve ter no mínimo 6 caracteres', 'error'); return; }
+        const { error } = await db.auth.signUp({ email, password, options: { data: { name } } });
+        if (error) { showToast(error.message, 'error'); }
+        else { showToast('Conta criada! Faça login.', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
     });
 
-    // Recuperar senha
-    document.getElementById('recoverForm').addEventListener('submit', async (e) => {
+    document.getElementById('recoverForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('recoverEmail').value.trim();
-        
-        const { error } = await db.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin + '/index.html'
-        });
-        
-        if (error) {
-            showToast(error.message, 'error');
-        } else {
-            showToast('Email de recuperação enviado!', 'success');
-            setTimeout(() => showForm('loginForm'), 2000);
-        }
+        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/index.html' });
+        if (error) { showToast(error.message, 'error'); }
+        else { showToast('Email de recuperação enviado!', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
     });
 }
 
 // ============================================
-// PÁGINA: dashboard.html
+// PÁGINA: home.html
 // ============================================
-if (window.location.pathname.includes('dashboard')) {
+if (window.location.pathname.includes('home')) {
     document.addEventListener('DOMContentLoaded', async () => {
         const session = await requireAuth();
         if (!session) return;
-        setupDashboard(session);
+        await setupHome(session);
     });
 }
 
-async function setupDashboard(session) {
+async function setupHome(session) {
+    const user = session.user;
+    const profile = await getProfile(user.id);
+    
+    // Atualiza header
+    document.getElementById('headerAvatarImg').src = profile?.avatar_url || 'https://via.placeholder.com/32';
+    document.getElementById('headerAvatar').addEventListener('click', () => window.location.href = 'profile.html');
+    
+    // Atualiza sidebar
+    document.getElementById('sidebarAvatar').src = profile?.avatar_url || 'https://via.placeholder.com/48';
+    document.getElementById('sidebarName').textContent = profile?.name || 'Usuário';
+    document.getElementById('sidebarEmail').textContent = profile?.email || user.email;
+    
+    // Menu lateral
     setupSidebar();
     
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
+    // Logout
+    document.getElementById('logoutBtn')?.addEventListener('click', async () => {
         await db.auth.signOut();
         window.location.href = 'index.html';
     });
     
-    await loadMyGroups();
-    
-    document.getElementById('createGroupBtn').addEventListener('click', () => {
+    // Criar grupo (sidebar)
+    document.getElementById('createGroupSidebarBtn')?.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sidebarOverlay').classList.remove('active');
         document.getElementById('createGroupModal').classList.add('open');
     });
     
-    document.getElementById('createGroupForm').addEventListener('submit', createGroup);
+    document.getElementById('createGroupForm')?.addEventListener('submit', createGroup);
     
+    // Fechar modal
     document.querySelectorAll('.modal-close').forEach(btn => {
         btn.addEventListener('click', () => btn.closest('.modal').classList.remove('open'));
     });
     
     document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('open');
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+    });
+    
+    // Bottom navigation
+    setupBottomNav();
+    
+    // FAB Button
+    const fab = document.getElementById('fabRegister');
+    fab?.addEventListener('click', openRegisterModal);
+    document.getElementById('confirmRegisterBtn')?.addEventListener('click', goToRegister);
+    
+    // Fechar modal de seleção
+    document.querySelectorAll('#registerSelectModal .modal-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('registerSelectModal').classList.remove('open');
         });
     });
     
-    document.getElementById('joinGroupBtn').addEventListener('click', joinByInviteCode);
-    document.getElementById('searchGroupBtn').addEventListener('click', searchGroups);
-    document.getElementById('clearSearchBtn').addEventListener('click', () => {
-        document.getElementById('searchResultsSection').style.display = 'none';
-        document.getElementById('searchGroupInput').value = '';
-    });
+    // Carrega grupos no menu lateral
+    await loadSidebarGroups(user.id);
+    
+    // Tenta carregar último grupo acessado
+    const lastGroupId = localStorage.getItem('fatfit_last_group');
+    if (lastGroupId) {
+        const { data: group } = await db.from('groups').select('*').eq('id', lastGroupId).single();
+        if (group) {
+            const { data: membership } = await db.from('group_members').select('role').eq('group_id', group.id).eq('user_id', user.id).single();
+            if (membership) {
+                await selectGroup(group, membership.role);
+                return;
+            }
+        }
+    }
+    
+    // Se não tem grupo, mostra estado vazio
+    document.getElementById('noGroupState').style.display = 'block';
+    document.getElementById('bottomNav').style.display = 'none';
+    document.getElementById('fabRegister').style.display = 'none';
+    document.getElementById('headerGroupName').textContent = 'FATFIT';
 }
 
 function setupSidebar() {
     const sidebar = document.getElementById('sidebar');
-    const overlay = document.createElement('div');
-    overlay.className = 'sidebar-overlay';
-    document.body.appendChild(overlay);
+    const overlay = document.getElementById('sidebarOverlay');
     
-    document.getElementById('menuBtn').addEventListener('click', () => {
+    document.getElementById('menuBtn')?.addEventListener('click', () => {
         sidebar.classList.add('open');
         overlay.classList.add('active');
     });
     
-    document.getElementById('closeSidebar').addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-    });
-    
-    overlay.addEventListener('click', () => {
+    overlay?.addEventListener('click', () => {
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
     });
 }
 
-async function loadMyGroups() {
-    const db = getDb();
-    const grid = document.getElementById('myGroupsGrid');
-    if (!grid) return;
-    
-    const user = await getCurrentUser();
-    if (!user) {
-        grid.innerHTML = '<p class="empty-state">Faça login novamente</p>';
-        return;
+function setupBottomNav() {
+    document.querySelectorAll('.bottom-nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.bottom-nav-item').forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            item.classList.add('active');
+            const tabId = item.dataset.tab;
+            document.getElementById(tabId)?.classList.add('active');
+            
+            if (tabId === 'tabDetalhes') loadDetalhes();
+            if (tabId === 'tabRanking') loadRanking();
+            if (tabId === 'tabChat') loadChat();
+        });
+    });
+}
+
+function toggleFAB() {
+    const fab = document.getElementById('fabRegister');
+    if (fab) {
+        fab.style.display = currentGroup ? 'flex' : 'none';
     }
+}
+
+async function loadSidebarGroups(userId) {
+    const container = document.getElementById('sidebarGroups');
+    if (!container) return;
     
-    console.log('Carregando grupos para:', user.id);
-    
-    // PRIMEIRO: Busca os group_ids do usuário
-    const { data: memberships, error: memberError } = await db
-        .from('group_members')
-        .select('group_id, role')
-        .eq('user_id', user.id);
-    
-    if (memberError) {
-        console.error('Erro ao buscar membros:', memberError);
-        grid.innerHTML = '<p class="empty-state">Erro ao carregar grupos</p>';
-        return;
-    }
-    
-    console.log('Membros encontrados:', memberships);
+    const { data: memberships } = await db.from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', userId);
     
     if (!memberships || memberships.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-users fa-2x"></i>
-                <p>Você não está em nenhum grupo</p>
-                <button class="btn btn-primary btn-sm mt-1" id="createGroupBtn2">
-                    <i class="fas fa-plus"></i> Criar Grupo
-                </button>
-            </div>
-        `;
-        document.getElementById('createGroupBtn2')?.addEventListener('click', () => {
-            document.getElementById('createGroupModal').classList.add('open');
-        });
+        container.innerHTML = '<p class="text-xs text-muted" style="padding:8px 16px;">Nenhum grupo</p>';
         return;
     }
     
-    grid.innerHTML = '';
-    
-    // SEGUNDO: Para cada grupo, busca os detalhes separadamente
+    container.innerHTML = '';
     for (const m of memberships) {
-        try {
-            // Busca detalhes do grupo
-            const { data: group, error: groupError } = await db
-                .from('groups')
-                .select('*')
-                .eq('id', m.group_id)
-                .single();
-            
-            if (groupError || !group) {
-                console.error('Erro ao buscar grupo:', m.group_id, groupError);
-                continue;
-            }
-            
-            // Conta membros
-            const { count: memberCount } = await db
-                .from('group_members')
-                .select('*', { count: 'exact', head: true })
-                .eq('group_id', group.id);
-            
-            // Busca desafio ativo
-            const { data: activeChallenge } = await db
-                .from('challenges')
-                .select('id, name, status')
-                .eq('group_id', group.id)
-                .in('status', ['pending', 'active'])
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            
-            // Cria o card
-            const card = document.createElement('div');
-            card.className = 'card group-card';
-            card.style.cursor = 'pointer';
-            card.innerHTML = `
-                <div class="flex-between mb-1">
-                    <h3>${escapeHtml(group.name)}</h3>
-                    ${m.role === 'admin' ? '<span class="badge badge-info">Admin</span>' : '<span class="badge badge-success">Membro</span>'}
-                </div>
-                <p class="text-sm text-muted mb-1">${escapeHtml(group.description || 'Sem descrição')}</p>
-                <div class="group-meta">
-                    <span><i class="fas fa-users"></i> ${memberCount || 0}/${group.max_members}</span>
-                    <span><i class="fas fa-key"></i> ${group.invite_code}</span>
-                    ${activeChallenge ? '<span class="badge badge-warning">Desafio ativo</span>' : '<span class="badge badge-secondary">Sem desafio</span>'}
-                </div>
-            `;
-            
-            card.addEventListener('click', () => {
-                viewGroup(group, m.role);
-            });
-            
-            grid.appendChild(card);
-            
-        } catch (err) {
-            console.error('Erro ao processar grupo:', err);
-        }
+        const g = m.groups;
+        if (!g) continue;
+        const btn = document.createElement('button');
+        btn.className = 'sidebar-group-item';
+        if (currentGroup?.id === g.id) btn.classList.add('active');
+        btn.innerHTML = `<i class="fas fa-circle" style="font-size:0.4rem;"></i> ${escapeHtml(g.name)}`;
+        btn.addEventListener('click', async () => {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
+            const { data: membership } = await db.from('group_members').select('role').eq('group_id', g.id).eq('user_id', userId).single();
+            await selectGroup(g, membership?.role || 'member');
+        });
+        container.appendChild(btn);
+    }
+}
+
+async function selectGroup(group, role) {
+    currentGroup = group;
+    currentUserRole = role;
+    
+    localStorage.setItem('fatfit_last_group', group.id);
+    document.getElementById('headerGroupName').textContent = group.name;
+    document.getElementById('noGroupState').style.display = 'none';
+    document.getElementById('bottomNav').style.display = 'flex';
+    toggleFAB();
+    
+    // Ativa timeline por padrão
+    document.querySelectorAll('.bottom-nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector('[data-tab="tabTimeline"]')?.classList.add('active');
+    document.getElementById('tabTimeline')?.classList.add('active');
+    
+    // Atualiza sidebar
+    const user = await getCurrentUser();
+    await loadSidebarGroups(user.id);
+    
+    // Carrega timeline
+    await loadTimeline();
+}
+
+async function loadTimeline() {
+    const feed = document.getElementById('timelineFeed');
+    if (!feed || !currentGroup) return;
+    
+    feed.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Carregando atividades...</p></div>';
+    
+    const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', currentGroup.id);
+    
+    if (!challengeIds || challengeIds.length === 0) {
+        feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhum desafio no grupo</p></div>';
+        return;
     }
     
-    console.log('Grupos carregados!');
+    const { data: activities, error } = await db.from('daily_activities')
+        .select('*, profiles:user_id(name, avatar_url), challenges:challenge_id(name)')
+        .in('challenge_id', challengeIds.map(c => c.id))
+        .order('created_at', { ascending: false })
+        .limit(50);
+    
+    if (error || !activities || activities.length === 0) {
+        feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhuma atividade ainda no grupo</p><p class="text-sm text-muted">As atividades dos desafios aparecerão aqui</p></div>';
+        return;
+    }
+    
+    feed.innerHTML = '';
+    for (const a of activities) {
+        const item = document.createElement('div');
+        item.className = 'timeline-item';
+        item.innerHTML = `
+            <div class="timeline-header">
+                <img src="${a.profiles?.avatar_url || 'https://via.placeholder.com/40'}" class="timeline-avatar">
+                <div class="timeline-user">
+                    <div class="timeline-name">${escapeHtml(a.profiles?.name || 'Usuário')}</div>
+                    <div class="timeline-date">📅 ${formatDate(a.activity_date)} • ${a.challenges?.name || 'Desafio'}</div>
+                </div>
+                <span class="timeline-points">+1 pt</span>
+            </div>
+            <img src="${a.photo_url}" class="timeline-photo" onclick="window.open('${a.photo_url}')" loading="lazy">
+            ${a.comment ? `<div class="timeline-body"><p class="timeline-comment">${escapeHtml(a.comment)}</p></div>` : ''}
+            ${a.location ? `<div class="timeline-body"><p class="timeline-location"><i class="fas fa-map-marker-alt"></i> Localização registrada</p></div>` : ''}
+        `;
+        feed.appendChild(item);
+    }
 }
-async function createGroup(e) {
-    e.preventDefault();
-    const db = getDb();
+
+async function loadDetalhes() {
+    const container = document.getElementById('detalhesContent');
+    if (!container || !currentGroup) return;
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
     const user = await getCurrentUser();
     
-    if (!user) {
-        showToast('Erro: usuário não encontrado', 'error');
+    const { data: members } = await db.from('group_members')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('group_id', currentGroup.id);
+    
+    const { data: activeChallenge } = await db.from('challenges')
+        .select('*').eq('group_id', currentGroup.id)
+        .in('status', ['pending', 'active']).maybeSingle();
+    
+    let isParticipant = false;
+    if (activeChallenge) {
+        const { data: cp } = await db.from('challenge_participants')
+            .select('*').eq('challenge_id', activeChallenge.id).eq('user_id', user.id).maybeSingle();
+        isParticipant = !!cp;
+    }
+    
+    const { data: pastChallenges } = await db.from('challenges')
+        .select('*').eq('group_id', currentGroup.id).eq('status', 'finished')
+        .order('end_date', { ascending: false });
+    
+    let html = `
+        <div class="group-detail-card">
+            <h3>📋 ${escapeHtml(currentGroup.name)}</h3>
+            <p class="text-sm text-muted">${escapeHtml(currentGroup.description || 'Sem descrição')}</p>
+            <div class="group-code">${currentGroup.invite_code}</div>
+            <p class="text-sm"><i class="fas fa-users"></i> ${members?.length || 0}/${currentGroup.max_members} membros</p>
+        </div>
+        
+        <div class="group-detail-card">
+            <h3>👥 Membros</h3>
+            <div>
+                ${members?.map(m => `
+                    <span class="member-chip">
+                        <img src="${m.profiles?.avatar_url || 'https://via.placeholder.com/24'}" alt="">
+                        ${escapeHtml(m.profiles?.name || 'Usuário')}
+                        ${m.role === 'admin' ? '<span class="badge badge-info">Admin</span>' : ''}
+                    </span>
+                `).join('') || 'Nenhum membro'}
+            </div>
+        </div>
+    `;
+    
+    if (activeChallenge) {
+        html += `
+            <div class="challenge-card-mini">
+                <h3>🎯 Desafio Atual: ${escapeHtml(activeChallenge.name || 'Desafio')}</h3>
+                <p>📅 ${formatDate(activeChallenge.start_date)} → ${formatDate(activeChallenge.end_date)}</p>
+                <p>💰 R$${activeChallenge.amount_per_person}/pessoa | Total: R$${activeChallenge.total_prize}</p>
+                <p>${escapeHtml(activeChallenge.description || '')}</p>
+                <span class="badge">${activeChallenge.status === 'active' ? 'Em andamento' : 'Aguardando'}</span>
+                <div class="mt-1">
+                    ${activeChallenge.status === 'pending' && !isParticipant && getToday() < activeChallenge.start_date ? 
+                        `<button class="btn btn-primary btn-block btn-sm confirm-participation-btn" data-id="${activeChallenge.id}">✅ Confirmar Participação</button>` : ''}
+                    ${activeChallenge.status === 'active' && isParticipant ? 
+                        `<a href="activity.html?challenge=${activeChallenge.id}" class="btn btn-secondary btn-block btn-sm">📸 Registrar Atividade</a>` : ''}
+                </div>
+            </div>
+        `;
+    } else if (currentUserRole === 'admin') {
+        html += `
+            <div class="group-detail-card">
+                <h3>Criar Desafio</h3>
+                <form id="createChallengeForm">
+                    <div class="input-group"><label>Nome</label><input type="text" id="challengeName" placeholder="Ex: Desafio de Verão"></div>
+                    <div class="input-group"><label>Data Início *</label><input type="date" id="challengeStartDate" required min="${getToday()}"></div>
+                    <div class="input-group"><label>Data Fim *</label><input type="date" id="challengeEndDate" required min="${getToday()}"></div>
+                    <div class="input-group"><label>Valor por Pessoa (R$) *</label><input type="number" id="challengeAmount" required min="0.01" step="0.01"></div>
+                    <div class="input-group"><label>Descrição</label><textarea id="challengeDescription" rows="2"></textarea></div>
+                    <button type="submit" class="btn btn-primary btn-block">Criar Desafio</button>
+                </form>
+            </div>
+        `;
+    }
+    
+    if (pastChallenges?.length > 0) {
+        html += `<div class="group-detail-card"><h3>📜 Histórico</h3>`;
+        for (const c of pastChallenges) {
+            const { data: winners } = await db.from('challenge_winners').select('*, profiles:user_id(name)').eq('challenge_id', c.id);
+            html += `<div class="mb-1"><strong>${escapeHtml(c.name || 'Desafio')}</strong><br>
+                <span class="text-sm">📅 ${formatDate(c.start_date)} → ${formatDate(c.end_date)} | 💰 ${formatCurrency(c.total_prize)}</span><br>
+                ${winners?.length > 0 ? '<span class="text-sm">🏆 ' + winners.map(w => escapeHtml(w.profiles?.name || '') + ' (' + formatCurrency(w.prize_share) + ')').join(', ') + '</span>' : ''}
+            </div>`;
+        }
+        html += '</div>';
+    }
+    
+    container.innerHTML = html;
+    
+    document.querySelectorAll('.confirm-participation-btn').forEach(b => b.addEventListener('click', async () => {
+        await db.from('challenge_participants').insert({ challenge_id: b.dataset.id, user_id: user.id });
+        showToast('Participação confirmada!', 'success');
+        loadDetalhes();
+    }));
+    
+    document.getElementById('createChallengeForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('challengeName').value.trim() || 'Desafio';
+        const start = document.getElementById('challengeStartDate').value;
+        const end = document.getElementById('challengeEndDate').value;
+        const amount = parseFloat(document.getElementById('challengeAmount').value);
+        const desc = document.getElementById('challengeDescription').value.trim();
+        
+        if (!start || !end || end < start) { showToast('Datas inválidas', 'error'); return; }
+        if (!amount || amount <= 0) { showToast('Valor inválido', 'error'); return; }
+        
+        const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', currentGroup.id);
+        
+        const { error } = await db.from('challenges').insert({
+            group_id: currentGroup.id, name, start_date: start, end_date: end,
+            amount_per_person: amount, total_prize: amount * (count || 1),
+            description: desc, status: 'pending'
+        });
+        
+        if (error) { showToast('Erro: ' + error.message, 'error'); }
+        else { showToast('Desafio criado!', 'success'); loadDetalhes(); }
+    });
+}
+
+async function loadRanking() {
+    const container = document.getElementById('rankingContent');
+    if (!container || !currentGroup) return;
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
+    const user = await getCurrentUser();
+    
+    const { data: activeChallenge } = await db.from('challenges')
+        .select('*').eq('group_id', currentGroup.id)
+        .in('status', ['pending', 'active']).maybeSingle();
+    
+    if (!activeChallenge) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-trophy"></i><p>Nenhum desafio ativo</p></div>';
         return;
     }
     
+    const { data: participants } = await db.from('challenge_participants')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('challenge_id', activeChallenge.id)
+        .order('points', { ascending: false });
+    
+    if (!participants || participants.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>Nenhum participante ainda</p></div>';
+        return;
+    }
+    
+    const maxPoints = Math.max(...participants.map(p => p.points), 1);
+    
+    let html = `
+        <div class="ranking-header">
+            <h3>🏆 ${escapeHtml(activeChallenge.name || 'Desafio')}</h3>
+            <p class="text-sm">📅 ${formatDate(activeChallenge.start_date)} → ${formatDate(activeChallenge.end_date)}</p>
+            <p class="text-sm">💰 Prêmio total: ${formatCurrency(activeChallenge.total_prize)}</p>
+        </div>
+        <div class="ranking-list">
+    `;
+    
+    participants.forEach((p, i) => {
+        const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+        const isMe = p.user_id === user.id;
+        html += `
+            <div class="ranking-item" style="${isMe ? 'border: 2px solid var(--primary);' : ''}">
+                <div class="ranking-pos ${posClass}">${i + 1}</div>
+                <img src="${p.profiles?.avatar_url || 'https://via.placeholder.com/40'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+                <div class="ranking-info">
+                    <div class="ranking-name">${escapeHtml(p.profiles?.name || 'Usuário')} ${isMe ? '(você)' : ''}</div>
+                    <div class="ranking-bar"><div class="ranking-bar-fill" style="width:${(p.points / maxPoints) * 100}%"></div></div>
+                </div>
+                <div class="ranking-points">${p.points} pts</div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+async function loadChat() {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer || !currentGroup) return;
+    
+    messagesContainer.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
+    const user = await getCurrentUser();
+    
+    const { data: messages } = await db.from('messages')
+        .select('*, profiles:user_id(name)')
+        .eq('group_id', currentGroup.id)
+        .order('created_at', { ascending: true })
+        .limit(100);
+    
+    if (chatSubscription) {
+        await db.removeChannel(chatSubscription);
+    }
+    
+    chatSubscription = db.channel('chat-' + currentGroup.id)
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: 'group_id=eq.' + currentGroup.id
+        }, (payload) => {
+            appendMessage(payload.new, user.id);
+        })
+        .subscribe();
+    
+    messagesContainer.innerHTML = '';
+    if (messages && messages.length > 0) {
+        for (const msg of messages) {
+            appendMessage(msg, user.id);
+        }
+    } else {
+        messagesContainer.innerHTML = '<div class="empty-state" style="padding:20px;"><i class="fas fa-comments"></i><p>Nenhuma mensagem ainda</p></div>';
+    }
+    
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    document.getElementById('chatForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        if (!message) return;
+        
+        const { error } = await db.from('messages').insert({
+            group_id: currentGroup.id,
+            user_id: user.id,
+            message: message
+        });
+        
+        if (error) { showToast('Erro ao enviar', 'error'); }
+        else { input.value = ''; }
+    });
+}
+
+function appendMessage(msg, currentUserId) {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer) return;
+    
+    const isMine = msg.user_id === currentUserId;
+    const div = document.createElement('div');
+    div.className = `chat-message ${isMine ? 'mine' : 'other'}`;
+    div.innerHTML = `
+        ${!isMine ? `<div class="chat-message-sender">${escapeHtml(msg.profiles?.name || 'Usuário')}</div>` : ''}
+        <div>${escapeHtml(msg.message)}</div>
+        <div class="chat-message-time">${formatTime(msg.created_at)}</div>
+    `;
+    messagesContainer.appendChild(div);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+async function createGroup(e) {
+    e.preventDefault();
+    const user = await getCurrentUser();
     const name = document.getElementById('groupName').value.trim();
     const desc = document.getElementById('groupDescription').value.trim();
     const max = parseInt(document.getElementById('groupMaxMembers').value);
     
     if (!name) { showToast('Nome obrigatório', 'error'); return; }
-    if (max < 2) { showToast('Mínimo 2 membros', 'error'); return; }
     
-    // Gera código de convite
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
     
-    try {
-        // 1. Cria o grupo
-        const { data: group, error: groupError } = await db.from('groups').insert({
-            name: name,
-            description: desc,
-            max_members: max,
-            creator_id: user.id,
-            invite_code: code
-        }).select().single();
-        
-        if (groupError) {
-            console.error('Erro ao criar grupo:', groupError);
-            showToast('Erro ao criar grupo: ' + groupError.message, 'error');
-            return;
-        }
-        
-        console.log('Grupo criado:', group);
-        
-        // 2. Adiciona o criador como admin
-        const { error: memberError } = await db.from('group_members').insert({
-            group_id: group.id,
-            user_id: user.id,
-            role: 'admin'
-        });
-        
-        if (memberError) {
-            console.error('Erro ao adicionar membro:', memberError);
-            showToast('Grupo criado, mas erro ao adicionar você como membro. Tente entrar usando o código: ' + code, 'warning');
-        } else {
-            console.log('Membro adicionado com sucesso');
-            showToast('Grupo criado com sucesso! Código: ' + code, 'success');
-        }
-        
-        // 3. Fecha o modal e recarrega
-        document.getElementById('createGroupModal').classList.remove('open');
-        document.getElementById('createGroupForm').reset();
-        await loadMyGroups();
-        
-    } catch (err) {
-        console.error('Erro geral:', err);
-        showToast('Erro: ' + err.message, 'error');
-    }
-}
-async function joinByInviteCode() {
-    const code = document.getElementById('inviteCodeInput').value.trim().toUpperCase();
-    const user = await getCurrentUser();
+    const { data: group, error } = await db.from('groups').insert({
+        name, description: desc, max_members: max, creator_id: user.id, invite_code: code
+    }).select().single();
     
-    if (code.length !== 8) { showToast('Código inválido', 'error'); return; }
+    if (error) { showToast('Erro: ' + error.message, 'error'); return; }
     
-    const { data: group, error } = await db.from('groups').select('*').eq('invite_code', code).single();
+    await db.from('group_members').insert({ group_id: group.id, user_id: user.id, role: 'admin' });
     
-    if (error || !group) { showToast('Grupo não encontrado', 'error'); return; }
+    document.getElementById('createGroupModal').classList.remove('open');
+    document.getElementById('createGroupForm').reset();
+    showToast('Grupo criado! Código: ' + code, 'success');
     
-    const { data: existing } = await db.from('group_members').select('*').eq('group_id', group.id).eq('user_id', user.id).maybeSingle();
-    if (existing) { showToast('Você já está neste grupo!', 'warning'); return; }
-    
-    const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', group.id);
-    if (count >= group.max_members) { showToast('Grupo lotado!', 'error'); return; }
-    
-    await db.from('group_members').insert({ group_id: group.id, user_id: user.id, role: 'member' });
-    
-    showToast('Entrou no grupo: ' + group.name, 'success');
-    document.getElementById('inviteCodeInput').value = '';
-    await loadMyGroups();
+    await loadSidebarGroups(user.id);
+    await selectGroup(group, 'admin');
 }
 
-async function searchGroups() {
-    const query = document.getElementById('searchGroupInput').value.trim();
-    if (!query) return;
+// ============================================
+// FAB - REGISTRO EM MÚLTIPLOS GRUPOS
+// ============================================
+
+async function openRegisterModal() {
+    const user = await getCurrentUser();
+    if (!user) return;
     
-    const { data: groups } = await db.from('groups').select('*').ilike('name', '%' + query + '%').limit(20);
+    const { data: memberships } = await db.from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', user.id);
     
-    const section = document.getElementById('searchResultsSection');
-    const grid = document.getElementById('searchResultsGrid');
-    section.style.display = 'block';
-    
-    if (!groups || groups.length === 0) {
-        grid.innerHTML = '<p class="empty-state">Nenhum grupo encontrado</p>';
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo', 'warning');
         return;
     }
     
-    const user = await getCurrentUser();
-    grid.innerHTML = '';
-    
-    for (const g of groups) {
-        const { data: mem } = await db.from('group_members').select('*').eq('group_id', g.id).eq('user_id', user.id).maybeSingle();
-        const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id);
+    // Se só tem 1 grupo, vai direto
+    if (memberships.length === 1) {
+        const groupId = memberships[0].group_id;
+        const { data: challenge } = await db.from('challenges')
+            .select('id').eq('group_id', groupId).eq('status', 'active').maybeSingle();
         
-        const card = document.createElement('div');
-        card.className = 'card group-card';
-        card.innerHTML = `
-            <h3>${escapeHtml(g.name)}</h3>
-            <p class="text-sm text-muted mb-1">${escapeHtml(g.description || '')}</p>
-            <div class="group-meta mb-1"><span><i class="fas fa-users"></i> ${count}/${g.max_members}</span></div>
-            ${mem ? '<span class="badge badge-success">Membro</span>' : '<button class="btn btn-primary btn-sm join-btn" data-id="' + g.id + '">Entrar</button>'}
-        `;
-        grid.appendChild(card);
+        if (challenge) {
+            window.location.href = `activity.html?challenge=${challenge.id}`;
+        } else {
+            showToast('Nenhum desafio ativo neste grupo', 'warning');
+        }
+        return;
     }
     
-    document.querySelectorAll('.join-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await joinGroupById(btn.dataset.id);
+    // Múltiplos grupos - mostra modal
+    const modal = document.getElementById('registerSelectModal');
+    const container = document.getElementById('groupsChecklist');
+    container.innerHTML = '';
+    
+    let hasAnyActive = false;
+    
+    for (const m of memberships) {
+        const g = m.groups;
+        if (!g) continue;
+        
+        const { data: activeChallenge } = await db.from('challenges')
+            .select('id, name, status').eq('group_id', g.id)
+            .in('status', ['pending', 'active']).maybeSingle();
+        
+        const hasActive = activeChallenge && activeChallenge.status === 'active';
+        if (hasActive) hasAnyActive = true;
+        
+        const item = document.createElement('div');
+        item.className = 'group-checkbox-item' + (hasActive ? ' checked' : '');
+        item.innerHTML = `
+            <div class="checkbox-custom">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="group-checkbox-info">
+                <div class="group-checkbox-name">${escapeHtml(g.name)}</div>
+                ${activeChallenge ? 
+                    `<div class="group-checkbox-challenge">🎯 ${escapeHtml(activeChallenge.name || 'Desafio')}</div>` : 
+                    '<div class="group-checkbox-challenge">Nenhum desafio ativo</div>'}
+            </div>
+            <span class="group-checkbox-badge ${hasActive ? 'active' : 'inactive'}">
+                ${hasActive ? 'Ativo' : 'Inativo'}
+            </span>
+            <input type="checkbox" value="${g.id}" data-challenge="${activeChallenge?.id || ''}" ${hasActive ? 'checked' : 'disabled'} hidden>
+        `;
+        
+        if (hasActive) {
+            item.addEventListener('click', () => {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+                if (checkbox.checked) { item.classList.add('checked'); }
+                else { item.classList.remove('checked'); }
+            });
+        }
+        
+        container.appendChild(item);
+    }
+    
+    if (!hasAnyActive) {
+        container.innerHTML += '<p class="text-center text-muted mt-2">Nenhum grupo com desafio ativo no momento</p>';
+    }
+    
+    modal.classList.add('open');
+}
+
+function goToRegister() {
+    const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
+    const selectedChallenges = [];
+    
+    checkboxes.forEach(cb => {
+        if (cb.dataset.challenge) {
+            selectedChallenges.push(cb.dataset.challenge);
+        }
+    });
+    
+    if (selectedChallenges.length === 0) {
+        showToast('Selecione pelo menos um grupo', 'warning');
+        return;
+    }
+    
+    localStorage.setItem('fatfit_register_challenges', JSON.stringify(selectedChallenges));
+    document.getElementById('registerSelectModal').classList.remove('open');
+    
+    const url = selectedChallenges.length === 1 
+        ? `activity.html?challenge=${selectedChallenges[0]}`
+        : `activity.html?challenges=${selectedChallenges.join(',')}`;
+    
+    window.location.href = url;
+}
+
+// ============================================
+// PÁGINA: search.html
+// ============================================
+if (window.location.pathname.includes('search')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        await loadAllGroups();
+        document.getElementById('searchBtn')?.addEventListener('click', searchGroups);
+        document.getElementById('searchInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchGroups();
         });
     });
 }
 
-async function joinGroupById(id) {
-    const user = await getCurrentUser();
-    const { data: g } = await db.from('groups').select('*').eq('id', id).single();
-    const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', id);
-    if (count >= g.max_members) { showToast('Grupo lotado!', 'error'); return; }
+async function loadAllGroups(query = '') {
+    const container = document.getElementById('groupsList');
+    if (!container) return;
     
-    await db.from('group_members').insert({ group_id: id, user_id: user.id, role: 'member' });
-    showToast('Entrou no grupo: ' + g.name, 'success');
-    await loadMyGroups();
+    let queryBuilder = db.from('groups').select('*').order('created_at', { ascending: false }).limit(20);
+    if (query) queryBuilder = queryBuilder.ilike('name', '%' + query + '%');
+    
+    const { data: groups, error } = await queryBuilder;
+    
+    if (error || !groups || groups.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><p>Nenhum grupo encontrado</p></div>';
+        return;
+    }
+    
+    const user = await getCurrentUser();
+    container.innerHTML = '';
+    
+    for (const g of groups) {
+        const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id);
+        const { data: membership } = await db.from('group_members').select('*').eq('group_id', g.id).eq('user_id', user.id).maybeSingle();
+        
+        const card = document.createElement('div');
+        card.className = 'card group-card mb-2';
+        card.innerHTML = `
+            <h3>${escapeHtml(g.name)}</h3>
+            <p class="text-sm text-muted">${escapeHtml(g.description || '')}</p>
+            <div class="group-meta mb-1"><span><i class="fas fa-users"></i> ${count || 0}/${g.max_members}</span></div>
+            ${membership ? '<span class="badge badge-success">Membro</span>' : '<button class="btn btn-primary btn-sm join-btn" data-id="' + g.id + '">Entrar</button>'}
+        `;
+        container.appendChild(card);
+    }
+    
+    document.querySelectorAll('.join-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const gId = btn.dataset.id;
+            const { data: g } = await db.from('groups').select('*').eq('id', gId).single();
+            const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', gId);
+            if (count >= g.max_members) { showToast('Grupo lotado!', 'error'); return; }
+            
+            await db.from('group_members').insert({ group_id: gId, user_id: user.id, role: 'member' });
+            showToast('Entrou no grupo: ' + g.name, 'success');
+            loadAllGroups(query);
+        });
+    });
 }
 
-async function viewGroup(group, userRole) {
-    const modal = document.getElementById('viewGroupModal');
-    const body = document.getElementById('viewGroupBody');
-    document.getElementById('viewGroupName').textContent = group.name;
-    modal.classList.add('open');
-    body.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
-    
-    const user = await getCurrentUser();
-    
-    const { data: members } = await db.from('group_members')
-        .select('id, user_id, role, profiles:user_id(name)')
-        .eq('group_id', group.id);
-    
-    const { data: active } = await db.from('challenges')
-        .select('*').eq('group_id', group.id).in('status', ['pending', 'active']).maybeSingle();
-    
-    const { data: past } = await db.from('challenges')
-        .select('*').eq('group_id', group.id).eq('status', 'finished').order('end_date', { ascending: false });
-    
-    let html = `<div class="mb-2">
-        <p><strong>Descrição:</strong> ${escapeHtml(group.description || '-')}</p>
-        <p><strong>Código:</strong> <span style="font-family:monospace;font-size:1.2rem;">${group.invite_code}</span></p>
-        <p><strong>Membros:</strong> ${members?.length || 0}/${group.max_members}</p>
-    </div>`;
-    
-    html += '<h4 class="mb-1">Membros</h4><div class="members-list mb-2">';
-    if (members) {
-        for (const m of members) {
-            html += `<div class="card flex-between mb-1" style="padding:8px 12px;">
-                <div><strong>${escapeHtml(m.profiles?.name || 'Usuário')}</strong> ${m.role === 'admin' ? '<span class="badge badge-info">Admin</span>' : ''}</div>
-                ${userRole === 'admin' && m.user_id !== user.id ? '<button class="btn btn-danger btn-sm remove-btn" data-id="' + m.id + '"><i class="fas fa-user-minus"></i></button>' : ''}
-            </div>`;
-        }
-    }
-    html += '</div>';
-    
-    if (active) {
-        const { data: participants } = await db.from('challenge_participants')
-            .select('*, profiles:user_id(name)').eq('challenge_id', active.id).order('points', { ascending: false });
-        const isParticipant = participants?.some(p => p.user_id === user.id);
-        
-        html += `<h4 class="mb-1">Desafio Atual</h4>
-        <div class="challenge-card card mb-2">
-            <h3>${escapeHtml(active.name || 'Desafio')}</h3>
-            <p>📅 ${formatDate(active.start_date)} → ${formatDate(active.end_date)}</p>
-            <p>💰 R$${active.amount_per_person}/pessoa | Total: R$${active.total_prize}</p>
-            <p>📝 ${escapeHtml(active.description || '')}</p>
-            <span class="badge badge-${active.status === 'active' ? 'success' : 'warning'}">${active.status === 'active' ? 'Em andamento' : 'Aguardando'}</span>
-        </div>`;
-        
-        if (active.status === 'pending' && !isParticipant && getToday() < active.start_date) {
-            html += `<button class="btn btn-primary btn-block mb-2 confirm-btn" data-id="${active.id}">Confirmar Participação (R$${active.amount_per_person})</button>`;
-        }
-        
-        if (active.status === 'active' && isParticipant) {
-            html += `<a href="activity.html?challenge=${active.id}" class="btn btn-secondary btn-block mb-2"><i class="fas fa-camera"></i> Registrar Atividade</a>`;
-        }
-        
-        if (participants?.length > 0) {
-            html += '<h4 class="mb-1">🏆 Ranking</h4><div class="ranking-list mb-2">';
-            participants.forEach((p, i) => {
-                const cls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-                html += `<div class="ranking-item"><div class="ranking-position ${cls}">${i+1}</div><div class="ranking-info"><div class="ranking-name">${escapeHtml(p.profiles?.name || '')} ${p.user_id === user.id ? '(você)' : ''}</div></div><div><strong>${p.points}</strong> pts</div></div>`;
-            });
-            html += '</div>';
-        }
-        
-        if (active.status === 'active') {
-            const { data: activities } = await db.from('daily_activities')
-                .select('*, profiles:user_id(name)').eq('challenge_id', active.id).order('created_at', { ascending: false }).limit(20);
-            
-            if (activities?.length > 0) {
-                html += '<h4 class="mb-1">Atividades Recentes</h4>';
-                for (const a of activities) {
-                    html += `<div class="card activity-card mb-1">
-                        <img src="${a.photo_url}" class="activity-photo" onclick="window.open('${a.photo_url}')" style="cursor:pointer;">
-                        <div style="flex:1;"><strong>${escapeHtml(a.profiles?.name || '')}</strong> <span class="text-sm text-muted">📅 ${formatDate(a.activity_date)}</span> ${a.comment ? '<p class="text-sm">'+escapeHtml(a.comment)+'</p>' : ''} ${a.status === 'reported' ? '<span class="badge badge-warning">Denunciado</span>' : ''} ${a.status === 'invalid' ? '<span class="badge badge-danger">Invalidado</span>' : ''}</div>
-                        <div>${userRole === 'admin' && a.status === 'reported' ? '<button class="btn btn-success btn-sm approve-btn mb-1" data-id="'+a.id+'">✓</button><button class="btn btn-danger btn-sm reject-btn" data-id="'+a.id+'">✕</button>' : (a.status === 'valid' && a.user_id !== user.id ? '<button class="btn btn-warning btn-sm report-btn" data-id="'+a.id+'">🚩</button>' : '')}</div>
-                    </div>`;
-                }
-            }
-        }
-    } else if (userRole === 'admin') {
-        html += `<h4 class="mb-1">Criar Desafio</h4>
-        <form id="createChallengeForm" class="mb-2">
-            <div class="input-group"><label>Nome</label><input type="text" id="challengeName" placeholder="Ex: Desafio de Verão"></div>
-            <div class="input-group"><label>Data Início *</label><input type="date" id="challengeStartDate" required min="${getToday()}"></div>
-            <div class="input-group"><label>Data Fim *</label><input type="date" id="challengeEndDate" required min="${getToday()}"></div>
-            <div class="input-group"><label>Valor por Pessoa (R$) *</label><input type="number" id="challengeAmount" required min="0.01" step="0.01"></div>
-            <div class="input-group"><label>Descrição</label><textarea id="challengeDescription" rows="2"></textarea></div>
-            <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-plus-circle"></i> Criar</button>
-        </form>`;
-    } else {
-        html += '<p class="text-center text-muted">Nenhum desafio ativo</p>';
-    }
-    
-    if (past?.length > 0) {
-        html += '<h4 class="mb-1 mt-2">📜 Histórico</h4>';
-        for (const c of past) {
-            const { data: winners } = await db.from('challenge_winners').select('*, profiles:user_id(name)').eq('challenge_id', c.id);
-            html += `<div class="card mb-1" style="border-left:4px solid var(--secondary);"><h4>${escapeHtml(c.name || 'Desafio')}</h4><p class="text-sm">📅 ${formatDate(c.start_date)} → ${formatDate(c.end_date)}</p><p class="text-sm">💰 ${formatCurrency(c.total_prize)}</p>${winners?.length > 0 ? '<p class="text-sm"><strong>🏆</strong> '+winners.map(w => escapeHtml(w.profiles?.name||'')+' ('+formatCurrency(w.prize_share)+')').join(', ')+'</p>' : ''}</div>`;
-        }
-    }
-    
-    body.innerHTML = html;
-    
-    // Event listeners
-    document.querySelectorAll('.remove-btn').forEach(b => b.addEventListener('click', async () => {
-        if (!confirm('Remover membro?')) return;
-        await db.from('group_members').delete().eq('id', b.dataset.id);
-        showToast('Removido!', 'success');
-        viewGroup(group, userRole);
-    }));
-    
-    document.querySelectorAll('.confirm-btn').forEach(b => b.addEventListener('click', async () => {
-        await db.from('challenge_participants').insert({ challenge_id: b.dataset.id, user_id: user.id });
-        showToast('Confirmado!', 'success');
-        viewGroup(group, userRole);
-    }));
-    
-    document.querySelectorAll('.report-btn').forEach(b => b.addEventListener('click', async () => {
-        const reason = prompt('Motivo (opcional):');
-        if (reason === null) return;
-        await db.from('reports').insert({ activity_id: b.dataset.id, reported_by: user.id, reason: reason || '' });
-        await db.from('daily_activities').update({ status: 'reported' }).eq('id', b.dataset.id);
-        showToast('Denunciado!', 'success');
-        viewGroup(group, userRole);
-    }));
-    
-    document.querySelectorAll('.approve-btn').forEach(b => b.addEventListener('click', async () => {
-        await db.from('daily_activities').update({ status: 'valid' }).eq('id', b.dataset.id);
-        await db.from('reports').update({ resolved_by: user.id, resolved_at: new Date().toISOString(), resolution: 'approved' }).eq('activity_id', b.dataset.id).is('resolved_by', null);
-        showToast('Aprovado!', 'success');
-        viewGroup(group, userRole);
-    }));
-    
-    document.querySelectorAll('.reject-btn').forEach(b => b.addEventListener('click', async () => {
-        if (!confirm('Remover ponto?')) return;
-        await db.from('daily_activities').update({ status: 'invalid' }).eq('id', b.dataset.id);
-        await db.from('reports').update({ resolved_by: user.id, resolved_at: new Date().toISOString(), resolution: 'removed' }).eq('activity_id', b.dataset.id).is('resolved_by', null);
-        showToast('Removido!', 'success');
-        viewGroup(group, userRole);
-    }));
-    
-    const challengeForm = document.getElementById('createChallengeForm');
-    if (challengeForm) {
-        challengeForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('challengeName').value.trim() || 'Desafio';
-            const start = document.getElementById('challengeStartDate').value;
-            const end = document.getElementById('challengeEndDate').value;
-            const amount = parseFloat(document.getElementById('challengeAmount').value);
-            const desc = document.getElementById('challengeDescription').value.trim();
-            
-            if (!start || !end || end < start) { showToast('Datas inválidas', 'error'); return; }
-            if (!amount || amount <= 0) { showToast('Valor inválido', 'error'); return; }
-            
-            const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', group.id);
-            
-            const { error } = await db.from('challenges').insert({
-                group_id: group.id, name, start_date: start, end_date: end,
-                amount_per_person: amount, total_prize: amount * (count || 1),
-                description: desc, status: 'pending'
-            });
-            
-            if (error) { showToast('Erro: ' + error.message, 'error'); }
-            else { showToast('Desafio criado!', 'success'); viewGroup(group, userRole); }
-        });
-    }
+function searchGroups() {
+    const query = document.getElementById('searchInput')?.value.trim() || '';
+    loadAllGroups(query);
 }
 
 // ============================================
-// PÁGINA: activity.html
+// PÁGINA: activity.html (MÚLTIPLOS DESAFIOS)
 // ============================================
 if (window.location.pathname.includes('activity')) {
     document.addEventListener('DOMContentLoaded', async () => {
@@ -691,18 +839,80 @@ if (window.location.pathname.includes('activity')) {
 
 async function setupActivity(session) {
     const user = session.user;
-    const challengeId = new URLSearchParams(window.location.search).get('challenge');
+    const params = new URLSearchParams(window.location.search);
     
-    if (!challengeId) { showToast('Desafio não especificado', 'error'); setTimeout(() => location.href='dashboard.html', 1500); return; }
+    let challengeIds = [];
     
-    const { data: challenge } = await db.from('challenges').select('*').eq('id', challengeId).single();
-    if (!challenge || challenge.status !== 'active') { showToast('Desafio não ativo', 'error'); setTimeout(() => location.href='dashboard.html', 1500); return; }
+    if (params.get('challenges')) {
+        challengeIds = params.get('challenges').split(',').filter(Boolean);
+    } else if (params.get('challenge')) {
+        challengeIds = [params.get('challenge')];
+    } else {
+        const stored = localStorage.getItem('fatfit_register_challenges');
+        if (stored) {
+            try { challengeIds = JSON.parse(stored); } catch(e) {}
+        }
+    }
     
-    const { data: participant } = await db.from('challenge_participants').select('*').eq('challenge_id', challengeId).eq('user_id', user.id).maybeSingle();
-    if (!participant) { showToast('Não participante', 'error'); setTimeout(() => location.href='dashboard.html', 1500); return; }
+    if (challengeIds.length === 0) {
+        showToast('Nenhum desafio selecionado', 'error');
+        setTimeout(() => location.href = 'home.html', 1500);
+        return;
+    }
     
-    const { data: today } = await db.from('daily_activities').select('*').eq('user_id', user.id).eq('challenge_id', challengeId).eq('activity_date', getToday()).maybeSingle();
-    if (today) { showToast('Já registrou hoje!', 'warning'); setTimeout(() => location.href='dashboard.html', 2000); return; }
+    // Busca desafios ativos
+    const challenges = [];
+    for (const id of challengeIds) {
+        const { data: challenge } = await db.from('challenges')
+            .select('*, groups:group_id(name)').eq('id', id).eq('status', 'active').single();
+        if (challenge) challenges.push(challenge);
+    }
+    
+    if (challenges.length === 0) {
+        showToast('Nenhum desafio ativo encontrado', 'error');
+        setTimeout(() => location.href = 'home.html', 1500);
+        return;
+    }
+    
+    // Mostra grupos selecionados
+    const groupsDiv = document.getElementById('selectedGroups');
+    groupsDiv.innerHTML = challenges.map(c => `
+        <span class="badge badge-info" style="margin:3px;font-size:0.85rem;padding:6px 12px;">
+            ${escapeHtml(c.groups?.name || 'Grupo')} - ${escapeHtml(c.name || 'Desafio')}
+        </span>
+    `).join('');
+    
+    document.getElementById('registerInfo').textContent = 
+        `Registrando em ${challenges.length} grupo(s) • +1 ponto em cada`;
+    document.getElementById('submitInfo').textContent = 
+        `A foto será registrada em ${challenges.length} desafio(s)`;
+    
+    // Verifica se já registrou hoje
+    const alreadyRegistered = [];
+    const validChallenges = [];
+    
+    for (const c of challenges) {
+        const { data: today } = await db.from('daily_activities')
+            .select('id').eq('user_id', user.id).eq('challenge_id', c.id)
+            .eq('activity_date', getToday()).maybeSingle();
+        if (today) {
+            alreadyRegistered.push(c);
+        } else {
+            validChallenges.push(c);
+        }
+    }
+    
+    if (validChallenges.length === 0) {
+        showToast('Já registrou em todos os grupos hoje!', 'warning');
+        setTimeout(() => location.href = 'home.html', 2000);
+        return;
+    }
+    
+    // Se removeu alguns que já foram registrados
+    if (alreadyRegistered.length > 0) {
+        const names = alreadyRegistered.map(c => c.groups?.name || '').join(', ');
+        showToast(`Já registrado em: ${names}. Registrando nos outros.`, 'info');
+    }
     
     let photoFile = null;
     let locationData = null;
@@ -715,16 +925,20 @@ async function setupActivity(session) {
     
     async function startCamera() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+            });
             video.srcObject = stream;
             await video.play();
-        } catch (e) {
-            showToast('Erro na câmera', 'error');
+        } catch (e) { 
+            console.error('Erro câmera:', e);
+            showToast('Erro ao acessar câmera', 'error'); 
         }
     }
     await startCamera();
     
-    captureBtn.addEventListener('click', () => {
+    captureBtn?.addEventListener('click', () => {
+        if (!video.videoWidth) return;
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         canvas.getContext('2d').drawImage(video, 0, 0);
@@ -737,7 +951,7 @@ async function setupActivity(session) {
         canvas.toBlob(b => photoFile = new File([b], 'act.jpg', { type: 'image/jpeg' }), 'image/jpeg', 0.8);
     });
     
-    retakeBtn.addEventListener('click', async () => {
+    retakeBtn?.addEventListener('click', async () => {
         photo.style.display = 'none';
         retakeBtn.style.display = 'none';
         video.style.display = 'block';
@@ -746,46 +960,93 @@ async function setupActivity(session) {
         await startCamera();
     });
     
-    document.getElementById('getLocationBtn').addEventListener('click', () => {
+    document.getElementById('getLocationBtn')?.addEventListener('click', () => {
+        if (!navigator.geolocation) { showToast('Geolocalização não suportada', 'warning'); return; }
         navigator.geolocation.getCurrentPosition(
             pos => {
                 locationData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                 document.getElementById('locationStatus').textContent = '✓ Capturada';
                 document.getElementById('locationStatus').style.color = 'var(--secondary)';
+                showToast('Localização capturada!', 'success');
             },
-            () => showToast('Falha na localização', 'warning'),
-            { timeout: 10000 }
+            (err) => {
+                console.error('Erro localização:', err);
+                showToast('Falha ao obter localização', 'warning');
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     });
     
-    document.getElementById('skipLocationBtn').addEventListener('click', () => {
+    document.getElementById('skipLocationBtn')?.addEventListener('click', () => {
         locationData = null;
         document.getElementById('locationStatus').textContent = 'Ignorada';
+        document.getElementById('locationStatus').style.color = 'var(--gray-500)';
     });
     
-    document.getElementById('activityForm').addEventListener('submit', async (e) => {
+    document.getElementById('activityForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!photoFile) { showToast('Tire uma foto!', 'error'); return; }
         
-        const btn = e.target.querySelector('button[type="submit"]');
+        if (!photoFile) { showToast('Tire uma foto primeiro!', 'error'); return; }
+        
+        const btn = document.getElementById('submitBtn');
+        const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
         
-        const fileName = `${user.id}/${challengeId}/${Date.now()}.jpg`;
-        const { error: upErr } = await db.storage.from('activity-photos').upload(fileName, photoFile, { contentType: 'image/jpeg' });
+        const comment = document.getElementById('activityComment')?.value?.trim() || null;
+        let successCount = 0;
+        let errorCount = 0;
         
-        if (upErr) { showToast('Erro upload: ' + upErr.message, 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Registrar'; return; }
+        for (let i = 0; i < validChallenges.length; i++) {
+            const challenge = validChallenges[i];
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Salvando ${i + 1}/${validChallenges.length}...`;
+            
+            try {
+                const fileName = `${user.id}/${challenge.id}/${Date.now()}_${i}.jpg`;
+                const { error: upErr } = await db.storage.from('activity-photos')
+                    .upload(fileName, photoFile, { contentType: 'image/jpeg', upsert: false });
+                
+                if (upErr) {
+                    console.error('Erro upload:', upErr);
+                    errorCount++;
+                    continue;
+                }
+                
+                const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+                
+                const { error: actErr } = await db.from('daily_activities').insert({
+                    user_id: user.id,
+                    challenge_id: challenge.id,
+                    activity_date: getToday(),
+                    photo_url: urlData.publicUrl,
+                    location: locationData,
+                    comment: comment,
+                    status: 'valid'
+                });
+                
+                if (actErr) {
+                    console.error('Erro insert:', actErr);
+                    errorCount++;
+                } else {
+                    successCount++;
+                }
+            } catch (err) {
+                console.error('Erro geral:', err);
+                errorCount++;
+            }
+        }
         
-        const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+        localStorage.removeItem('fatfit_register_challenges');
         
-        const { error: actErr } = await db.from('daily_activities').insert({
-            user_id: user.id, challenge_id: challengeId, activity_date: getToday(),
-            photo_url: urlData.publicUrl, location: locationData,
-            comment: document.getElementById('activityComment').value.trim() || null, status: 'valid'
-        });
+        if (successCount > 0) {
+            showToast(`Registrado em ${successCount} grupo(s)! 🎉 +${successCount} pontos`, 'success');
+        } else {
+            showToast('Erro ao registrar atividade', 'error');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            return;
+        }
         
-        if (actErr) { showToast('Erro: ' + actErr.message, 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Registrar'; }
-        else { showToast('Registrado! 🎉', 'success'); setTimeout(() => location.href='dashboard.html', 1500); }
+        setTimeout(() => location.href = 'home.html', 1500);
     });
 }
 
@@ -813,31 +1074,35 @@ async function setupProfile(session) {
         if (profile.avatar_url) document.getElementById('avatarImg').src = profile.avatar_url;
     }
     
-    document.getElementById('avatarUploadBtn').addEventListener('click', () => document.getElementById('avatarInput').click());
+    document.getElementById('avatarUploadBtn')?.addEventListener('click', () => document.getElementById('avatarInput').click());
     
-    document.getElementById('avatarInput').addEventListener('change', async (e) => {
+    document.getElementById('avatarInput')?.addEventListener('change', async (e) => {
         const file = e.target.files[0];
-        if (!file || file.size > 5*1024*1024) { showToast('Imagem muito grande', 'error'); return; }
+        if (!file || file.size > 5*1024*1024) { showToast('Imagem muito grande (máx 5MB)', 'error'); return; }
         
         const fileName = `avatars/${user.id}/${Date.now()}.jpg`;
-        await db.storage.from('activity-photos').upload(fileName, file, { contentType: file.type, upsert: true });
+        const { error: uploadError } = await db.storage.from('activity-photos')
+            .upload(fileName, file, { contentType: file.type, upsert: true });
+        
+        if (uploadError) { showToast('Erro ao enviar foto', 'error'); return; }
+        
         const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
         await db.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id);
         document.getElementById('avatarImg').src = urlData.publicUrl;
         showToast('Avatar atualizado!', 'success');
     });
     
-    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('editName').value.trim();
         const pix = document.getElementById('editPixKey').value.trim();
         if (!name) { showToast('Nome obrigatório', 'error'); return; }
         await db.from('profiles').update({ name, pix_key: pix || null }).eq('id', user.id);
         document.getElementById('profileName').textContent = name;
-        showToast('Salvo!', 'success');
+        showToast('Perfil salvo!', 'success');
     });
     
-    document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+    document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const curr = document.getElementById('currentPassword').value;
         const newPw = document.getElementById('newPassword').value;
@@ -846,29 +1111,48 @@ async function setupProfile(session) {
         const { error } = await db.auth.signInWithPassword({ email: user.email, password: curr });
         if (error) { showToast('Senha atual incorreta', 'error'); return; }
         
-        await db.auth.updateUser({ password: newPw });
-        showToast('Senha alterada!', 'success');
-        document.getElementById('changePasswordForm').reset();
+        const { error: updateError } = await db.auth.updateUser({ password: newPw });
+        if (updateError) { showToast('Erro ao trocar senha', 'error'); }
+        else { showToast('Senha alterada!', 'success'); document.getElementById('changePasswordForm').reset(); }
     });
     
     // Stats
-    const { count: challenges } = await db.from('challenge_participants').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    const { count: challenges } = await db.from('challenge_participants')
+        .select('*', { count: 'exact', head: true }).eq('user_id', user.id);
     document.getElementById('totalChallenges').textContent = challenges || 0;
     
-    const { data: wins } = await db.from('challenge_winners').select('*, challenges:challenge_id(name, groups:group_id(name))').eq('user_id', user.id).order('declared_at', { ascending: false });
+    const { data: wins } = await db.from('challenge_winners')
+        .select('*, challenges:challenge_id(name, groups:group_id(name))')
+        .eq('user_id', user.id).order('declared_at', { ascending: false });
     
     document.getElementById('totalWins').textContent = wins?.length || 0;
-    document.getElementById('totalEarnings').textContent = formatCurrency(wins?.reduce((s, w) => s + Number(w.prize_share), 0) || 0);
+    document.getElementById('totalEarnings').textContent = formatCurrency(
+        wins?.reduce((s, w) => s + Number(w.prize_share), 0) || 0
+    );
     
     const list = document.getElementById('winsList');
-    if (!wins?.length) { list.innerHTML = '<p class="empty-state"><i class="fas fa-trophy"></i> Nenhuma vitória ainda</p>'; return; }
+    if (!wins?.length) {
+        list.innerHTML = '<p class="empty-state"><i class="fas fa-trophy"></i> Nenhuma vitória ainda</p>';
+        return;
+    }
     
     list.innerHTML = '';
     wins.forEach(w => {
         const card = document.createElement('div');
         card.className = 'card mb-1';
         card.style.borderLeft = '4px solid #FCD34D';
-        card.innerHTML = `<div class="flex-between"><div><strong>${escapeHtml(w.challenges?.groups?.name || 'Grupo')}</strong><p class="text-sm">${escapeHtml(w.challenges?.name || 'Desafio')}</p><p class="text-xs text-muted">${formatDate(w.declared_at)}</p></div><div><span class="badge badge-warning" style="font-size:1rem;">${formatCurrency(w.prize_share)}</span></div></div>`;
+        card.innerHTML = `
+            <div class="flex-between">
+                <div>
+                    <strong>${escapeHtml(w.challenges?.groups?.name || 'Grupo')}</strong>
+                    <p class="text-sm">${escapeHtml(w.challenges?.name || 'Desafio')}</p>
+                    <p class="text-xs text-muted">${formatDate(w.declared_at)}</p>
+                </div>
+                <div>
+                    <span class="badge badge-warning" style="font-size:1rem;">${formatCurrency(w.prize_share)}</span>
+                </div>
+            </div>
+        `;
         list.appendChild(card);
     });
 }
