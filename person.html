@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>FATFIT - Atividades</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <button class="icon-btn" onclick="history.back()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="app-title" id="personPageTitle">Atividades</h1>
+        <div></div>
+    </header>
+
+    <main class="main-content">
+        <!-- Cabeçalho da Pessoa -->
+        <div class="person-header">
+            <img id="personAvatar" src="https://via.placeholder.com/80" alt="Avatar" class="person-avatar">
+            <h2 class="person-name" id="personName">Usuário</h2>
+            <p class="text-sm text-muted" id="personGroup">Grupo</p>
+            <div class="person-stats">
+                <div class="person-stat">
+                    <div class="person-stat-value" id="personPoints">0</div>
+                    <div class="person-stat-label">Pontos</div>
+                </div>
+                <div class="person-stat">
+                    <div class="person-stat-value" id="personDays">0</div>
+                    <div class="person-stat-label">Dias Ativos</div>
+                </div>
+                <div class="person-stat">
+                    <div class="person-stat-value" id="personStreak">0</div>
+                    <div class="person-stat-label">Sequência</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendário de Atividades -->
+        <section class="section">
+            <div class="section-header">
+                <h2>📅 Calendário de Atividades</h2>
+            </div>
+            <div id="personCalendar">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Carregando calendário...</p>
+                </div>
+            </div>
+            <div class="calendar-legend">
+                <div class="calendar-legend-item">
+                    <div class="calendar-legend-dot"></div>
+                    <span>Dia com atividade</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Todas as Atividades -->
+        <section class="section">
+            <div class="section-header">
+                <h2>📸 Atividades Recentes</h2>
+            </div>
+            <div id="personActivities">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Carregando...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal de Detalhes do Dia -->
+    <div class="modal" id="dayDetailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="dayDetailTitle">Detalhes do Dia</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="dayDetailBody">
+                <!-- Preenchido dinamicamente -->
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

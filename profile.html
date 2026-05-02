@@ -4,60 +4,101 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>FATFIT - Meu Perfil</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="app-page">
-    <!-- Header -->
     <header class="app-header">
-        <div class="header-left">
-            <button class="icon-btn" onclick="window.location.href='dashboard.html'" aria-label="Voltar">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <h1 class="app-title">Meu Perfil</h1>
-        </div>
+        <button class="icon-btn" onclick="history.back()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="app-title">Meu Perfil</h1>
+        <button class="icon-btn" id="editProfileBtn">
+            <i class="fas fa-cog"></i>
+        </button>
     </header>
 
-    <!-- Main Content -->
     <main class="main-content">
-        <!-- Perfil -->
-        <section class="section profile-section">
-            <div class="profile-header">
-                <div class="avatar-container" id="avatarContainer">
-                    <img id="avatarImg" src="https://via.placeholder.com/150" alt="Avatar" class="avatar">
-                    <button class="avatar-upload-btn" id="avatarUploadBtn">
-                        <i class="fas fa-camera"></i>
-                    </button>
-                    <input type="file" id="avatarInput" accept="image/*" hidden>
-                </div>
-                <h2 id="profileName">Usuário</h2>
-                <p id="profileEmail">email@exemplo.com</p>
+        <!-- Cabeçalho do Perfil -->
+        <section class="profile-section-new">
+            <div class="avatar-container">
+                <img id="avatarImg" src="https://via.placeholder.com/88" alt="Avatar" class="profile-avatar-new">
+                <button class="avatar-upload-btn" id="avatarUploadBtn">
+                    <i class="fas fa-camera"></i>
+                </button>
+                <input type="file" id="avatarInput" accept="image/*" hidden>
             </div>
+            <h2 class="profile-name-new" id="profileName">Usuário</h2>
+            <p class="profile-email-new" id="profileEmail">email@exemplo.com</p>
+        </section>
 
-            <form id="profileForm" class="profile-form">
+        <!-- Estatísticas -->
+        <div class="profile-stats-new">
+            <div class="profile-stat-new">
+                <div class="profile-stat-value-new" id="totalChallenges">0</div>
+                <div class="profile-stat-label-new">Desafios</div>
+            </div>
+            <div class="profile-stat-new">
+                <div class="profile-stat-value-new" id="totalWins">0</div>
+                <div class="profile-stat-label-new">Vitórias</div>
+            </div>
+            <div class="profile-stat-new">
+                <div class="profile-stat-value-new" id="totalEarnings">R$0</div>
+                <div class="profile-stat-label-new">Ganhos</div>
+            </div>
+        </div>
+
+        <!-- Calendário de Atividades -->
+        <section class="section">
+            <div class="section-header">
+                <h2>📅 Minhas Atividades</h2>
+            </div>
+            <div id="profileCalendar">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Carregando calendário...</p>
+                </div>
+            </div>
+            <div class="calendar-legend">
+                <div class="calendar-legend-item">
+                    <div class="calendar-legend-dot"></div>
+                    <span>Dia com atividade</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Ações -->
+        <div class="profile-actions">
+            <button class="btn btn-outline btn-sm" id="openEditProfileBtn">
+                <i class="fas fa-user-edit"></i> Editar Perfil
+            </button>
+            <button class="btn btn-outline btn-sm" id="openChangePasswordBtn">
+                <i class="fas fa-key"></i> Trocar Senha
+            </button>
+        </div>
+
+        <!-- Editar Perfil (inicialmente escondido) -->
+        <section class="section" id="editProfileSection" style="display:none;">
+            <form id="profileForm">
                 <div class="input-group">
                     <label for="editName">Nome</label>
                     <input type="text" id="editName" required maxlength="100">
                 </div>
-                
                 <div class="input-group">
                     <label for="editPixKey">Chave Pix (opcional)</label>
-                    <input type="text" id="editPixKey" maxlength="100" placeholder="Deixe em branco se não quiser">
+                    <input type="text" id="editPixKey" maxlength="100" placeholder="Sua chave Pix">
                 </div>
-
                 <button type="submit" class="btn btn-primary btn-block">
-                    <i class="fas fa-save"></i> Salvar Alterações
+                    <i class="fas fa-save"></i> Salvar
                 </button>
             </form>
         </section>
 
-        <!-- Trocar Senha -->
-        <section class="section">
-            <div class="section-header">
-                <h2>Trocar Senha</h2>
-            </div>
-            <form id="changePasswordForm" class="form-card">
+        <!-- Trocar Senha (inicialmente escondido) -->
+        <section class="section" id="changePasswordSection" style="display:none;">
+            <form id="changePasswordForm">
                 <div class="input-group">
                     <label for="currentPassword">Senha Atual</label>
                     <input type="password" id="currentPassword" required placeholder="Digite sua senha atual">
@@ -66,43 +107,39 @@
                     <label for="newPassword">Nova Senha</label>
                     <input type="password" id="newPassword" required minlength="6" placeholder="Mínimo 6 caracteres">
                 </div>
-                <button type="submit" class="btn btn-secondary btn-block">
+                <button type="submit" class="btn btn-primary btn-block">
                     <i class="fas fa-key"></i> Trocar Senha
                 </button>
             </form>
         </section>
 
-        <!-- Histórico de Vitórias -->
+        <!-- Vitórias -->
         <section class="section">
             <div class="section-header">
-                <h2>Minhas Vitórias</h2>
+                <h2>🏆 Vitórias</h2>
             </div>
-            <div class="stats-cards">
-                <div class="stat-card">
-                    <div class="stat-number" id="totalChallenges">0</div>
-                    <div class="stat-label">Desafios</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="totalWins">0</div>
-                    <div class="stat-label">Vitórias</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="totalEarnings">R$ 0,00</div>
-                    <div class="stat-label">Ganhos</div>
-                </div>
-            </div>
-
-            <div class="wins-list" id="winsList">
+            <div id="winsList">
                 <p class="empty-state">Nenhuma vitória ainda</p>
             </div>
         </section>
     </main>
 
-    <!-- Toast container -->
+    <!-- Modal de Detalhes do Dia -->
+    <div class="modal" id="dayDetailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="dayDetailTitle">Detalhes do Dia</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="dayDetailBody">
+                <!-- Preenchido dinamicamente -->
+            </div>
+        </div>
+    </div>
+
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Scripts na ordem correta -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
 </body>

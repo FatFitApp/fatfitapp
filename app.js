@@ -1914,6 +1914,585 @@ window.quickRegister = function() {
         });
 };
 
+// ============================================
+// FUNÇÕES DE CALENDÁRIO
+// ============================================
+
+/**
+ * Renderiza um calendário mensal
+ * @param {string} containerId - ID do elemento container
+ * @param {Array} activities - Array de atividades do mês
+ * @param {number} month - Mês (1-12)
+ * @param {number} year - Ano
+ * @param {object} options - Opções adicionais
+ */
+function renderCalendar(containerId, activities, month, year, options = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const { onClickDay, showUserBadge, groupByUser } = options;
+    
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayOfWeek = firstDay.getDay();
+    
+    const today = getToday();
+    const todayParts = today.split('-');
+    const todayDay = parseInt(todayParts[2]);
+    const todayMonth = parseInt(todayParts[1]);
+    const todayYear = parseInt(todayParts[0]);
+    
+    // Agrupa atividades por dia
+    const activitiesByDay = {};
+    if (activities) {
+        for (const a of activities) {
+            const day = parseInt(a.activity_date.split('-')[2]);
+            if (!activitiesByDay[day]) activitiesByDay[day] = [];
+            activitiesByDay[day].push(a);
+        }
+    }
+    
+    let html = `
+        <div class="calendar-container">
+            <div class="calendar-header">
+                <h3 class="calendar-title">${monthNames[month - 1]} ${year}</h3>
+                <div class="calendar-nav">
+                    <button class="calendar-nav-btn" onclick="changeMonth(${containerId}, ${month}, ${year}, -1)" ${!hasPreviousMonth(month, year) ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="calendar-nav-btn" onclick="changeMonth(${containerId}, ${month}, ${year}, 1)" ${!hasNextMonth(month, year) ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="calendar-weekdays">
+                ${weekDays.map(d => `<div class="calendar-weekday">${d}</div>`).join('')}
+            </div>
+            
+            <div class="calendar-grid">
+    `;
+    
+    // Dias vazios antes do primeiro dia
+    for (let i = 0; i < startDayOfWeek; i++) {
+        html += '<div class="calendar-day other-month"></div>';
+    }
+    
+    // Dias do mês
+    for (let day = 1; day <= daysInMonth; day++) {
+        const isToday = day === todayDay && month === todayMonth && year === todayYear;
+        const dayActivities = activitiesByDay[day] || [];
+        const hasActivity = dayActivities.length > 0;
+        
+        let dayClass = 'calendar-day';
+        if (isToday) dayClass += ' today';
+        if (hasActivity) dayClass += ' has-activity';
+        
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        html += `<div class="${dayClass}" data-date="${dateStr}" ${hasActivity ? `onclick="openDayDetail('${dateStr}', '${containerId}')"` : ''}>`;
+        html += '<div class="calendar-day-inner">';
+        html += `<span class="calendar-day-number">${day}</span>`;
+        
+        if (hasActivity) {
+            // Mostra miniatura da primeira foto
+            const firstPhoto = dayActivities[0].photo_url;
+            html += `<img src="${firstPhoto}" class="calendar-day-photo" alt="Atividade" loading="lazy">`;
+            
+            // Se tem mais de 1, mostra badge
+            if (dayActivities.length > 1) {
+                html += `<span class="calendar-day-badge">+${dayActivities.length - 1}</span>`;
+            }
+        }
+        
+        html += '</div></div>';
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    // Armazena as atividades para uso posterior
+    container.dataset.activities = JSON.stringify(activitiesByDay);
+    container.dataset.month = month;
+    container.dataset.year = year;
+    container.dataset.containerId = containerId;
+    
+    container.innerHTML = html;
+}
+
+// Funções auxiliares para navegação
+let currentProfileMonth = new Date().getMonth() + 1;
+let currentProfileYear = new Date().getFullYear();
+let currentPersonMonth = new Date().getMonth() + 1;
+let currentPersonYear = new Date().getFullYear();
+let currentGroupMonth = new Date().getMonth() + 1;
+let currentGroupYear = new Date().getFullYear();
+
+function hasPreviousMonth(month, year) {
+    const now = new Date();
+    return !(year < 2024 || (year === 2024 && month <= 1));
+}
+
+function hasNextMonth(month, year) {
+    const now = new Date();
+    return !(year > now.getFullYear() || (year === now.getFullYear() && month >= now.getMonth() + 1));
+}
+
+async function changeMonth(containerId, currentMonth, currentYear, direction) {
+    let newMonth = currentMonth + direction;
+    let newYear = currentYear;
+    
+    if (newMonth < 1) {
+        newMonth = 12;
+        newYear--;
+    } else if (newMonth > 12) {
+        newMonth = 1;
+        newYear++;
+    }
+    
+    // Atualiza variáveis globais baseado no container
+    if (containerId === 'profileCalendar') {
+        currentProfileMonth = newMonth;
+        currentProfileYear = newYear;
+        await loadProfileCalendar(newMonth, newYear);
+    } else if (containerId === 'personCalendar') {
+        currentPersonMonth = newMonth;
+        currentPersonYear = newYear;
+        const params = new URLSearchParams(window.location.search);
+        await loadPersonCalendar(params.get('user'), params.get('group'), newMonth, newYear);
+    } else if (containerId === 'groupCalendar') {
+        currentGroupMonth = newMonth;
+        currentGroupYear = newYear;
+        await loadGroupCalendar(newMonth, newYear);
+    }
+}
+
+// ============================================
+// ABRIR DETALHES DO DIA (MODAL)
+// ============================================
+function openDayDetail(dateStr, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    let activitiesByDay;
+    try {
+        activitiesByDay = JSON.parse(container.dataset.activities);
+    } catch (e) {
+        console.error('Erro ao parsear atividades:', e);
+        return;
+    }
+    
+    const day = parseInt(dateStr.split('-')[2]);
+    const dayActivities = activitiesByDay[day] || [];
+    
+    if (dayActivities.length === 0) return;
+    
+    const modal = document.getElementById('dayDetailModal');
+    const title = document.getElementById('dayDetailTitle');
+    const body = document.getElementById('dayDetailBody');
+    
+    const [year, month, dayNum] = dateStr.split('-');
+    title.textContent = `📅 ${dayNum}/${month}/${year}`;
+    
+    let html = '';
+    
+    for (const a of dayActivities) {
+        html += `
+            <div class="day-detail-item">
+                <img src="${a.photo_url}" class="day-detail-photo" onclick="window.open('${a.photo_url}')" alt="Foto">
+                <div class="day-detail-info">
+                    <div class="day-detail-name">${escapeHtml(a.user_name || 'Usuário')}</div>
+                    <div class="day-detail-meta">
+                        <span>👥 ${escapeHtml(a.group_name || 'Grupo')}</span>
+                        <span>🎯 ${escapeHtml(a.challenge_name || 'Desafio')}</span>
+                    </div>
+                    ${a.comment ? `<p class="day-detail-comment">💬 ${escapeHtml(a.comment)}</p>` : ''}
+                    ${a.location ? '<span class="text-xs text-muted">📍 Localização registrada</span>' : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    body.innerHTML = html;
+    modal.classList.add('open');
+}
+
+// ============================================
+// CALENDÁRIO DO PERFIL (todos os grupos)
+// ============================================
+async function loadProfileCalendar(month, year) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const container = document.getElementById('profileCalendar');
+    if (!container) return;
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
+    if (!month) month = currentProfileMonth;
+    if (!year) year = currentProfileYear;
+    
+    const { data: activities, error } = await db.rpc('get_calendar_data', {
+        p_user_id: user.id,
+        p_group_id: null,
+        p_month: month,
+        p_year: year
+    });
+    
+    if (error) {
+        console.error('Erro ao carregar calendário:', error);
+        container.innerHTML = '<p class="empty-state">Erro ao carregar calendário</p>';
+        return;
+    }
+    
+    renderCalendar('profileCalendar', activities, month, year, { showUserBadge: false });
+}
+
+// ============================================
+// CALENDÁRIO DA PESSOA (grupo específico)
+// ============================================
+async function loadPersonCalendar(userId, groupId, month, year) {
+    const container = document.getElementById('personCalendar');
+    if (!container) return;
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
+    if (!month) month = currentPersonMonth;
+    if (!year) year = currentPersonYear;
+    
+    const { data: activities, error } = await db.rpc('get_calendar_data', {
+        p_user_id: userId,
+        p_group_id: groupId,
+        p_month: month,
+        p_year: year
+    });
+    
+    if (error) {
+        console.error('Erro ao carregar calendário:', error);
+        container.innerHTML = '<p class="empty-state">Erro ao carregar calendário</p>';
+        return;
+    }
+    
+    renderCalendar('personCalendar', activities, month, year);
+}
+
+// ============================================
+// CALENDÁRIO DO GRUPO (todos os membros)
+// ============================================
+async function loadGroupCalendar(month, year) {
+    if (!currentGroup) return;
+    
+    const container = document.getElementById('groupCalendar');
+    if (!container) return;
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
+    if (!month) month = currentGroupMonth;
+    if (!year) year = currentGroupYear;
+    
+    const { data: activities, error } = await db.rpc('get_calendar_data', {
+        p_user_id: null,
+        p_group_id: currentGroup.id,
+        p_month: month,
+        p_year: year
+    });
+    
+    if (error) {
+        console.error('Erro ao carregar calendário:', error);
+        container.innerHTML = '<p class="empty-state">Erro ao carregar calendário</p>';
+        return;
+    }
+    
+    renderCalendar('groupCalendar', activities, month, year, { showUserBadge: true });
+}
+
+// ============================================
+// ATUALIZAÇÕES NAS PÁGINAS EXISTENTES
+// ============================================
+
+// Atualiza loadDetalhes para incluir calendário do grupo
+const originalLoadDetalhes = loadDetalhes;
+loadDetalhes = async function() {
+    await originalLoadDetalhes();
+    
+    // Adiciona seção de calendário após o conteúdo existente
+    const container = document.getElementById('detalhesContent');
+    if (!container || !currentGroup) return;
+    
+    // Adiciona o calendário do grupo
+    const calendarSection = document.createElement('div');
+    calendarSection.innerHTML = `
+        <div class="group-detail-card mt-2">
+            <h3>📅 Calendário do Grupo</h3>
+            <div id="groupCalendar">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+            </div>
+            <div class="calendar-legend">
+                <div class="calendar-legend-item">
+                    <div class="calendar-legend-dot"></div>
+                    <span>Dia com atividade</span>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(calendarSection);
+    
+    // Carrega o calendário
+    await loadGroupCalendar(currentGroupMonth, currentGroupYear);
+};
+
+// ============================================
+// PÁGINA: person.html
+// ============================================
+if (window.location.pathname.includes('person')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        setupPersonPage(session);
+    });
+}
+
+async function setupPersonPage(session) {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('user');
+    const groupId = params.get('group');
+    
+    if (!userId || !groupId) {
+        showToast('Parâmetros inválidos', 'error');
+        setTimeout(() => history.back(), 1500);
+        return;
+    }
+    
+    // Busca perfil da pessoa
+    const profile = await getProfile(userId);
+    const { data: group } = await db.from('groups').select('name').eq('id', groupId).single();
+    
+    if (profile) {
+        document.getElementById('personName').textContent = profile.name || 'Usuário';
+        document.getElementById('personAvatar').src = profile.avatar_url || 'https://via.placeholder.com/80';
+        document.getElementById('personGroup').textContent = '👥 ' + (group?.name || 'Grupo');
+        document.getElementById('personPageTitle').textContent = profile.name || 'Atividades';
+    }
+    
+    // Busca estatísticas
+    const { data: activities } = await db.rpc('get_calendar_data', {
+        p_user_id: userId,
+        p_group_id: groupId
+    });
+    
+    if (activities) {
+        const uniqueDays = new Set(activities.map(a => a.activity_date)).size;
+        document.getElementById('personDays').textContent = uniqueDays;
+        
+        // Calcula maior sequência
+        const dates = [...new Set(activities.map(a => a.activity_date))].sort();
+        let maxStreak = 0;
+        let currentStreak = 1;
+        for (let i = 1; i < dates.length; i++) {
+            const prev = new Date(dates[i-1]);
+            const curr = new Date(dates[i]);
+            const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
+            if (diffDays === 1) {
+                currentStreak++;
+            } else {
+                maxStreak = Math.max(maxStreak, currentStreak);
+                currentStreak = 1;
+            }
+        }
+        maxStreak = Math.max(maxStreak, currentStreak);
+        document.getElementById('personStreak').textContent = maxStreak;
+    }
+    
+    // Busca pontos no desafio ativo
+    const { data: activeChallenge } = await db.from('challenges')
+        .select('id').eq('group_id', groupId).eq('status', 'active').maybeSingle();
+    
+    if (activeChallenge) {
+        const { data: participant } = await db.from('challenge_participants')
+            .select('points').eq('challenge_id', activeChallenge.id).eq('user_id', userId).maybeSingle();
+        document.getElementById('personPoints').textContent = participant?.points || 0;
+    }
+    
+    // Carrega calendário
+    await loadPersonCalendar(userId, groupId);
+    
+    // Carrega atividades recentes
+    const { data: recentActivities } = await db.from('daily_activities')
+        .select('*, challenges:challenge_id(name), profiles:user_id(name)')
+        .eq('user_id', userId)
+        .eq('challenge_id', 
+            (await db.from('challenges').select('id').eq('group_id', groupId)).data?.map(c => c.id) || []
+        )
+        .order('created_at', { ascending: false })
+        .limit(20);
+    
+    const activitiesContainer = document.getElementById('personActivities');
+    if (recentActivities && recentActivities.length > 0) {
+        activitiesContainer.innerHTML = recentActivities.map(a => `
+            <div class="card activity-card mb-1">
+                <img src="${a.photo_url}" class="day-detail-photo" onclick="window.open('${a.photo_url}')" style="cursor:pointer;">
+                <div class="day-detail-info">
+                    <div class="text-sm">📅 ${formatDate(a.activity_date)}</div>
+                    <div class="text-xs text-muted">🎯 ${escapeHtml(a.challenges?.name || 'Desafio')}</div>
+                    ${a.comment ? `<p class="text-sm mt-1">${escapeHtml(a.comment)}</p>` : ''}
+                </div>
+                <span class="badge badge-success">+1</span>
+            </div>
+        `).join('');
+    } else {
+        activitiesContainer.innerHTML = '<p class="empty-state">Nenhuma atividade ainda</p>';
+    }
+}
+
+// ============================================
+// PÁGINA: profile.html (ATUALIZADA)
+// ============================================
+if (window.location.pathname.includes('profile')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        setupNewProfile(session);
+    });
+}
+
+async function setupNewProfile(session) {
+    const user = session.user;
+    
+    const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
+    
+    if (profile) {
+        document.getElementById('profileName').textContent = profile.name || 'Usuário';
+        document.getElementById('profileEmail').textContent = profile.email || user.email;
+        document.getElementById('editName').value = profile.name || '';
+        document.getElementById('editPixKey').value = profile.pix_key || '';
+        if (profile.avatar_url) document.getElementById('avatarImg').src = profile.avatar_url;
+    }
+    
+    // Avatar upload
+    document.getElementById('avatarUploadBtn')?.addEventListener('click', () => {
+        document.getElementById('avatarInput').click();
+    });
+    
+    document.getElementById('avatarInput')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || file.size > 5*1024*1024) { showToast('Imagem muito grande (máx 5MB)', 'error'); return; }
+        
+        const fileName = `avatars/${user.id}/${Date.now()}.jpg`;
+        const { error: uploadError } = await db.storage.from('activity-photos')
+            .upload(fileName, file, { contentType: file.type, upsert: true });
+        
+        if (uploadError) { showToast('Erro ao enviar foto', 'error'); return; }
+        
+        const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+        await db.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id);
+        document.getElementById('avatarImg').src = urlData.publicUrl;
+        showToast('Avatar atualizado!', 'success');
+    });
+    
+    // Toggle editar perfil
+    document.getElementById('openEditProfileBtn')?.addEventListener('click', () => {
+        const section = document.getElementById('editProfileSection');
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        document.getElementById('changePasswordSection').style.display = 'none';
+    });
+    
+    // Toggle trocar senha
+    document.getElementById('openChangePasswordBtn')?.addEventListener('click', () => {
+        const section = document.getElementById('changePasswordSection');
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        document.getElementById('editProfileSection').style.display = 'none';
+    });
+    
+    // Salvar perfil
+    document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('editName').value.trim();
+        const pix = document.getElementById('editPixKey').value.trim();
+        if (!name) { showToast('Nome obrigatório', 'error'); return; }
+        await db.from('profiles').update({ name, pix_key: pix || null }).eq('id', user.id);
+        document.getElementById('profileName').textContent = name;
+        document.getElementById('editProfileSection').style.display = 'none';
+        showToast('Perfil salvo!', 'success');
+    });
+    
+    // Trocar senha
+    document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const curr = document.getElementById('currentPassword').value;
+        const newPw = document.getElementById('newPassword').value;
+        if (newPw.length < 6) { showToast('Mínimo 6 caracteres', 'error'); return; }
+        
+        const { error } = await db.auth.signInWithPassword({ email: user.email, password: curr });
+        if (error) { showToast('Senha atual incorreta', 'error'); return; }
+        
+        const { error: updateError } = await db.auth.updateUser({ password: newPw });
+        if (updateError) { showToast('Erro ao trocar senha', 'error'); }
+        else { 
+            showToast('Senha alterada!', 'success'); 
+            document.getElementById('changePasswordForm').reset();
+            document.getElementById('changePasswordSection').style.display = 'none';
+        }
+    });
+    
+    // Stats
+    const { count: challenges } = await db.from('challenge_participants')
+        .select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    document.getElementById('totalChallenges').textContent = challenges || 0;
+    
+    const { data: wins } = await db.from('challenge_winners')
+        .select('*, challenges:challenge_id(name, groups:group_id(name))')
+        .eq('user_id', user.id).order('declared_at', { ascending: false });
+    
+    document.getElementById('totalWins').textContent = wins?.length || 0;
+    document.getElementById('totalEarnings').textContent = formatCurrency(
+        wins?.reduce((s, w) => s + Number(w.prize_share), 0) || 0
+    );
+    
+    // Lista de vitórias
+    const list = document.getElementById('winsList');
+    if (!wins?.length) {
+        list.innerHTML = '<p class="empty-state"><i class="fas fa-trophy"></i> Nenhuma vitória ainda</p>';
+    } else {
+        list.innerHTML = '';
+        wins.forEach(w => {
+            const card = document.createElement('div');
+            card.className = 'card mb-1';
+            card.style.borderLeft = '4px solid #FCD34D';
+            card.innerHTML = `
+                <div class="flex-between">
+                    <div>
+                        <strong>${escapeHtml(w.challenges?.groups?.name || 'Grupo')}</strong>
+                        <p class="text-sm">${escapeHtml(w.challenges?.name || 'Desafio')}</p>
+                        <p class="text-xs text-muted">${formatDate(w.declared_at)}</p>
+                    </div>
+                    <div>
+                        <span class="badge badge-warning" style="font-size:1rem;">${formatCurrency(w.prize_share)}</span>
+                    </div>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    }
+    
+    // Carrega calendário
+    await loadProfileCalendar();
+}
+
+// ============================================
+// FECHAR MODAL AO CLICAR FORA
+// ============================================
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal') && e.target.classList.contains('open')) {
+        e.target.classList.remove('open');
+    }
+});
+
 
 // Expor funções globalmente
 window.closeModal = closeModal;

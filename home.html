@@ -4,72 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#4F46E5">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* Estilos adicionais para garantir que o FAB funcione */
-        .fab {
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-            z-index: 1000;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .fab:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-        }
-        
-        .fab i {
-            font-size: 24px;
-        }
-        
-        /* Garantir que os modais fiquem visíveis */
-        .modal {
-            z-index: 2000;
-        }
-        
-        /* Estilo para os checkboxes na lista de desafios */
-        .challenge-checkbox-item {
-            padding: 12px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .challenge-checkbox-item input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-        
-        .challenge-checkbox-item label {
-            flex: 1;
-            cursor: pointer;
-            margin: 0;
-        }
-        
-        .challenge-checkbox-item.disabled {
-            opacity: 0.5;
-            background: #f5f5f5;
-        }
-    </style>
 </head>
 <body class="app-page">
     <!-- Header -->
@@ -120,14 +58,12 @@
 
     <!-- Conteúdo Principal -->
     <main class="main-content">
-        <!-- Estado: Nenhum grupo selecionado -->
         <div id="noGroupState" class="empty-state" style="display:none;">
             <i class="fas fa-users fa-3x"></i>
             <h3>Nenhum grupo selecionado</h3>
             <p>Abra o menu ☰ e escolha um grupo</p>
         </div>
 
-        <!-- Aba: Timeline -->
         <div id="tabTimeline" class="tab-content active">
             <div class="timeline" id="timelineFeed">
                 <div class="loading-state">
@@ -137,17 +73,14 @@
             </div>
         </div>
 
-        <!-- Aba: Detalhes -->
         <div id="tabDetalhes" class="tab-content">
             <div id="detalhesContent"></div>
         </div>
 
-        <!-- Aba: Classificação -->
         <div id="tabRanking" class="tab-content">
             <div id="rankingContent"></div>
         </div>
 
-        <!-- Aba: Chat -->
         <div id="tabChat" class="tab-content">
             <div id="chatContent">
                 <div class="chat-container">
@@ -188,66 +121,61 @@
         </button>
     </nav>
 
-    <!-- Modal de Criação de Grupo Melhorado -->
-    <div id="createGroupModal" class="modal">
+    <!-- FAB - Botão Flutuante -->
+    <button class="fab" id="fabRegister" title="Registrar Atividade">
+        <i class="fas fa-camera"></i>
+    </button>
+
+    <!-- Modal Criar Grupo -->
+    <div class="modal" id="createGroupModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Criar Novo Grupo</h3>
-                <button class="modal-close">&times;</button>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="createGroupForm">
+                <div class="input-group">
+                    <label>Nome do Grupo *</label>
+                    <input type="text" id="groupName" required maxlength="100" placeholder="Ex: Emagrecimento Time A">
+                </div>
+                <div class="input-group">
+                    <label>Descrição</label>
+                    <textarea id="groupDescription" rows="3" maxlength="500" placeholder="Descreva o propósito do grupo..."></textarea>
+                </div>
+                <div class="input-group">
+                    <label>Limite de Participantes *</label>
+                    <input type="number" id="groupMaxMembers" required min="2" max="100" value="10">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Criar Grupo</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Registro em Múltiplos Grupos -->
+    <div class="modal" id="registerSelectModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📸 Registrar Atividade</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <form id="createGroupForm">
-                    <div class="input-group">
-                        <label>
-                            <i class="fas fa-users"></i>
-                            Nome do Grupo *
-                        </label>
-                        <input type="text" id="groupName" 
-                               placeholder="Ex: Equipe Fitness 2024" 
-                               maxlength="100" 
-                               required>
-                        <small>Escolha um nome único para seu grupo</small>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label>
-                            <i class="fas fa-align-left"></i>
-                            Descrição
-                        </label>
-                        <textarea id="groupDescription" 
-                                  placeholder="Descreva o propósito do grupo..." 
-                                  rows="3"
-                                  maxlength="500"></textarea>
-                        <small>Conte um pouco sobre o objetivo do grupo</small>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label>
-                            <i class="fas fa-user-friends"></i>
-                            Limite de Membros
-                        </label>
-                        <input type="number" id="groupMaxMembers" 
-                               value="50" 
-                               min="1" 
-                               max="500">
-                        <small>Máximo de participantes permitidos</small>
-                    </div>
-                    
-                    <div class="group-code-preview">
-                        <p><i class="fas fa-ticket-alt"></i> Após criar, você receberá:</p>
-                        <div class="code-display">CÓDIGO ÚNICO</div>
-                        <small>Compartilhe este código para convidar membros</small>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('createGroupModal')">
-                    Cancelar
-                </button>
-                <button type="submit" form="createGroupForm" class="btn btn-primary">
-                    <i class="fas fa-rocket"></i> Criar Grupo
+                <p class="text-sm text-muted mb-2">Selecione os grupos para registrar atividade:</p>
+                <div id="groupsChecklist"></div>
+                <button class="btn btn-primary btn-block mt-2" id="confirmRegisterBtn">
+                    <i class="fas fa-camera"></i> Ir para Registro
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes do Dia -->
+    <div class="modal" id="dayDetailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="dayDetailTitle">Detalhes do Dia</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="dayDetailBody"></div>
         </div>
     </div>
 
@@ -258,71 +186,5 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
-
-    <!-- FAB - Botão Flutuante de Registro -->
-    <button class="fab" id="fabRegister" title="Registrar Atividade">
-        <i class="fas fa-camera"></i>
-    </button>
-
-    <!-- Modal de Seleção de Desafios para Registro (MODIFICADO) -->
-    <div class="modal" id="registerSelectModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-camera"></i> Registrar Atividade</h3>
-                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-sm text-muted mb-2">Selecione os desafios para registrar sua atividade:</p>
-                <div id="challengesList" style="max-height: 400px; overflow-y: auto;">
-                    <div class="loading-state">Carregando desafios...</div>
-                </div>
-                <button class="btn btn-primary btn-block mt-2" id="confirmMultiRegisterBtn" style="margin-top: 15px;">
-                    <i class="fas fa-camera"></i> Continuar para Registro
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Script de garantia para o FAB -->
-    <script>
-        (function() {
-            // Aguardar o DOM carregar completamente
-            document.addEventListener('DOMContentLoaded', function() {
-                console.log('🔵 Home.html - DOM carregado');
-                
-                // Verificar se o FAB existe e adicionar evento de fallback
-                setTimeout(function() {
-                    const fab = document.getElementById('fabRegister');
-                    if (fab) {
-                        console.log('✅ FAB encontrado, adicionando evento de clique');
-                        // Remover qualquer evento anterior para evitar duplicação
-                        const newFab = fab.cloneNode(true);
-                        fab.parentNode.replaceChild(newFab, fab);
-                        
-                        newFab.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('🟢 FAB clicado!');
-                            if (typeof window.openRegisterModal === 'function') {
-                                window.openRegisterModal();
-                            } else {
-                                console.error('❌ openRegisterModal não encontrada, aguardando app.js carregar...');
-                                // Tentar novamente em 500ms
-                                setTimeout(function() {
-                                    if (typeof window.openRegisterModal === 'function') {
-                                        window.openRegisterModal();
-                                    } else {
-                                        alert('Sistema ainda carregando. Por favor, aguarde alguns segundos e tente novamente.');
-                                    }
-                                }, 500);
-                            }
-                        });
-                    } else {
-                        console.error('❌ FAB não encontrado no DOM');
-                    }
-                }, 500);
-            });
-        })();
-    </script>
 </body>
 </html>
