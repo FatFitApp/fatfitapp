@@ -564,11 +564,16 @@ async function loadRanking() {
     participants.forEach((p, i) => {
         const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
         const isMe = p.user_id === user.id;
+        
         html += `
             <div class="ranking-item" style="${isMe ? 'border: 2px solid var(--primary);' : ''}">
                 <div class="ranking-pos ${posClass}">${i + 1}</div>
-                <img src="${p.profiles?.avatar_url || 'https://via.placeholder.com/40'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
-                <div class="ranking-info">
+                <img src="${p.profiles?.avatar_url || 'https://via.placeholder.com/40'}" 
+                     style="width:40px;height:40px;border-radius:50%;object-fit:cover;cursor:pointer;" 
+                     onclick="window.openPersonCalendar('${p.user_id}', '${currentGroup.id}', '${escapeHtml(p.profiles?.name || 'Usuário')}')"
+                     alt="${escapeHtml(p.profiles?.name || 'Usuário')}"
+                     title="Ver atividades de ${escapeHtml(p.profiles?.name || 'Usuário')}">
+                <div class="ranking-info" style="cursor:pointer;" onclick="window.openPersonCalendar('${p.user_id}', '${currentGroup.id}', '${escapeHtml(p.profiles?.name || 'Usuário')}')">
                     <div class="ranking-name">${escapeHtml(p.profiles?.name || 'Usuário')} ${isMe ? '(você)' : ''}</div>
                     <div class="ranking-bar"><div class="ranking-bar-fill" style="width:${(p.points / maxPoints) * 100}%"></div></div>
                 </div>
@@ -580,6 +585,12 @@ async function loadRanking() {
     html += '</div>';
     container.innerHTML = html;
 }
+
+// Função global para abrir calendário da pessoa
+window.openPersonCalendar = function(userId, groupId, personName) {
+    console.log('👤 Abrindo calendário de:', personName, userId, groupId);
+    window.location.href = `person.html?user=${userId}&group=${groupId}`;
+};
 
 async function loadChat() {
     const messagesContainer = document.getElementById('chatMessages');
@@ -1928,9 +1939,10 @@ window.quickRegister = function() {
  */
 function renderCalendar(containerId, activities, month, year, options = {}) {
     const container = document.getElementById(containerId);
-    if (!container) return;
-    
-    const { onClickDay, showUserBadge, groupByUser } = options;
+    if (!container) {
+        console.error('Container não encontrado:', containerId);
+        return;
+    }
     
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
                         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -1951,21 +1963,28 @@ function renderCalendar(containerId, activities, month, year, options = {}) {
     const activitiesByDay = {};
     if (activities) {
         for (const a of activities) {
+            if (!a.activity_date) continue;
             const day = parseInt(a.activity_date.split('-')[2]);
             if (!activitiesByDay[day]) activitiesByDay[day] = [];
             activitiesByDay[day].push(a);
         }
     }
     
+    // Salva o mês/ano atual no container
+    container.dataset.month = month;
+    container.dataset.year = year;
+    container.dataset.activities = JSON.stringify(activitiesByDay);
+    container.dataset.containerId = containerId;
+    
     let html = `
         <div class="calendar-container">
             <div class="calendar-header">
                 <h3 class="calendar-title">${monthNames[month - 1]} ${year}</h3>
                 <div class="calendar-nav">
-                    <button class="calendar-nav-btn" onclick="changeMonth(${containerId}, ${month}, ${year}, -1)" ${!hasPreviousMonth(month, year) ? 'disabled' : ''}>
+                    <button class="calendar-nav-btn" onclick="window.navigateCalendar('${containerId}', -1)" title="Mês anterior">
                         <i class="fas fa-chevron-left"></i>
                     </button>
-                    <button class="calendar-nav-btn" onclick="changeMonth(${containerId}, ${month}, ${year}, 1)" ${!hasNextMonth(month, year) ? 'disabled' : ''}>
+                    <button class="calendar-nav-btn" onclick="window.navigateCalendar('${containerId}', 1)" title="Próximo mês">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -1995,16 +2014,14 @@ function renderCalendar(containerId, activities, month, year, options = {}) {
         
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
-        html += `<div class="${dayClass}" data-date="${dateStr}" ${hasActivity ? `onclick="openDayDetail('${dateStr}', '${containerId}')"` : ''}>`;
+        html += `<div class="${dayClass}" data-date="${dateStr}" ${hasActivity ? `onclick="window.openDayDetail('${dateStr}', '${containerId}')"` : ''}>`;
         html += '<div class="calendar-day-inner">';
         html += `<span class="calendar-day-number">${day}</span>`;
         
         if (hasActivity) {
-            // Mostra miniatura da primeira foto
             const firstPhoto = dayActivities[0].photo_url;
-            html += `<img src="${firstPhoto}" class="calendar-day-photo" alt="Atividade" loading="lazy">`;
+            html += `<img src="${firstPhoto}" class="calendar-day-photo" alt="Atividade" loading="lazy" onerror="this.style.display='none'">`;
             
-            // Se tem mais de 1, mostra badge
             if (dayActivities.length > 1) {
                 html += `<span class="calendar-day-badge">+${dayActivities.length - 1}</span>`;
             }
@@ -2018,14 +2035,111 @@ function renderCalendar(containerId, activities, month, year, options = {}) {
         </div>
     `;
     
-    // Armazena as atividades para uso posterior
-    container.dataset.activities = JSON.stringify(activitiesByDay);
-    container.dataset.month = month;
-    container.dataset.year = year;
-    container.dataset.containerId = containerId;
-    
     container.innerHTML = html;
+    console.log(`📅 Calendário renderizado: ${containerId} - ${monthNames[month - 1]} ${year}`);
 }
+
+// Navegação do calendário (função global)
+window.navigateCalendar = async function(containerId, direction) {
+    console.log(`🔄 Navegando calendário: ${containerId} direção: ${direction}`);
+    
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error('Container não encontrado:', containerId);
+        return;
+    }
+    
+    let month = parseInt(container.dataset.month);
+    let year = parseInt(container.dataset.year);
+    
+    if (!month || !year) {
+        console.error('Mês/ano não encontrados no container');
+        return;
+    }
+    
+    // Calcula novo mês/ano
+    month += direction;
+    if (month < 1) {
+        month = 12;
+        year--;
+    } else if (month > 12) {
+        month = 1;
+        year++;
+    }
+    
+    console.log(`📅 Novo período: ${month}/${year}`);
+    
+    // Atualiza variáveis globais e recarrega
+    if (containerId === 'profileCalendar') {
+        currentProfileMonth = month;
+        currentProfileYear = year;
+        await loadProfileCalendar(month, year);
+    } else if (containerId === 'personCalendar') {
+        currentPersonMonth = month;
+        currentPersonYear = year;
+        const params = new URLSearchParams(window.location.search);
+        await loadPersonCalendar(params.get('user'), params.get('group'), month, year);
+    } else if (containerId === 'groupCalendar') {
+        currentGroupMonth = month;
+        currentGroupYear = year;
+        await loadGroupCalendar(month, year);
+    }
+};
+
+// Abrir detalhes do dia (função global)
+window.openDayDetail = function(dateStr, containerId) {
+    console.log(`🔍 Abrindo detalhes do dia: ${dateStr}`);
+    
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    let activitiesByDay;
+    try {
+        activitiesByDay = JSON.parse(container.dataset.activities);
+    } catch (e) {
+        console.error('Erro ao parsear atividades:', e);
+        return;
+    }
+    
+    const day = parseInt(dateStr.split('-')[2]);
+    const dayActivities = activitiesByDay[day] || [];
+    
+    if (dayActivities.length === 0) return;
+    
+    const modal = document.getElementById('dayDetailModal');
+    const title = document.getElementById('dayDetailTitle');
+    const body = document.getElementById('dayDetailBody');
+    
+    if (!modal || !title || !body) {
+        console.error('Modal de detalhes não encontrado');
+        return;
+    }
+    
+    const [year, month, dayNum] = dateStr.split('-');
+    title.textContent = `📅 ${dayNum}/${month}/${year}`;
+    
+    let html = '';
+    
+    for (const a of dayActivities) {
+        html += `
+            <div class="day-detail-item">
+                <img src="${a.photo_url}" class="day-detail-photo" onclick="window.open('${a.photo_url}')" alt="Foto" onerror="this.style.display='none'">
+                <div class="day-detail-info">
+                    <div class="day-detail-name">${escapeHtml(a.user_name || 'Usuário')}</div>
+                    <div class="day-detail-meta">
+                        <span>👥 ${escapeHtml(a.group_name || 'Grupo')}</span>
+                        <span>🎯 ${escapeHtml(a.challenge_name || 'Desafio')}</span>
+                    </div>
+                    ${a.comment ? `<p class="day-detail-comment">💬 ${escapeHtml(a.comment)}</p>` : ''}
+                    ${a.location ? '<span class="text-xs text-muted">📍 Localização registrada</span>' : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    body.innerHTML = html;
+    modal.classList.add('open');
+};
 
 // Funções auxiliares para navegação
 let currentProfileMonth = new Date().getMonth() + 1;
@@ -2138,6 +2252,8 @@ async function loadProfileCalendar(month, year) {
     if (!month) month = currentProfileMonth;
     if (!year) year = currentProfileYear;
     
+    console.log(`📅 Carregando calendário do perfil: ${month}/${year}`);
+    
     const { data: activities, error } = await db.rpc('get_calendar_data', {
         p_user_id: user.id,
         p_group_id: null,
@@ -2146,12 +2262,13 @@ async function loadProfileCalendar(month, year) {
     });
     
     if (error) {
-        console.error('Erro ao carregar calendário:', error);
-        container.innerHTML = '<p class="empty-state">Erro ao carregar calendário</p>';
+        console.error('Erro ao carregar calendário do perfil:', error);
+        container.innerHTML = '<p class="empty-state">Erro ao carregar</p>';
         return;
     }
     
-    renderCalendar('profileCalendar', activities, month, year, { showUserBadge: false });
+    console.log(`📊 Atividades encontradas: ${activities?.length || 0}`);
+    renderCalendar('profileCalendar', activities, month, year);
 }
 
 // ============================================
@@ -2165,6 +2282,8 @@ async function loadPersonCalendar(userId, groupId, month, year) {
     if (!month) month = currentPersonMonth;
     if (!year) year = currentPersonYear;
     
+    console.log(`📅 Carregando calendário da pessoa: ${userId} - ${month}/${year}`);
+    
     const { data: activities, error } = await db.rpc('get_calendar_data', {
         p_user_id: userId,
         p_group_id: groupId,
@@ -2173,19 +2292,24 @@ async function loadPersonCalendar(userId, groupId, month, year) {
     });
     
     if (error) {
-        console.error('Erro ao carregar calendário:', error);
-        container.innerHTML = '<p class="empty-state">Erro ao carregar calendário</p>';
+        console.error('Erro ao carregar calendário da pessoa:', error);
+        container.innerHTML = '<p class="empty-state">Erro ao carregar</p>';
         return;
     }
     
+    console.log(`📊 Atividades encontradas: ${activities?.length || 0}`);
     renderCalendar('personCalendar', activities, month, year);
 }
+
 
 // ============================================
 // CALENDÁRIO DO GRUPO (todos os membros)
 // ============================================
 async function loadGroupCalendar(month, year) {
-    if (!currentGroup) return;
+    if (!currentGroup) {
+        console.log('Nenhum grupo selecionado para o calendário');
+        return;
+    }
     
     const container = document.getElementById('groupCalendar');
     if (!container) return;
@@ -2193,6 +2317,8 @@ async function loadGroupCalendar(month, year) {
     
     if (!month) month = currentGroupMonth;
     if (!year) year = currentGroupYear;
+    
+    console.log(`📅 Carregando calendário do grupo: ${currentGroup.name} - ${month}/${year}`);
     
     const { data: activities, error } = await db.rpc('get_calendar_data', {
         p_user_id: null,
@@ -2202,12 +2328,13 @@ async function loadGroupCalendar(month, year) {
     });
     
     if (error) {
-        console.error('Erro ao carregar calendário:', error);
-        container.innerHTML = '<p class="empty-state">Erro ao carregar calendário</p>';
+        console.error('Erro ao carregar calendário do grupo:', error);
+        container.innerHTML = '<p class="empty-state">Erro ao carregar</p>';
         return;
     }
     
-    renderCalendar('groupCalendar', activities, month, year, { showUserBadge: true });
+    console.log(`📊 Atividades encontradas: ${activities?.length || 0}`);
+    renderCalendar('groupCalendar', activities, month, year);
 }
 
 // ============================================
