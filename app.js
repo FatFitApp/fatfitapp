@@ -195,15 +195,9 @@ async function setupHome(session) {
     
     // FAB Button
     const fab = document.getElementById('fabRegister');
-    fab?.addEventListener('click', openRegisterModal);
-    document.getElementById('confirmRegisterBtn')?.addEventListener('click', goToRegister);
-    
-    // Fechar modal de seleção
-    document.querySelectorAll('#registerSelectModal .modal-close').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.getElementById('registerSelectModal').classList.remove('open');
-        });
-    });
+    if (fab) {
+        fab.addEventListener('click', openRegisterModal);
+    }
     
     // Carrega grupos no menu lateral
     await loadSidebarGroups(user.id);
@@ -394,10 +388,32 @@ async function loadDetalhes() {
     
     let html = `
         <div class="group-detail-card">
-            <h3>📋 ${escapeHtml(currentGroup.name)}</h3>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <h3 style="margin: 0;">📋 ${escapeHtml(currentGroup.name)}</h3>
+                ${currentUserRole === 'admin' ? `
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-secondary" onclick="openEditGroupModal()" style="padding: 5px 10px;">
+                            ✏️ Editar
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
             <p class="text-sm text-muted">${escapeHtml(currentGroup.description || 'Sem descrição')}</p>
-            <div class="group-code">${currentGroup.invite_code}</div>
+            <div class="group-code" style="background: #f5f5f5; padding: 8px; border-radius: 5px; font-family: monospace; font-size: 14px; margin: 10px 0;">
+                Código: ${currentGroup.invite_code}
+            </div>
             <p class="text-sm"><i class="fas fa-users"></i> ${members?.length || 0}/${currentGroup.max_members} membros</p>
+            
+            ${currentUserRole === 'admin' ? `
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-info" onclick="openManageMembersModal()" style="flex: 1;">
+                        👥 Gerenciar Membros
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteGroup()" style="flex: 1;">
+                        🗑️ Deletar Grupo
+                    </button>
+                </div>
+            ` : ''}
         </div>
         
         <div class="group-detail-card">
@@ -426,7 +442,7 @@ async function loadDetalhes() {
                     ${activeChallenge.status === 'pending' && !isParticipant && getToday() < activeChallenge.start_date ? 
                         `<button class="btn btn-primary btn-block btn-sm confirm-participation-btn" data-id="${activeChallenge.id}">✅ Confirmar Participação</button>` : ''}
                     ${activeChallenge.status === 'active' && isParticipant ? 
-                        `<a href="activity.html?challenge=${activeChallenge.id}" class="btn btn-secondary btn-block btn-sm">📸 Registrar Atividade</a>` : ''}
+                        `<button class="btn btn-secondary btn-block btn-sm register-activity-btn" data-id="${activeChallenge.id}">📸 Registrar Atividade</button>` : ''}
                 </div>
             </div>
         `;
@@ -460,11 +476,29 @@ async function loadDetalhes() {
     
     container.innerHTML = html;
     
-    document.querySelectorAll('.confirm-participation-btn').forEach(b => b.addEventListener('click', async () => {
-        await db.from('challenge_participants').insert({ challenge_id: b.dataset.id, user_id: user.id });
+// Além disso, adicione também o evento para o botão de confirmar participação
+document.querySelectorAll('.confirm-participation-btn').forEach(b => {
+    b.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const challengeId = b.dataset.id;
+        await db.from('challenge_participants').insert({ 
+            challenge_id: challengeId, 
+            user_id: user.id 
+        });
         showToast('Participação confirmada!', 'success');
-        loadDetalhes();
-    }));
+        loadDetalhes(); // Recarregar a página de detalhes
+    });
+});
+    
+ document.querySelectorAll('.register-activity-btn').forEach(b => {
+    b.addEventListener('click', (e) => {
+        e.preventDefault();
+        const challengeId = b.dataset.id;
+        console.log('Registrando atividade para desafio:', challengeId);
+        localStorage.setItem('fatfit_register_challenges', JSON.stringify([challengeId]));
+        window.location.href = 'activity.html';
+    });
+});
     
     document.getElementById('createChallengeForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -620,103 +654,190 @@ function appendMessage(msg, currentUserId) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+// Substitua a função createGroup existente por esta versão melhorada:
 async function createGroup(e) {
     e.preventDefault();
+    
     const user = await getCurrentUser();
     const name = document.getElementById('groupName').value.trim();
     const desc = document.getElementById('groupDescription').value.trim();
     const max = parseInt(document.getElementById('groupMaxMembers').value);
     
-    if (!name) { showToast('Nome obrigatório', 'error'); return; }
+    if (!name) { 
+        showToast('Por favor, digite um nome para o grupo', 'error');
+        // Adiciona animação de erro no campo
+        const nameInput = document.getElementById('groupName');
+        nameInput.style.borderColor = '#dc3545';
+        setTimeout(() => {
+            nameInput.style.borderColor = '#e0e0e0';
+        }, 2000);
+        return; 
+    }
     
+    // Gerar código de convite único
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
-    for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
     
-    const { data: group, error } = await db.from('groups').insert({
-        name, description: desc, max_members: max, creator_id: user.id, invite_code: code
-    }).select().single();
+    // Mostrar loading no botão
+    const submitBtn = document.querySelector('#createGroupForm button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando grupo...';
     
-    if (error) { showToast('Erro: ' + error.message, 'error'); return; }
-    
-    await db.from('group_members').insert({ group_id: group.id, user_id: user.id, role: 'admin' });
-    
-    document.getElementById('createGroupModal').classList.remove('open');
-    document.getElementById('createGroupForm').reset();
-    showToast('Grupo criado! Código: ' + code, 'success');
-    
-    await loadSidebarGroups(user.id);
-    await selectGroup(group, 'admin');
+    try {
+        const { data: group, error } = await db.from('groups').insert({
+            name, 
+            description: desc || null, 
+            max_members: max || 50, 
+            creator_id: user.id, 
+            invite_code: code
+        }).select().single();
+        
+        if (error) throw error;
+        
+        await db.from('group_members').insert({ 
+            group_id: group.id, 
+            user_id: user.id, 
+            role: 'admin' 
+        });
+        
+        // Fechar modal e resetar formulário
+        document.getElementById('createGroupModal').classList.remove('open');
+        document.getElementById('createGroupForm').reset();
+        
+        // Mostrar mensagem de sucesso com o código
+        showToast(`🎉 Grupo "${name}" criado com sucesso! Código: ${code}`, 'success');
+        
+        // Atualizar sidebar e selecionar o novo grupo
+        await loadSidebarGroups(user.id);
+        await selectGroup(group, 'admin');
+        
+    } catch (error) {
+        console.error('Erro ao criar grupo:', error);
+        showToast('Erro ao criar grupo: ' + error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
 }
 
 // ============================================
-// FAB - REGISTRO EM MÚLTIPLOS GRUPOS
+// FUNÇÕES DO FAB - REGISTRO EM MÚLTIPLOS DESAFIOS
+// ============================================
+
+// ============================================
+// FUNÇÃO DO FAB - REGISTRO DE ATIVIDADE
 // ============================================
 
 async function openRegisterModal() {
-    const user = await getCurrentUser();
-    if (!user) return;
+    console.log('openRegisterModal chamado');
     
-    const { data: memberships } = await db.from('group_members')
+    const user = await getCurrentUser();
+    if (!user) {
+        console.log('Usuário não encontrado');
+        return;
+    }
+    
+    const { data: memberships, error } = await db.from('group_members')
         .select('group_id, groups:group_id(id, name)')
         .eq('user_id', user.id);
     
+    console.log('Memberships:', memberships?.length, 'Erro:', error);
+    
+    if (error) {
+        console.error('Erro ao buscar groups:', error);
+        showToast('Erro ao carregar grupos', 'error');
+        return;
+    }
+    
     if (!memberships || memberships.length === 0) {
+        console.log('Nenhum grupo encontrado');
         showToast('Você não está em nenhum grupo', 'warning');
         return;
     }
     
-    // Se só tem 1 grupo, vai direto
+    // Se só tem 1 grupo, vai direto para o registro
     if (memberships.length === 1) {
         const groupId = memberships[0].group_id;
-        const { data: challenge } = await db.from('challenges')
-            .select('id').eq('group_id', groupId).eq('status', 'active').maybeSingle();
+        console.log('Apenas 1 grupo, ID:', groupId);
+        
+        // Busca o desafio mais recente (ativo ou não)
+        const { data: challenge, error: challengeError } = await db.from('challenges')
+            .select('id, name, status, start_date, end_date')
+            .eq('group_id', groupId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        console.log('Desafio encontrado:', challenge?.name, 'Erro:', challengeError);
         
         if (challenge) {
-            window.location.href = `activity.html?challenge=${challenge.id}`;
+            console.log('Redirecionando para activity.html?challenge=' + challenge.id);
+            // Força o redirect
+            window.location.replace('activity.html?challenge=' + challenge.id);
+            return;
         } else {
-            showToast('Nenhum desafio ativo neste grupo', 'warning');
+            console.log('Nenhum desafio encontrado');
+            showToast('Este grupo não tem desafios. Crie um desafio primeiro.', 'warning');
+            return;
         }
-        return;
     }
     
     // Múltiplos grupos - mostra modal
+    console.log('Múltiplos grupos, abrindo modal');
     const modal = document.getElementById('registerSelectModal');
     const container = document.getElementById('groupsChecklist');
-    container.innerHTML = '';
     
-    let hasAnyActive = false;
+    if (!modal || !container) {
+        console.error('Modal ou container não encontrados');
+        return;
+    }
+    
+    container.innerHTML = '';
     
     for (const m of memberships) {
         const g = m.groups;
         if (!g) continue;
         
-        const { data: activeChallenge } = await db.from('challenges')
-            .select('id, name, status').eq('group_id', g.id)
-            .in('status', ['pending', 'active']).maybeSingle();
+        const { data: challenge } = await db.from('challenges')
+            .select('id, name, status, start_date, end_date')
+            .eq('group_id', g.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
         
-        const hasActive = activeChallenge && activeChallenge.status === 'active';
-        if (hasActive) hasAnyActive = true;
+        const hasActive = challenge && challenge.status === 'active';
+        const today = getToday();
+        const inPeriod = challenge && today >= challenge.start_date && today <= challenge.end_date;
+        const willScore = hasActive && inPeriod;
         
         const item = document.createElement('div');
-        item.className = 'group-checkbox-item' + (hasActive ? ' checked' : '');
+        item.className = 'group-checkbox-item' + (challenge ? ' checked' : '');
         item.innerHTML = `
             <div class="checkbox-custom">
                 <i class="fas fa-check"></i>
             </div>
             <div class="group-checkbox-info">
                 <div class="group-checkbox-name">${escapeHtml(g.name)}</div>
-                ${activeChallenge ? 
-                    `<div class="group-checkbox-challenge">🎯 ${escapeHtml(activeChallenge.name || 'Desafio')}</div>` : 
-                    '<div class="group-checkbox-challenge">Nenhum desafio ativo</div>'}
+                ${challenge ? 
+                    `<div class="group-checkbox-challenge">
+                        🎯 ${escapeHtml(challenge.name || 'Desafio')} 
+                        ${willScore ? '✅ <span style="color:#065F46;">Pontuando</span>' : 
+                          hasActive ? '⏳ <span style="color:#92400E;">Fora do período</span>' : 
+                          '📋 <span style="color:#6B7280;">Desafio inativo</span>'}
+                    </div>` : 
+                    '<div class="group-checkbox-challenge">⚠️ Nenhum desafio criado</div>'}
             </div>
-            <span class="group-checkbox-badge ${hasActive ? 'active' : 'inactive'}">
-                ${hasActive ? 'Ativo' : 'Inativo'}
+            <span class="group-checkbox-badge ${willScore ? 'active' : 'inactive'}">
+                ${willScore ? '+1 pt' : 'Sem ponto'}
             </span>
-            <input type="checkbox" value="${g.id}" data-challenge="${activeChallenge?.id || ''}" ${hasActive ? 'checked' : 'disabled'} hidden>
+            <input type="checkbox" value="${g.id}" data-challenge="${challenge?.id || ''}" ${challenge ? 'checked' : 'disabled'} hidden>
         `;
         
-        if (hasActive) {
+        if (challenge) {
             item.addEventListener('click', () => {
                 const checkbox = item.querySelector('input[type="checkbox"]');
                 checkbox.checked = !checkbox.checked;
@@ -726,10 +847,6 @@ async function openRegisterModal() {
         }
         
         container.appendChild(item);
-    }
-    
-    if (!hasAnyActive) {
-        container.innerHTML += '<p class="text-center text-muted mt-2">Nenhum grupo com desafio ativo no momento</p>';
     }
     
     modal.classList.add('open');
@@ -746,7 +863,7 @@ function goToRegister() {
     });
     
     if (selectedChallenges.length === 0) {
-        showToast('Selecione pelo menos um grupo', 'warning');
+        showToast('Selecione pelo menos um grupo com desafio', 'warning');
         return;
     }
     
@@ -757,7 +874,821 @@ function goToRegister() {
         ? `activity.html?challenge=${selectedChallenges[0]}`
         : `activity.html?challenges=${selectedChallenges.join(',')}`;
     
-    window.location.href = url;
+    window.location.replace(url);
+}
+
+function createRegisterModal() {
+    const modalHTML = `
+        <div id="registerSelectModal" class="modal">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>📸 Registrar Atividade</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Selecione os desafios para registrar:</p>
+                    <div id="challengesList" style="max-height: 400px; overflow-y: auto;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('registerSelectModal')">Cancelar</button>
+                    <button id="confirmMultiRegisterBtn" class="btn btn-primary">Continuar →</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    const closeBtn = document.querySelector('#registerSelectModal .modal-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            closeModal('registerSelectModal');
+        });
+    }
+    
+    const modal = document.getElementById('registerSelectModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal('registerSelectModal');
+            }
+        });
+    }
+}
+
+// ============================================
+// FUNÇÕES DE ADMIN - EDITAR GRUPO
+// ============================================
+
+async function openEditGroupModal() {
+    if (!currentGroup) {
+        showToast('Nenhum grupo selecionado', 'warning');
+        return;
+    }
+    
+    if (currentUserRole !== 'admin') {
+        showToast('Apenas administradores podem editar o grupo', 'error');
+        return;
+    }
+    
+    let modal = document.getElementById('editGroupModal');
+    if (!modal) {
+        createEditGroupModal();
+        modal = document.getElementById('editGroupModal');
+    }
+    
+    document.getElementById('editGroupName').value = currentGroup.name || '';
+    document.getElementById('editGroupDescription').value = currentGroup.description || '';
+    document.getElementById('editGroupMaxMembers').value = currentGroup.max_members || 50;
+    document.getElementById('editGroupInviteCode').value = currentGroup.invite_code || '';
+    
+    const inviteCodeInput = document.getElementById('editGroupInviteCode');
+    if (inviteCodeInput) {
+        inviteCodeInput.readOnly = true;
+    }
+    
+    modal.classList.add('open');
+}
+
+function createEditGroupModal() {
+    const modalHTML = `
+        <div id="editGroupModal" class="modal">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>✏️ Editar Grupo</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="editGroupForm">
+                        <div class="input-group">
+                            <label>Nome do Grupo *</label>
+                            <input type="text" id="editGroupName" required maxlength="100">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Descrição</label>
+                            <textarea id="editGroupDescription" rows="3" maxlength="500"></textarea>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Máximo de Membros</label>
+                            <input type="number" id="editGroupMaxMembers" min="1" max="500" value="50">
+                            <small class="text-muted">Atual: ${currentGroup?.max_members || 50}</small>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label>Código de Convite</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="editGroupInviteCode" style="flex: 1; font-family: monospace;" readonly>
+                                <button type="button" id="regenerateInviteCodeBtn" class="btn btn-secondary btn-sm">🔄 Gerar Novo</button>
+                            </div>
+                            <small class="text-muted">Compartilhe este código para novos membros entrarem</small>
+                        </div>
+                        
+                        <div class="modal-footer" style="margin-top: 20px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeModal('editGroupModal')">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    const closeBtn = document.querySelector('#editGroupModal .modal-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            closeModal('editGroupModal');
+        });
+    }
+    
+    const modal = document.getElementById('editGroupModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal('editGroupModal');
+            }
+        });
+    }
+    
+    const regenerateBtn = document.getElementById('regenerateInviteCodeBtn');
+    if (regenerateBtn) {
+        regenerateBtn.addEventListener('click', async () => {
+            const newCode = generateInviteCode();
+            document.getElementById('editGroupInviteCode').value = newCode;
+            showToast('Novo código gerado! Não esqueça de salvar as alterações.', 'info');
+        });
+    }
+    
+    const editForm = document.getElementById('editGroupForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await updateGroup();
+        });
+    }
+}
+
+function generateInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
+async function updateGroup() {
+    if (!currentGroup) return;
+    
+    const newName = document.getElementById('editGroupName').value.trim();
+    const newDescription = document.getElementById('editGroupDescription').value.trim();
+    const newMaxMembers = parseInt(document.getElementById('editGroupMaxMembers').value);
+    const newInviteCode = document.getElementById('editGroupInviteCode').value.trim();
+    
+    if (!newName) {
+        showToast('Nome do grupo é obrigatório', 'error');
+        return;
+    }
+    
+    if (newMaxMembers < 1 || newMaxMembers > 500) {
+        showToast('Número de membros inválido', 'error');
+        return;
+    }
+    
+    if (newInviteCode !== currentGroup.invite_code) {
+        const { data: existingGroup } = await db.from('groups')
+            .select('id')
+            .eq('invite_code', newInviteCode)
+            .neq('id', currentGroup.id)
+            .single();
+        
+        if (existingGroup) {
+            showToast('Este código de convite já está em uso. Gere outro.', 'error');
+            return;
+        }
+    }
+    
+    const updateData = {
+        name: newName,
+        description: newDescription || null,
+        max_members: newMaxMembers,
+        invite_code: newInviteCode
+    };
+    
+    const { error } = await db.from('groups')
+        .update(updateData)
+        .eq('id', currentGroup.id);
+    
+    if (error) {
+        showToast('Erro ao atualizar grupo: ' + error.message, 'error');
+        return;
+    }
+    
+    currentGroup = {
+        ...currentGroup,
+        ...updateData
+    };
+    
+    document.getElementById('headerGroupName').textContent = newName;
+    
+    const user = await getCurrentUser();
+    await loadSidebarGroups(user.id);
+    
+    const activeTab = document.querySelector('.tab-content.active')?.id;
+    if (activeTab === 'tabDetalhes') {
+        await loadDetalhes();
+    }
+    
+    closeModal('editGroupModal');
+    showToast('Grupo atualizado com sucesso!', 'success');
+}
+
+async function openManageMembersModal() {
+    if (!currentGroup) {
+        showToast('Nenhum grupo selecionado', 'warning');
+        return;
+    }
+    
+    if (currentUserRole !== 'admin') {
+        showToast('Apenas administradores podem gerenciar membros', 'error');
+        return;
+    }
+    
+    let modal = document.getElementById('manageMembersModal');
+    if (!modal) {
+        createManageMembersModal();
+        modal = document.getElementById('manageMembersModal');
+    }
+    
+    await loadMembersList();
+    modal.classList.add('open');
+}
+
+function createManageMembersModal() {
+    const modalHTML = `
+        <div id="manageMembersModal" class="modal">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3>👥 Gerenciar Membros</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="membersListContainer">
+                        <div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('manageMembersModal')">Fechar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    const closeBtn = document.querySelector('#manageMembersModal .modal-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            closeModal('manageMembersModal');
+        });
+    }
+    
+    const modal = document.getElementById('manageMembersModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal('manageMembersModal');
+            }
+        });
+    }
+}
+
+async function loadMembersList() {
+    const container = document.getElementById('membersListContainer');
+    if (!container || !currentGroup) return;
+    
+    const { data: members } = await db.from('group_members')
+        .select('*, profiles:user_id(id, name, email, avatar_url)')
+        .eq('group_id', currentGroup.id)
+        .order('role', { ascending: false });
+    
+    if (!members || members.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Nenhum membro encontrado</p></div>';
+        return;
+    }
+    
+    const currentUser = await getCurrentUser();
+    
+    let html = '<div style="max-height: 400px; overflow-y: auto;">';
+    
+    for (const member of members) {
+        const profile = member.profiles;
+        const isCurrentUser = profile.id === currentUser.id;
+        const isAdmin = member.role === 'admin';
+        const canRemove = !isCurrentUser && currentUserRole === 'admin';
+        const canPromote = !isAdmin && currentUserRole === 'admin' && !isCurrentUser;
+        
+        html += `
+            <div class="member-management-item" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee;">
+                <img src="${profile?.avatar_url || 'https://via.placeholder.com/40'}" 
+                     style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px;">
+                <div style="flex: 1;">
+                    <div style="font-weight: 500;">${escapeHtml(profile?.name || 'Usuário')}</div>
+                    <div style="font-size: 12px; color: #666;">${escapeHtml(profile?.email || '')}</div>
+                    ${isAdmin ? '<span class="badge badge-info" style="font-size: 11px;">Admin</span>' : '<span class="badge badge-secondary" style="font-size: 11px;">Membro</span>'}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    ${canPromote ? `
+                        <button class="btn btn-sm btn-primary promote-member-btn" data-user-id="${profile.id}" data-user-name="${escapeHtml(profile?.name)}">
+                            👑 Promover
+                        </button>
+                    ` : ''}
+                    ${canRemove ? `
+                        <button class="btn btn-sm btn-danger remove-member-btn" data-user-id="${profile.id}" data-user-name="${escapeHtml(profile?.name)}">
+                            🗑️ Remover
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+    
+    document.querySelectorAll('.promote-member-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const userId = btn.dataset.userId;
+            const userName = btn.dataset.userName;
+            await promoteToAdmin(userId, userName);
+        });
+    });
+    
+    document.querySelectorAll('.remove-member-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const userId = btn.dataset.userId;
+            const userName = btn.dataset.userName;
+            await removeMember(userId, userName);
+        });
+    });
+}
+
+async function promoteToAdmin(userId, userName) {
+    if (!confirm(`Promover ${userName} para administrador?`)) return;
+    
+    const { error } = await db.from('group_members')
+        .update({ role: 'admin' })
+        .eq('group_id', currentGroup.id)
+        .eq('user_id', userId);
+    
+    if (error) {
+        showToast('Erro ao promover membro: ' + error.message, 'error');
+    } else {
+        showToast(`${userName} agora é administrador!`, 'success');
+        await loadMembersList();
+        await loadDetalhes();
+    }
+}
+
+async function removeMember(userId, userName) {
+    if (!confirm(`Remover ${userName} do grupo?`)) return;
+    
+    const { data: admins } = await db.from('group_members')
+        .select('user_id')
+        .eq('group_id', currentGroup.id)
+        .eq('role', 'admin');
+    
+    const isLastAdmin = admins.length === 1 && admins[0].user_id === userId;
+    
+    if (isLastAdmin) {
+        showToast('Não é possível remover o último administrador do grupo', 'error');
+        return;
+    }
+    
+    const { error } = await db.from('group_members')
+        .delete()
+        .eq('group_id', currentGroup.id)
+        .eq('user_id', userId);
+    
+    if (error) {
+        showToast('Erro ao remover membro: ' + error.message, 'error');
+    } else {
+        showToast(`${userName} foi removido do grupo`, 'success');
+        await loadMembersList();
+        await loadSidebarGroups((await getCurrentUser()).id);
+        
+        const currentUser = await getCurrentUser();
+        if (userId === currentUser.id) {
+            currentGroup = null;
+            document.getElementById('noGroupState').style.display = 'block';
+            document.getElementById('bottomNav').style.display = 'none';
+            document.getElementById('fabRegister').style.display = 'none';
+            document.getElementById('headerGroupName').textContent = 'FATFIT';
+            closeModal('manageMembersModal');
+            showToast('Você foi removido do grupo', 'info');
+        } else {
+            await loadDetalhes();
+        }
+    }
+}
+
+async function deleteGroup() {
+    if (!currentGroup) return;
+    
+    if (currentUserRole !== 'admin') {
+        showToast('Apenas administradores podem deletar o grupo', 'error');
+        return;
+    }
+    
+    const confirmMessage = `Tem certeza que deseja deletar o grupo "${currentGroup.name}"?\n\nEsta ação é irreversível e todos os dados do grupo serão perdidos!`;
+    
+    if (!confirm(confirmMessage)) return;
+    
+    showToast('Deletando grupo...', 'info');
+    
+    try {
+        const { data: challenges } = await db.from('challenges')
+            .select('id')
+            .eq('group_id', currentGroup.id);
+        
+        if (challenges && challenges.length > 0) {
+            const challengeIds = challenges.map(c => c.id);
+            
+            await db.from('daily_activities')
+                .delete()
+                .in('challenge_id', challengeIds);
+            
+            await db.from('challenge_participants')
+                .delete()
+                .in('challenge_id', challengeIds);
+            
+            await db.from('challenge_winners')
+                .delete()
+                .in('challenge_id', challengeIds);
+            
+            await db.from('challenges')
+                .delete()
+                .eq('group_id', currentGroup.id);
+        }
+        
+        await db.from('messages')
+            .delete()
+            .eq('group_id', currentGroup.id);
+        
+        await db.from('group_members')
+            .delete()
+            .eq('group_id', currentGroup.id);
+        
+        const { error } = await db.from('groups')
+            .delete()
+            .eq('id', currentGroup.id);
+        
+        if (error) throw error;
+        
+        currentGroup = null;
+        currentUserRole = null;
+        
+        document.getElementById('noGroupState').style.display = 'block';
+        document.getElementById('bottomNav').style.display = 'none';
+        document.getElementById('fabRegister').style.display = 'none';
+        document.getElementById('headerGroupName').textContent = 'FATFIT';
+        
+        const user = await getCurrentUser();
+        await loadSidebarGroups(user.id);
+        
+        showToast('Grupo deletado com sucesso!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao deletar grupo:', error);
+        showToast('Erro ao deletar grupo: ' + error.message, 'error');
+    }
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('open');
+}
+
+// ============================================
+// PÁGINA: activity.html (REGISTRO FLEXÍVEL)
+// ============================================
+// ============================================
+// PÁGINA: activity.html (REGISTRO FLEXÍVEL)
+// ============================================
+if (window.location.pathname.includes('activity')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        console.log('📸 Activity.html carregado');
+        
+        const session = await requireAuth();
+        if (!session) {
+            console.log('❌ Sem sessão, voltando');
+            return;
+        }
+        
+        console.log('✅ Sessão OK, usuário:', session.user.id);
+        await setupActivity(session);
+    });
+}
+
+async function setupActivity(session) {
+    console.log('🚀 setupActivity iniciado');
+    
+    const user = session.user;
+    const params = new URLSearchParams(window.location.search);
+    
+    let challengeIds = [];
+    
+    if (params.get('challenges')) {
+        challengeIds = params.get('challenges').split(',').filter(Boolean);
+        console.log('📋 Múltiplos desafios:', challengeIds);
+    } else if (params.get('challenge')) {
+        challengeIds = [params.get('challenge')];
+        console.log('📋 Desafio único:', challengeIds[0]);
+    } else {
+        const stored = localStorage.getItem('fatfit_register_challenges');
+        if (stored) {
+            try { 
+                challengeIds = JSON.parse(stored); 
+                console.log('📋 Desafios do localStorage:', challengeIds);
+            } catch(e) {
+                console.error('❌ Erro ao parsear localStorage:', e);
+            }
+        }
+    }
+    
+    if (challengeIds.length === 0) {
+        console.log('❌ Nenhum desafio encontrado');
+        showToast('Nenhum desafio selecionado', 'error');
+        setTimeout(() => location.replace('home.html'), 1500);
+        return;
+    }
+    
+    // Busca TODOS os desafios
+    const challenges = [];
+    for (const id of challengeIds) {
+        console.log('🔍 Buscando desafio:', id);
+        const { data: challenge, error } = await db.from('challenges')
+            .select('*, groups:group_id(name)').eq('id', id).single();
+        
+        if (error) {
+            console.error('❌ Erro ao buscar desafio:', id, error);
+            continue;
+        }
+        
+        if (challenge) {
+            console.log('✅ Desafio encontrado:', challenge.name, 'Status:', challenge.status);
+            challenges.push(challenge);
+        } else {
+            console.log('⚠️ Desafio não encontrado:', id);
+        }
+    }
+    
+    if (challenges.length === 0) {
+        console.log('❌ Nenhum desafio válido');
+        showToast('Nenhum desafio encontrado', 'error');
+        setTimeout(() => location.replace('home.html'), 1500);
+        return;
+    }
+    
+    console.log('✅ Total de desafios válidos:', challenges.length);
+    
+    // Mostra grupos selecionados com status
+    const today = getToday();
+    const groupsDiv = document.getElementById('selectedGroups');
+    
+    if (!groupsDiv) {
+        console.error('❌ Elemento selectedGroups não encontrado!');
+        showToast('Erro na página', 'error');
+        setTimeout(() => location.replace('home.html'), 1000);
+        return;
+    }
+    
+    groupsDiv.innerHTML = challenges.map(c => {
+        const inPeriod = today >= c.start_date && today <= c.end_date;
+        const willScore = c.status === 'active' && inPeriod;
+        
+        return `
+            <span class="badge ${willScore ? 'badge-success' : 'badge-secondary'}" 
+                  style="margin:3px;font-size:0.85rem;padding:6px 12px;">
+                ${escapeHtml(c.groups?.name || 'Grupo')} - ${escapeHtml(c.name || 'Desafio')}
+                ${willScore ? ' (+1 pt)' : ' (sem ponto)'}
+            </span>
+        `;
+    }).join('');
+    
+    const scoringCount = challenges.filter(c => {
+        const inPeriod = today >= c.start_date && today <= c.end_date;
+        return c.status === 'active' && inPeriod;
+    }).length;
+    
+    document.getElementById('registerInfo').textContent = 
+        `Registrando em ${challenges.length} grupo(s) • ${scoringCount} pontuando`;
+    document.getElementById('submitInfo').textContent = 
+        scoringCount > 0 ? `Você ganhará +${scoringCount} ponto(s) hoje` : 'Nenhum desafio está em período de pontuação';
+    
+    // Verifica se já registrou hoje
+    const validChallenges = [];
+    
+    for (const c of challenges) {
+        const { data: todayActivity } = await db.from('daily_activities')
+            .select('id').eq('user_id', user.id).eq('challenge_id', c.id)
+            .eq('activity_date', today).maybeSingle();
+        
+        if (todayActivity) {
+            const inPeriod = today >= c.start_date && today <= c.end_date;
+            if (c.status === 'active' && inPeriod) {
+                console.log('⚠️ Já registrou hoje no desafio:', c.name);
+                continue;
+            }
+        }
+        validChallenges.push(c);
+    }
+    
+    if (validChallenges.length === 0) {
+        console.log('⚠️ Já registrou em todos hoje');
+        showToast('Já registrou em todos os desafios pontuáveis hoje!', 'warning');
+        setTimeout(() => location.replace('home.html'), 2000);
+        return;
+    }
+    
+    console.log('✅ Desafios válidos para registro:', validChallenges.length);
+    console.log('📸 Iniciando câmera...');
+    
+    // Continua com o resto da função...
+    let photoFile = null;
+    let locationData = null;
+    
+    const video = document.getElementById('cameraPreview');
+    const canvas = document.getElementById('photoCanvas');
+    const photo = document.getElementById('photoResult');
+    const captureBtn = document.getElementById('captureBtn');
+    const retakeBtn = document.getElementById('retakeBtn');
+    
+    if (!video || !captureBtn) {
+        console.error('❌ Elementos da câmera não encontrados!');
+        showToast('Erro ao carregar câmera', 'error');
+        setTimeout(() => location.replace('home.html'), 2000);
+        return;
+    }
+    
+    async function startCamera() {
+        try {
+            console.log('🎥 Solicitando acesso à câmera...');
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+            });
+            video.srcObject = stream;
+            await video.play();
+            console.log('✅ Câmera iniciada');
+        } catch (e) { 
+            console.error('❌ Erro câmera:', e);
+            showToast('Erro ao acessar câmera. Verifique as permissões.', 'error'); 
+        }
+    }
+    await startCamera();
+    
+    captureBtn.addEventListener('click', () => {
+        console.log('📸 Foto capturada');
+        if (!video.videoWidth) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        video.srcObject?.getTracks().forEach(t => t.stop());
+        video.style.display = 'none';
+        photo.src = canvas.toDataURL('image/jpeg', 0.8);
+        photo.style.display = 'block';
+        captureBtn.style.display = 'none';
+        retakeBtn.style.display = 'flex';
+        canvas.toBlob(b => photoFile = new File([b], 'act.jpg', { type: 'image/jpeg' }), 'image/jpeg', 0.8);
+    });
+    
+    retakeBtn.addEventListener('click', async () => {
+        console.log('🔄 Refazendo foto');
+        photo.style.display = 'none';
+        retakeBtn.style.display = 'none';
+        video.style.display = 'block';
+        captureBtn.style.display = 'flex';
+        photoFile = null;
+        await startCamera();
+    });
+    
+    document.getElementById('getLocationBtn')?.addEventListener('click', () => {
+        if (!navigator.geolocation) { 
+            showToast('Geolocalização não suportada', 'warning'); 
+            return; 
+        }
+        console.log('📍 Solicitando localização...');
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                locationData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                document.getElementById('locationStatus').textContent = '✓ Capturada';
+                document.getElementById('locationStatus').style.color = 'var(--secondary)';
+                console.log('✅ Localização capturada');
+            },
+            (err) => {
+                console.error('❌ Erro localização:', err);
+                showToast('Falha ao obter localização', 'warning');
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
+    
+    document.getElementById('skipLocationBtn')?.addEventListener('click', () => {
+        locationData = null;
+        document.getElementById('locationStatus').textContent = 'Ignorada';
+        document.getElementById('locationStatus').style.color = 'var(--gray-500)';
+    });
+    
+    document.getElementById('activityForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        console.log('📤 Enviando atividade...');
+        
+        if (!photoFile) { 
+            showToast('Tire uma foto primeiro!', 'error'); 
+            return; 
+        }
+        
+        const btn = document.getElementById('submitBtn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        
+        const comment = document.getElementById('activityComment')?.value?.trim() || null;
+        let successCount = 0;
+        let pointsEarned = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < validChallenges.length; i++) {
+            const challenge = validChallenges[i];
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Salvando ${i + 1}/${validChallenges.length}...`;
+            
+            try {
+                console.log(`📤 Upload ${i+1}/${validChallenges.length} para desafio:`, challenge.id);
+                
+                const fileName = `${user.id}/${challenge.id}/${Date.now()}_${i}.jpg`;
+                const { error: upErr } = await db.storage.from('activity-photos')
+                    .upload(fileName, photoFile, { contentType: 'image/jpeg', upsert: false });
+                
+                if (upErr) {
+                    console.error('❌ Erro upload:', upErr);
+                    errorCount++;
+                    continue;
+                }
+                
+                const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+                
+                const inPeriod = today >= challenge.start_date && today <= challenge.end_date;
+                const activityStatus = 'valid';
+                
+                const { error: actErr } = await db.from('daily_activities').insert({
+                    user_id: user.id,
+                    challenge_id: challenge.id,
+                    activity_date: today,
+                    photo_url: urlData.publicUrl,
+                    location: locationData,
+                    comment: comment,
+                    status: activityStatus
+                });
+                
+                if (actErr) {
+                    console.error('❌ Erro insert atividade:', actErr);
+                    errorCount++;
+                } else {
+                    console.log('✅ Atividade registrada:', challenge.name);
+                    successCount++;
+                    if (activityStatus === 'valid' && challenge.status === 'active' && inPeriod) {
+                        pointsEarned++;
+                    }
+                }
+            } catch (err) {
+                console.error('❌ Erro geral:', err);
+                errorCount++;
+            }
+        }
+        
+        localStorage.removeItem('fatfit_register_challenges');
+        
+        if (successCount > 0) {
+            const msg = pointsEarned > 0 
+                ? `Registrado em ${successCount} grupo(s)! 🎉 +${pointsEarned} pontos` 
+                : `Registrado em ${successCount} grupo(s)! (fora do período)`;
+            showToast(msg, 'success');
+            console.log('✅ Sucesso! Redirecionando...');
+        } else {
+            showToast('Erro ao registrar atividade', 'error');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            return;
+        }
+        
+        setTimeout(() => location.replace('home.html'), 1500);
+    });
+    
+    console.log('✅ setupActivity concluído - aguardando ação do usuário');
 }
 
 // ============================================
@@ -827,230 +1758,6 @@ function searchGroups() {
 }
 
 // ============================================
-// PÁGINA: activity.html (MÚLTIPLOS DESAFIOS)
-// ============================================
-if (window.location.pathname.includes('activity')) {
-    document.addEventListener('DOMContentLoaded', async () => {
-        const session = await requireAuth();
-        if (!session) return;
-        setupActivity(session);
-    });
-}
-
-async function setupActivity(session) {
-    const user = session.user;
-    const params = new URLSearchParams(window.location.search);
-    
-    let challengeIds = [];
-    
-    if (params.get('challenges')) {
-        challengeIds = params.get('challenges').split(',').filter(Boolean);
-    } else if (params.get('challenge')) {
-        challengeIds = [params.get('challenge')];
-    } else {
-        const stored = localStorage.getItem('fatfit_register_challenges');
-        if (stored) {
-            try { challengeIds = JSON.parse(stored); } catch(e) {}
-        }
-    }
-    
-    if (challengeIds.length === 0) {
-        showToast('Nenhum desafio selecionado', 'error');
-        setTimeout(() => location.href = 'home.html', 1500);
-        return;
-    }
-    
-    // Busca desafios ativos
-    const challenges = [];
-    for (const id of challengeIds) {
-        const { data: challenge } = await db.from('challenges')
-            .select('*, groups:group_id(name)').eq('id', id).eq('status', 'active').single();
-        if (challenge) challenges.push(challenge);
-    }
-    
-    if (challenges.length === 0) {
-        showToast('Nenhum desafio ativo encontrado', 'error');
-        setTimeout(() => location.href = 'home.html', 1500);
-        return;
-    }
-    
-    // Mostra grupos selecionados
-    const groupsDiv = document.getElementById('selectedGroups');
-    groupsDiv.innerHTML = challenges.map(c => `
-        <span class="badge badge-info" style="margin:3px;font-size:0.85rem;padding:6px 12px;">
-            ${escapeHtml(c.groups?.name || 'Grupo')} - ${escapeHtml(c.name || 'Desafio')}
-        </span>
-    `).join('');
-    
-    document.getElementById('registerInfo').textContent = 
-        `Registrando em ${challenges.length} grupo(s) • +1 ponto em cada`;
-    document.getElementById('submitInfo').textContent = 
-        `A foto será registrada em ${challenges.length} desafio(s)`;
-    
-    // Verifica se já registrou hoje
-    const alreadyRegistered = [];
-    const validChallenges = [];
-    
-    for (const c of challenges) {
-        const { data: today } = await db.from('daily_activities')
-            .select('id').eq('user_id', user.id).eq('challenge_id', c.id)
-            .eq('activity_date', getToday()).maybeSingle();
-        if (today) {
-            alreadyRegistered.push(c);
-        } else {
-            validChallenges.push(c);
-        }
-    }
-    
-    if (validChallenges.length === 0) {
-        showToast('Já registrou em todos os grupos hoje!', 'warning');
-        setTimeout(() => location.href = 'home.html', 2000);
-        return;
-    }
-    
-    // Se removeu alguns que já foram registrados
-    if (alreadyRegistered.length > 0) {
-        const names = alreadyRegistered.map(c => c.groups?.name || '').join(', ');
-        showToast(`Já registrado em: ${names}. Registrando nos outros.`, 'info');
-    }
-    
-    let photoFile = null;
-    let locationData = null;
-    
-    const video = document.getElementById('cameraPreview');
-    const canvas = document.getElementById('photoCanvas');
-    const photo = document.getElementById('photoResult');
-    const captureBtn = document.getElementById('captureBtn');
-    const retakeBtn = document.getElementById('retakeBtn');
-    
-    async function startCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
-            });
-            video.srcObject = stream;
-            await video.play();
-        } catch (e) { 
-            console.error('Erro câmera:', e);
-            showToast('Erro ao acessar câmera', 'error'); 
-        }
-    }
-    await startCamera();
-    
-    captureBtn?.addEventListener('click', () => {
-        if (!video.videoWidth) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        video.srcObject?.getTracks().forEach(t => t.stop());
-        video.style.display = 'none';
-        photo.src = canvas.toDataURL('image/jpeg', 0.8);
-        photo.style.display = 'block';
-        captureBtn.style.display = 'none';
-        retakeBtn.style.display = 'flex';
-        canvas.toBlob(b => photoFile = new File([b], 'act.jpg', { type: 'image/jpeg' }), 'image/jpeg', 0.8);
-    });
-    
-    retakeBtn?.addEventListener('click', async () => {
-        photo.style.display = 'none';
-        retakeBtn.style.display = 'none';
-        video.style.display = 'block';
-        captureBtn.style.display = 'flex';
-        photoFile = null;
-        await startCamera();
-    });
-    
-    document.getElementById('getLocationBtn')?.addEventListener('click', () => {
-        if (!navigator.geolocation) { showToast('Geolocalização não suportada', 'warning'); return; }
-        navigator.geolocation.getCurrentPosition(
-            pos => {
-                locationData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                document.getElementById('locationStatus').textContent = '✓ Capturada';
-                document.getElementById('locationStatus').style.color = 'var(--secondary)';
-                showToast('Localização capturada!', 'success');
-            },
-            (err) => {
-                console.error('Erro localização:', err);
-                showToast('Falha ao obter localização', 'warning');
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    });
-    
-    document.getElementById('skipLocationBtn')?.addEventListener('click', () => {
-        locationData = null;
-        document.getElementById('locationStatus').textContent = 'Ignorada';
-        document.getElementById('locationStatus').style.color = 'var(--gray-500)';
-    });
-    
-    document.getElementById('activityForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        if (!photoFile) { showToast('Tire uma foto primeiro!', 'error'); return; }
-        
-        const btn = document.getElementById('submitBtn');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        
-        const comment = document.getElementById('activityComment')?.value?.trim() || null;
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (let i = 0; i < validChallenges.length; i++) {
-            const challenge = validChallenges[i];
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Salvando ${i + 1}/${validChallenges.length}...`;
-            
-            try {
-                const fileName = `${user.id}/${challenge.id}/${Date.now()}_${i}.jpg`;
-                const { error: upErr } = await db.storage.from('activity-photos')
-                    .upload(fileName, photoFile, { contentType: 'image/jpeg', upsert: false });
-                
-                if (upErr) {
-                    console.error('Erro upload:', upErr);
-                    errorCount++;
-                    continue;
-                }
-                
-                const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
-                
-                const { error: actErr } = await db.from('daily_activities').insert({
-                    user_id: user.id,
-                    challenge_id: challenge.id,
-                    activity_date: getToday(),
-                    photo_url: urlData.publicUrl,
-                    location: locationData,
-                    comment: comment,
-                    status: 'valid'
-                });
-                
-                if (actErr) {
-                    console.error('Erro insert:', actErr);
-                    errorCount++;
-                } else {
-                    successCount++;
-                }
-            } catch (err) {
-                console.error('Erro geral:', err);
-                errorCount++;
-            }
-        }
-        
-        localStorage.removeItem('fatfit_register_challenges');
-        
-        if (successCount > 0) {
-            showToast(`Registrado em ${successCount} grupo(s)! 🎉 +${successCount} pontos`, 'success');
-        } else {
-            showToast('Erro ao registrar atividade', 'error');
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            return;
-        }
-        
-        setTimeout(() => location.href = 'home.html', 1500);
-    });
-}
-
-// ============================================
 // PÁGINA: profile.html
 // ============================================
 if (window.location.pathname.includes('profile')) {
@@ -1116,7 +1823,6 @@ async function setupProfile(session) {
         else { showToast('Senha alterada!', 'success'); document.getElementById('changePasswordForm').reset(); }
     });
     
-    // Stats
     const { count: challenges } = await db.from('challenge_participants')
         .select('*', { count: 'exact', head: true }).eq('user_id', user.id);
     document.getElementById('totalChallenges').textContent = challenges || 0;
@@ -1156,3 +1862,63 @@ async function setupProfile(session) {
         list.appendChild(card);
     });
 }
+
+// Função de debug para verificar o botão de registro
+function debugRegisterButton() {
+    console.log('🔍 Verificando botões de registro...');
+    const btns = document.querySelectorAll('.register-activity-btn');
+    console.log(`Encontrados ${btns.length} botões de registro`);
+    btns.forEach((btn, i) => {
+        console.log(`Botão ${i + 1}:`, {
+            id: btn.dataset.id,
+            texto: btn.textContent,
+            visivel: btn.offsetParent !== null
+        });
+    });
+}
+
+// Função de teste para debug
+window.testFAB = function() {
+    console.log('=== TESTE DO FAB ===');
+    console.log('currentGroup:', currentGroup);
+    console.log('currentUserRole:', currentUserRole);
+    const fab = document.getElementById('fabRegister');
+    console.log('Elemento FAB:', fab);
+    if (fab) {
+        console.log('FAB está visível:', fab.style.display);
+        console.log('FAB classes:', fab.className);
+    }
+    console.log('openRegisterModal function:', typeof openRegisterModal);
+};
+
+// Também adicione uma função para ir direto para registro
+window.quickRegister = function() {
+    if (!currentGroup) {
+        console.log('Sem grupo selecionado');
+        return;
+    }
+    console.log('Indo direto para registro do grupo:', currentGroup.name);
+    // Buscar primeiro desafio ativo
+    db.from('challenges')
+        .select('id')
+        .eq('group_id', currentGroup.id)
+        .eq('status', 'active')
+        .limit(1)
+        .then(({ data }) => {
+            if (data && data.length > 0) {
+                localStorage.setItem('fatfit_register_challenges', JSON.stringify([data[0].id]));
+                window.location.href = 'activity.html';
+            } else {
+                showToast('Nenhum desafio ativo', 'warning');
+            }
+        });
+};
+
+
+// Expor funções globalmente
+window.closeModal = closeModal;
+window.openRegisterModal = openRegisterModal;
+window.openEditGroupModal = openEditGroupModal;
+window.openManageMembersModal = openManageMembersModal;
+window.deleteGroup = deleteGroup;
+window.debugRegisterButton = debugRegisterButton;

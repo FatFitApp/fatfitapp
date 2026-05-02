@@ -1,85 +1,67 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#4F46E5">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>FATFIT - Registrar Atividade</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Registrar Atividade - FATFIT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="app-page">
-    <header class="app-header">
-        <button class="icon-btn" onclick="history.back()">
-            <i class="fas fa-arrow-left"></i>
-        </button>
-        <h1 class="app-title">Registrar Atividade</h1>
-        <div></div>
-    </header>
+<body>
+    <div class="container">
+        <header>
+            <button onclick="history.back()" class="btn-back">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h1>📸 Registrar Atividade</h1>
+            <div style="width: 40px;"></div>
+        </header>
 
-    <main class="main-content">
-        <!-- Grupos selecionados -->
-        <section class="section">
-            <div class="section-header">
-                <h2>📋 Grupos</h2>
-            </div>
-            <div id="selectedGroups" class="mb-2"></div>
-            <p class="text-xs text-muted" id="registerInfo"></p>
-        </section>
+        <div class="activity-content">
+            <div id="selectedGroups" class="selected-groups"></div>
+            <div id="registerInfo" class="register-info"></div>
+            <div id="submitInfo" class="submit-info"></div>
 
-        <!-- Câmera -->
-        <section class="section">
-            <div class="camera-container" id="cameraContainer">
-                <video id="cameraPreview" autoplay playsinline></video>
-                <img id="photoResult" style="display:none;" alt="Foto capturada">
-                <canvas id="photoCanvas" hidden></canvas>
-                <div class="camera-overlay">
-                    <button class="camera-btn" id="captureBtn">
-                        <i class="fas fa-camera"></i>
-                    </button>
-                    <button class="camera-btn" id="retakeBtn" style="display:none;">
-                        <i class="fas fa-redo"></i>
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- Localização -->
-        <section class="section">
-            <div class="card">
-                <div class="flex-between mb-1">
-                    <span>📍 Localização</span>
-                    <span id="locationStatus">Não capturada</span>
-                </div>
-                <div class="flex-between">
-                    <button class="btn btn-outline btn-sm" id="getLocationBtn">
-                        <i class="fas fa-map-marker-alt"></i> Capturar
-                    </button>
-                    <button class="btn btn-text btn-sm" id="skipLocationBtn">
-                        Pular
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- Comentário e envio -->
-        <section class="section">
             <form id="activityForm">
-                <div class="input-group">
-                    <label for="activityComment">💬 Comentário (opcional)</label>
-                    <textarea id="activityComment" rows="3" placeholder="Como foi seu treino hoje?" maxlength="500"></textarea>
+                <div class="camera-container">
+                    <video id="cameraPreview" autoplay playsinline></video>
+                    <canvas id="photoCanvas" style="display: none;"></canvas>
+                    <img id="photoResult" style="display: none;">
+                    <div class="camera-controls">
+                        <button type="button" id="captureBtn" class="btn-capture">
+                            <i class="fas fa-camera"></i> Tirar Foto
+                        </button>
+                        <button type="button" id="retakeBtn" class="btn-retake" style="display: none;">
+                            <i class="fas fa-redo"></i> Refazer
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
-                    <i class="fas fa-check-circle"></i> Registrar Atividade
+
+                <div class="input-group">
+                    <label><i class="fas fa-comment"></i> Comentário (opcional)</label>
+                    <textarea id="activityComment" rows="3" placeholder="Adicione um comentário sobre sua atividade..."></textarea>
+                </div>
+
+                <div class="location-controls">
+                    <button type="button" id="getLocationBtn" class="btn-location">
+                        <i class="fas fa-map-marker-alt"></i> Capturar Localização
+                    </button>
+                    <button type="button" id="skipLocationBtn" class="btn-skip">
+                        <i class="fas fa-skip"></i> Pular
+                    </button>
+                    <div id="locationStatus" class="location-status"></div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn-submit">
+                    <i class="fas fa-check"></i> Registrar Atividade
                 </button>
-                <p class="text-xs text-muted text-center mt-1" id="submitInfo"></p>
             </form>
-        </section>
-    </main>
+        </div>
+    </div>
 
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Scripts na ordem correta -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
