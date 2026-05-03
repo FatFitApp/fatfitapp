@@ -965,48 +965,159 @@ async function submitActivity(e) {
 }
 
 // ============================================
-// PÁGINA: search.html
+// PÁGINA: search.html (MODERNA)
 // ============================================
 if (window.location.pathname.includes('search')) {
     document.addEventListener('DOMContentLoaded', async () => {
         const session = await requireAuth();
         if (!session) return;
-        await loadAllGroups();
-        document.getElementById('searchBtn')?.addEventListener('click', () => loadAllGroups(document.getElementById('searchInput')?.value || ''));
-        document.getElementById('searchInput')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') loadAllGroups(e.target.value); });
+        setupSearchPage();
     });
 }
 
-async function loadAllGroups(query = '') {
+let searchPage = 0;
+let searchQuery = '';
+const SEARCH_LIMIT = 10;
+
+async function setupSearchPage() {
+    const searchInput = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    
+    // Busca ao digitar (com delay)
+    let searchTimeout;
+    searchInput?.addEventListener('input', () => {
+        clearBtn.style.display = searchInput.value ? 'flex' : 'none';
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            searchQuery = searchInput.value.trim();
+            searchPage = 0;
+            loadAllGroups(true);
+        }, 400);
+    });
+    
+    // Limpar busca
+    clearBtn?.addEventListener('click', () => {
+        searchInput.value = '';
+        clearBtn.style.display = 'none';
+        searchQuery = '';
+        searchPage = 0;
+        loadAllGroups(true);
+        searchInput.focus();
+    });
+    
+    // Atualizar
+    refreshBtn?.addEventListener('click', () => {
+        searchPage = 0;
+        loadAllGroups(true);
+    });
+    
+    // Carregar mais
+    loadMoreBtn?.addEventListener('click', () => {
+        loadAllGroups(false);
+    });
+    
+    // Carrega grupos iniciais
+    await loadAllGroups(true);
+}
+
+async function loadAllGroups(reset = false) {
     const container = document.getElementById('groupsList');
+    const emptyState = document.getElementById('emptyState');
+    const loadMoreContainer = document.getElementById('loadMoreContainer');
+    const groupsCount = document.getElementById('groupsCount');
+    
     if (!container) return;
-    let q = db.from('groups').select('*').order('created_at', { ascending: false }).limit(20);
-    if (query) q = q.ilike('name', '%' + query + '%');
-    const { data: groups } = await q;
-    if (!groups || groups.length === 0) { container.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><p>Nenhum grupo encontrado</p></div>'; return; }
+    
+    if (reset) {
+        container.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Buscando grupos...</p></div>';
+        emptyState.style.display = 'none';
+        loadMoreContainer.style.display = 'none';
+        searchPage = 0;
+    }
+    
+    searchPage++;
+    const from = (searchPage - 1) * SEARCH_LIMIT;
+    const to = from + SEARCH_LIMIT - 1;
+    
+    // Busca grupos
+    let query = db.from('groups').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+    if (searchQuery) query = query.ilike('name', '%' + searchQuery + '%');
+    
+    const { data: groups, count, error } = await query;
+    
+    if (error) {
+        container.innerHTML = '<div class="empty-state"><p>Erro ao carregar grupos</p></div>';
+        return;
+    }
+    
+    const totalCount = count || 0;
+    groupsCount.textContent = totalCount + ' grupo(s) encontrado(s)';
+    
+    if (!groups || groups.length === 0) {
+        if (reset) {
+            container.innerHTML = '';
+            emptyState.style.display = 'block';
+        }
+        loadMoreContainer.style.display = 'none';
+        return;
+    }
+    
+    if (reset) container.innerHTML = '';
+    
     const user = await getCurrentUser();
-    container.innerHTML = '';
+    
     for (const g of groups) {
-        const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id);
+        const { count: memberCount } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id);
         const { data: membership } = await db.from('group_members').select('*').eq('group_id', g.id).eq('user_id', user.id).maybeSingle();
+        
         const card = document.createElement('div');
-        card.className = 'card group-card mb-2';
-        card.innerHTML = '<h3>' + escapeHtml(g.name) + '</h3><p class="text-sm text-muted">' + escapeHtml(g.description || '') + '</p><div class="group-meta mb-1"><span><i class="fas fa-users"></i> ' + (count || 0) + '/' + g.max_members + '</span></div>' + (membership ? '<span class="badge badge-success">Membro</span>' : '<button class="btn btn-primary btn-sm join-btn" data-id="' + g.id + '">Entrar</button>');
+        card.className = 'group-card-modern';
+        card.innerHTML = 
+            '<div class="group-card-header">' +
+            '<h3 class="group-card-title">' + escapeHtml(g.name) + '</h3>' +
+            '</div>' +
+            '<p class="group-card-description">' + escapeHtml(g.description || 'Sem descrição') + '</p>' +
+            '<div class="group-card-footer">' +
+            '<div class="group-card-stats">' +
+            '<span><i class="fas fa-users"></i> ' + (memberCount || 0) + '/' + g.max_members + '</span>' +
+            '<span><i class="fas fa-calendar"></i> ' + formatDate(g.created_at) + '</span>' +
+            '</div>' +
+            (membership ? 
+                '<span class="badge-member"><i class="fas fa-check-circle"></i> Membro</span>' : 
+                '<button class="btn-join" data-id="' + g.id + '"><i class="fas fa-door-open"></i> Entrar</button>'
+            ) +
+            '</div>';
+        
         container.appendChild(card);
     }
-    document.querySelectorAll('.join-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+    
+    // Mostrar/ocultar botão "Carregar mais"
+    const hasMore = totalCount > searchPage * SEARCH_LIMIT;
+    loadMoreContainer.style.display = hasMore ? 'block' : 'none';
+    
+    // Eventos dos botões Entrar
+    document.querySelectorAll('.btn-join').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
             const gId = btn.dataset.id;
             const { data: g } = await db.from('groups').select('*').eq('id', gId).single();
-            const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', gId);
-            if (count >= g.max_members) { showToast('Grupo lotado!', 'error'); return; }
+            const { count: currentCount } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', gId);
+            
+            if (currentCount >= g.max_members) {
+                showToast('Grupo lotado!', 'error');
+                return;
+            }
+            
             await db.from('group_members').insert({ group_id: gId, user_id: user.id, role: 'member' });
-            showToast('Entrou no grupo: ' + g.name, 'success');
-            loadAllGroups(query);
+            showToast('✅ Entrou no grupo: ' + g.name, 'success');
+            
+            // Atualiza o card
+            btn.outerHTML = '<span class="badge-member"><i class="fas fa-check-circle"></i> Membro</span>';
         });
     });
 }
-
 // ============================================
 // PÁGINA: profile.html
 // ============================================

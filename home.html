@@ -2,14 +2,26 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#4F46E5">
+    <meta name="theme-color" content="#1a1a2e">
     <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="app-page">
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <img src="logo.png" alt="FATFIT" class="loading-logo">
+        <p class="loading-text">Carregando</p>
+        <div class="loading-dots">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="app-header">
         <button class="icon-btn" id="menuBtn">
@@ -17,14 +29,14 @@
         </button>
         <h1 class="app-title" id="headerGroupName">FATFIT</h1>
         <button class="icon-btn" id="headerAvatar">
-            <img id="headerAvatarImg" src="https://via.placeholder.com/32" alt="Perfil" class="header-avatar">
+            <img id="headerAvatarImg" src="logo.png" alt="Perfil" class="header-avatar">
         </button>
     </header>
 
     <!-- Menu Lateral -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-profile" id="sidebarProfile">
-            <img id="sidebarAvatar" src="https://via.placeholder.com/48" alt="Avatar" class="sidebar-avatar">
+            <img id="sidebarAvatar" src="logo.png" alt="Avatar" class="sidebar-avatar">
             <div class="sidebar-user-info">
                 <strong id="sidebarName">Usuário</strong>
                 <span class="text-xs text-muted" id="sidebarEmail">email</span>
@@ -38,7 +50,7 @@
         <div class="sidebar-section-title">MEUS GRUPOS</div>
         <div class="sidebar-groups" id="sidebarGroups">
             <div class="loading-state" style="padding:10px;">
-                <i class="fas fa-spinner fa-spin"></i>
+                <img src="logo.png" alt="Carregando" class="loading-mini-logo" style="width:40px;height:40px;">
             </div>
         </div>
         
@@ -59,7 +71,7 @@
     <!-- Conteúdo Principal -->
     <main class="main-content">
         <div id="noGroupState" class="empty-state" style="display:none;">
-            <i class="fas fa-users fa-3x"></i>
+            <img src="logo.png" alt="FATFIT" style="width:100px;height:100px;object-fit:contain;margin-bottom:16px;opacity:0.5;">
             <h3>Nenhum grupo selecionado</h3>
             <p>Abra o menu ☰ e escolha um grupo</p>
         </div>
@@ -67,7 +79,7 @@
         <div id="tabTimeline" class="tab-content active">
             <div class="timeline" id="timelineFeed">
                 <div class="loading-state">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <img src="logo.png" alt="Carregando" class="loading-mini-logo">
                     <p>Carregando atividades...</p>
                 </div>
             </div>
@@ -86,7 +98,7 @@
                 <div class="chat-container">
                     <div class="chat-messages" id="chatMessages">
                         <div class="loading-state">
-                            <i class="fas fa-spinner fa-spin"></i>
+                            <img src="logo.png" alt="Carregando" class="loading-mini-logo">
                             <p>Carregando mensagens...</p>
                         </div>
                     </div>
@@ -121,7 +133,7 @@
         </button>
     </nav>
 
-    <!-- FAB - Botão Flutuante -->
+    <!-- FAB -->
     <button class="fab" id="fabRegister" title="Registrar Atividade">
         <i class="fas fa-camera"></i>
     </button>
@@ -151,7 +163,7 @@
         </div>
     </div>
 
-    <!-- Modal de Registro em Múltiplos Grupos -->
+    <!-- Modal de Registro -->
     <div class="modal" id="registerSelectModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -186,5 +198,18 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
+
+    <!-- Esconde loading screen -->
+    <script>
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                var loading = document.getElementById('loadingScreen');
+                if (loading) {
+                    loading.classList.add('hidden');
+                    setTimeout(function() { loading.remove(); }, 500);
+                }
+            }, 600);
+        });
+    </script>
 </body>
 </html>
