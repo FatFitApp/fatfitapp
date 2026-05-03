@@ -1097,7 +1097,7 @@ body {
    ============================================ */
 .fab {
     position: fixed;
-    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 20px);
+    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 150px);
     right: 20px;
     width: 56px;
     height: 56px;
@@ -2463,4 +2463,36 @@ body {
     background: #fff;
     animation: cameraFlash 0.4s ease forwards;
     pointer-events: none;
+}
+
+/* ============================================
+   BADGE DE MENSAGENS NÃO LIDAS
+   ============================================ */
+.bottom-nav-item {
+    position: relative;
+}
+
+.unread-badge {
+    position: absolute;
+    top: 2px;
+    right: 50%;
+    transform: translateX(18px);
+    background: var(--danger);
+    color: var(--white);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    animation: badgePop 0.3s ease;
+}
+
+@keyframes badgePop {
+    0% { transform: translateX(18px) scale(0); }
+    50% { transform: translateX(18px) scale(1.3); }
+    100% { transform: translateX(18px) scale(1); }
 }

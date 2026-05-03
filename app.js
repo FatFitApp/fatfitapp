@@ -198,6 +198,7 @@ async function setupHome(session) {
             const { data: membership } = await db.from('group_members').select('role').eq('group_id', group.id).eq('user_id', user.id).single();
             if (membership) {
                 await selectGroup(group, membership.role);
+                 await updateUnreadBadge();  // ← ADICIONE ESTA LINHA AQUI
                 return;
             }
         }
@@ -230,9 +231,21 @@ function setupBottomNav() {
             item.classList.add('active');
             const tabId = item.dataset.tab;
             document.getElementById(tabId)?.classList.add('active');
+            
             if (tabId === 'tabDetalhes') loadDetalhes();
             if (tabId === 'tabRanking') loadRanking();
-            if (tabId === 'tabChat') loadChat();
+if (tabId === 'tabChat') {
+                loadChat();
+                // Força marcar como lido com delay para garantir
+                setTimeout(() => {
+                    markMessagesAsRead();
+                }, 500);
+            }
+            
+            // Atualiza badge ao trocar de aba
+            if (tabId !== 'tabChat') {
+                updateUnreadBadge();
+            }
         });
     });
 }
@@ -283,6 +296,8 @@ async function selectGroup(group, role) {
     const user = await getCurrentUser();
     await loadSidebarGroups(user.id);
     await loadTimeline();
+        // Atualiza badge de mensagens não lidas
+    await updateUnreadBadge();
 }
 
 async function loadTimeline() {
@@ -475,24 +490,133 @@ window.openPersonCalendar = function(userId, groupId) {
 async function loadChat() {
     const messagesContainer = document.getElementById('chatMessages');
     if (!messagesContainer || !currentGroup) return;
+    
     messagesContainer.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    
     const user = await getCurrentUser();
-    const { data: messages } = await db.from('messages').select('*, profiles:user_id(name)').eq('group_id', currentGroup.id).order('created_at', { ascending: true }).limit(100);
-    if (chatSubscription) await db.removeChannel(chatSubscription);
-    chatSubscription = db.channel('chat-' + currentGroup.id).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'group_id=eq.' + currentGroup.id }, (payload) => { appendMessage(payload.new, user.id); }).subscribe();
+    
+    // 🔴 FECHA TODOS OS CANAIS ABERTOS antes de criar novo
+    if (chatSubscription) {
+        console.log('🔌 Removendo canal antigo...');
+        try {
+            await db.removeChannel(chatSubscription);
+        } catch(e) {
+            console.log('Erro ao remover canal:', e);
+        }
+        chatSubscription = null;
+    }
+    
+    // 🔴 Remove TODOS os canais do Supabase
+    try {
+        const channels = db.getChannels();
+        console.log('📡 Canais ativos antes da limpeza:', channels.length);
+        for (const ch of channels) {
+            await db.removeChannel(ch);
+        }
+        console.log('✅ Todos os canais removidos');
+    } catch(e) {
+        console.log('Erro ao limpar canais:', e);
+    }
+    
+    // Carrega mensagens existentes
+    const { data: messages } = await db.from('messages')
+        .select('*, profiles:user_id(name)')
+        .eq('group_id', currentGroup.id)
+        .order('created_at', { ascending: true })
+        .limit(100);
+    
+    // Cria NOVO canal com nome único
+    const channelName = 'chat-' + currentGroup.id + '-' + Date.now();
+    console.log('📡 Criando novo canal:', channelName);
+    
+    chatSubscription = db.channel(channelName)
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages', 
+            filter: 'group_id=eq.' + currentGroup.id 
+        }, (payload) => {
+            console.log('📩 Mensagem recebida via realtime:', payload.new.id);
+            
+            const isChatActive = document.getElementById('tabChat')?.classList.contains('active');
+            
+            if (isChatActive) {
+                appendMessage(payload.new, user.id);
+                markMessagesAsRead();
+            } else {
+                updateUnreadBadge();
+            }
+        })
+        .subscribe((status) => {
+            console.log('📡 Canal ' + channelName + ' status:', status);
+        });
+    
+    // Renderiza mensagens
     messagesContainer.innerHTML = '';
-    if (messages && messages.length > 0) { for (const msg of messages) appendMessage(msg, user.id); }
-    else { messagesContainer.innerHTML = '<div class="empty-state" style="padding:20px;"><i class="fas fa-comments"></i><p>Nenhuma mensagem ainda</p></div>'; }
+    if (messages && messages.length > 0) {
+        for (const msg of messages) {
+            appendMessage(msg, user.id);
+        }
+    } else {
+        messagesContainer.innerHTML = '<div class="empty-state" style="padding:20px;"><i class="fas fa-comments"></i><p>Nenhuma mensagem ainda</p></div>';
+    }
+    
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    document.getElementById('chatForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = document.getElementById('chatInput');
-        const message = input.value.trim();
-        if (!message) return;
-        const { error } = await db.from('messages').insert({ group_id: currentGroup.id, user_id: user.id, message: message });
-        if (error) { showToast('Erro ao enviar', 'error'); }
-        else { input.value = ''; }
-    });
+    await markMessagesAsRead();
+    
+    // Configura envio de mensagem com anti-duplo-clique
+    const chatForm = document.getElementById('chatForm');
+    if (chatForm) {
+        const newForm = chatForm.cloneNode(true);
+        chatForm.parentNode.replaceChild(newForm, chatForm);
+        
+        let isSending = false;
+        
+        newForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (isSending) {
+                console.log('⏳ Envio em andamento, ignorando');
+                return;
+            }
+            
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            isSending = true;
+            const submitBtn = newForm.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            }
+            
+            console.log('📤 Enviando mensagem para grupo:', currentGroup.id);
+            
+            const { error } = await db.from('messages').insert({ 
+                group_id: currentGroup.id, 
+                user_id: user.id, 
+                message: message 
+            });
+            
+            if (error) { 
+                console.error('❌ Erro:', error);
+                showToast('Erro ao enviar', 'error'); 
+            } else { 
+                console.log('✅ Enviada');
+                input.value = '';
+                input.focus();
+            }
+            
+            setTimeout(() => {
+                isSending = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                }
+            }, 2000); // 2 segundos para garantir
+        });
+    }
 }
 
 function appendMessage(msg, currentUserId) {
@@ -1130,6 +1254,60 @@ async function loadGroupCalendar(month, year) {
     const { data: activities } = await db.rpc('get_calendar_data', { p_user_id: null, p_group_id: currentGroup.id, p_month: month, p_year: year });
     renderCalendar('groupCalendar', activities, month, year);
 }
+
+// ============================================
+// MENSAGENS NÃO LIDAS
+// ============================================
+
+async function updateUnreadBadge() {
+    if (!currentGroup) return;
+    
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data, error } = await db.rpc('get_unread_count', {
+        p_user_id: user.id,
+        p_group_id: currentGroup.id
+    });
+    
+    console.log('🔴 updateUnreadBadge - Não lidas:', data, 'Erro:', error);
+    
+    const chatBtn = document.querySelector('[data-tab="tabChat"]');
+    if (!chatBtn) return;
+    
+    // Remove badge existente
+    const existingBadge = chatBtn.querySelector('.unread-badge');
+    if (existingBadge) existingBadge.remove();
+    
+    const count = data || 0;
+    
+    if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'unread-badge';
+        badge.textContent = count > 99 ? '99+' : count;
+        chatBtn.appendChild(badge);
+    }
+}
+
+async function markMessagesAsRead() {
+    if (!currentGroup) return;
+    
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    await db.rpc('mark_messages_read', {
+        p_user_id: user.id,
+        p_group_id: currentGroup.id
+    });
+    
+    // Remove badge imediatamente
+    const chatBtn = document.querySelector('[data-tab="tabChat"]');
+    if (chatBtn) {
+        const badge = chatBtn.querySelector('.unread-badge');
+        if (badge) badge.remove();
+    }
+}
+
 
 // ============================================
 // FECHAR MODAL
