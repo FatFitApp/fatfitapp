@@ -2825,3 +2825,346 @@ body {
 .group-card-modern {
     animation: fadeInUp 0.3s ease forwards;
 }
+
+/* ============================================
+   AVALIAÇÃO ANTROPOMÉTRICA
+   ============================================ */
+
+/* Step Indicator */
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 24px;
+}
+
+.step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    color: var(--gray-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    transition: var(--transition);
+}
+
+.step-dot.active {
+    background: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+}
+
+.step-dot.completed {
+    background: var(--secondary);
+    color: var(--white);
+}
+
+.step-line {
+    width: 40px;
+    height: 3px;
+    background: var(--gray-300);
+    transition: var(--transition);
+}
+
+.step-line.completed {
+    background: var(--secondary);
+}
+
+/* IMC Preview */
+.imc-preview {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: var(--white);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    margin-top: 12px;
+}
+
+.imc-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+}
+
+.imc-classification {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+/* Layout de Medidas - Capivara + Formulário */
+.measurement-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.capybara-container {
+    position: relative;
+    flex-shrink: 0;
+    width: 45%;
+    max-width: 350px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--gray-100);
+    border: 2px solid var(--gray-300);
+}
+
+.capybara-body {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.highlight-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.highlight-region {
+    position: absolute;
+    border: 2px solid #FCD34D;
+    background: rgba(252, 211, 77, 0.25);
+    border-radius: 4px;
+    animation: highlightPulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 12px rgba(252, 211, 77, 0.4);
+}
+
+@keyframes highlightPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(252, 211, 77, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(252, 211, 77, 0.6); }
+}
+
+.measurement-form {
+    flex: 1;
+    min-width: 0;
+}
+
+.measurement-form .input-group {
+    margin-bottom: 8px;
+}
+
+.measurement-form .input-group label {
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+}
+
+.measurement-form .input-group input {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+}
+
+.measurement-form .input-group input:focus {
+    border-color: #FCD34D;
+    box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.2);
+}
+
+/* Dashboard de Avaliações */
+.measurement-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: var(--transition);
+    border-left: 4px solid var(--primary);
+}
+
+.measurement-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.measurement-card .measurement-date {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.measurement-card .measurement-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    font-size: 0.8rem;
+}
+
+.measurement-card .measurement-stat {
+    text-align: center;
+    padding: 8px;
+    background: var(--gray-100);
+    border-radius: var(--radius-xs);
+}
+
+.measurement-card .measurement-stat-value {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 1rem;
+}
+
+.measurement-card .measurement-stat-label {
+    color: var(--gray-500);
+    font-size: 0.65rem;
+    margin-top: 2px;
+}
+
+/* Delta / Comparativo */
+.delta-positive {
+    color: var(--secondary);
+}
+
+.delta-negative {
+    color: var(--danger);
+}
+
+.delta-neutral {
+    color: var(--gray-500);
+}
+
+.delta-arrow {
+    font-size: 0.8rem;
+}
+
+/* Comparativo Modal */
+.compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.compare-table th,
+.compare-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.compare-table th {
+    background: var(--gray-100);
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.compare-table .delta-col {
+    text-align: right;
+    font-weight: 600;
+}
+
+/* Fotos */
+.photo-protocol {
+    background: #FFFBEB;
+    border: 1px solid #FCD34D;
+}
+
+.photo-protocol h4 {
+    color: #92400E;
+    margin-bottom: 8px;
+}
+
+.photo-protocol ul {
+    list-style: none;
+    padding: 0;
+}
+
+.photo-protocol li {
+    padding: 4px 0;
+    font-size: 0.85rem;
+    color: #78350F;
+}
+
+.photos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.photo-slot {
+    aspect-ratio: 3/4;
+    background: var(--gray-100);
+    border: 2px dashed var(--gray-400);
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    color: var(--gray-500);
+}
+
+.photo-slot:hover {
+    border-color: var(--primary);
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.photo-slot i {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.photo-slot span {
+    font-size: 0.7rem;
+}
+
+.photo-preview-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Responsivo */
+@media (max-width: 600px) {
+    .measurement-layout {
+        flex-direction: column;
+    }
+    
+    .capybara-container {
+        width: 80%;
+        max-width: 300px;
+        margin: 0 auto 16px;
+    }
+    
+    .measurement-card .measurement-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .photos-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+}
+
+/* Botão de deletar avaliação */
+.btn-delete-measurement {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px 8px;
+    opacity: 0.6;
+    transition: var(--transition);
+}
+
+.btn-delete-measurement:hover {
+    opacity: 1;
+}
+
+/* Modal de comparativo */
+.compare-select {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: var(--white);
+}

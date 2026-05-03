@@ -1428,3 +1428,437 @@ document.addEventListener('click', (e) => {
         e.target.classList.remove('open');
     }
 });
+
+// ============================================
+// PÁGINA: body.html - Avaliação Antropométrica
+// ============================================
+if (window.location.pathname.includes('body')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        setupBodyPage(session);
+    });
+}
+
+// Coordenadas das regiões na capivara (imagem 758x1162)
+const REGIONS = {
+    braco_relaxado: { x1: 63, y1: 400, x2: 129, y2: 560 },
+    braco_contraido: { x1: 580, y1: 340, x2: 634, y2: 484 },
+    cintura: { x1: 158, y1: 570, x2: 550, y2: 590 },
+    abdomen: { x1: 116, y1: 675, x2: 600, y2: 700 },
+    quadril: { x1: 82, y1: 780, x2: 622, y2: 808 },
+    perna_esquerda: { x1: 94, y1: 915, x2: 252, y2: 961 },
+    perna_direita: { x1: 418, y1: 915, x2: 600, y2: 961 },
+    panturrilha_esquerda: { x1: 106, y1: 1008, x2: 228, y2: 1045 },
+    panturrilha_direita: { x1: 461, y1: 1008, x2: 583, y2: 1045 }
+};
+
+// Regiões que destacam duas áreas (mapeamento)
+const DUAL_REGIONS = {
+    perna_esquerda: ['perna_esquerda', 'perna_direita'],
+    perna_direita: ['perna_esquerda', 'perna_direita'],
+    panturrilha_esquerda: ['panturrilha_esquerda', 'panturrilha_direita'],
+    panturrilha_direita: ['panturrilha_esquerda', 'panturrilha_direita']
+};
+
+let currentStep = 'dashboard';
+let photoFiles = [null, null, null];
+
+async function setupBodyPage(session) {
+    // Configura data padrão como hoje
+    const dateInput = document.getElementById('measurementDate');
+    if (dateInput) dateInput.value = getToday();
+    
+    // Calcula IMC em tempo real
+    document.getElementById('weightKg')?.addEventListener('input', updateIMCPreview);
+    document.getElementById('heightM')?.addEventListener('input', updateIMCPreview);
+    
+    // Botão nova avaliação
+    document.getElementById('btnNewMeasurement')?.addEventListener('click', () => showStep('basic'));
+    
+    // Formulário dados básicos
+    document.getElementById('formBasic')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        showStep('perimeters');
+    });
+    
+    // Botão finalizar
+    document.getElementById('btnFinishMeasurement')?.addEventListener('click', saveMeasurement);
+    
+    // Configura highlights nos campos de medida
+    setupMeasurementHighlights();
+    
+    // Carrega dashboard
+    await loadDashboard();
+}
+
+// ============================================
+// NAVEGAÇÃO ENTRE ETAPAS
+// ============================================
+function showStep(step) {
+    // Esconde todas as etapas
+    ['dashboard', 'basic', 'perimeters', 'photos', 'confirm'].forEach(s => {
+        const el = document.getElementById('step' + s.charAt(0).toUpperCase() + s.slice(1));
+        if (el) el.style.display = 'none';
+    });
+    
+    // Mostra a etapa desejada
+    const stepMap = {
+        'dashboard': 'stepDashboard',
+        'basic': 'stepBasic',
+        'perimeters': 'stepPerimeters',
+        'photos': 'stepPhotos',
+        'confirm': 'stepConfirm'
+    };
+    
+    const el = document.getElementById(stepMap[step]);
+    if (el) el.style.display = 'block';
+    
+    currentStep = step;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================
+// IMC PREVIEW
+// ============================================
+function updateIMCPreview() {
+    const weight = parseFloat(document.getElementById('weightKg').value);
+    const height = parseFloat(document.getElementById('heightM').value);
+    const preview = document.getElementById('imcPreview');
+    
+    if (weight && height && height > 0) {
+        const bmi = weight / (height * height);
+        preview.style.display = 'block';
+        document.getElementById('imcValue').textContent = bmi.toFixed(1);
+        
+        let classification = '';
+        let color = '';
+        if (bmi < 18.5) { classification = 'Abaixo do peso'; color = '#F59E0B'; }
+        else if (bmi < 25) { classification = 'Peso normal'; color = '#10B981'; }
+        else if (bmi < 30) { classification = 'Sobrepeso'; color = '#F59E0B'; }
+        else if (bmi < 35) { classification = 'Obesidade Grau I'; color = '#EF4444'; }
+        else if (bmi < 40) { classification = 'Obesidade Grau II'; color = '#EF4444'; }
+        else { classification = 'Obesidade Grau III'; color = '#DC2626'; }
+        
+        document.getElementById('imcClassification').textContent = classification;
+        document.getElementById('imcClassification').style.color = color;
+    } else {
+        preview.style.display = 'none';
+    }
+}
+
+// ============================================
+// HIGHLIGHTS NA CAPIVARA
+// ============================================
+function setupMeasurementHighlights() {
+    const inputs = document.querySelectorAll('#measurementForm input[data-region]');
+    
+    inputs.forEach(input => {
+        input.addEventListener('focus', () => highlightRegion(input.dataset.region));
+        input.addEventListener('blur', () => clearHighlights());
+    });
+}
+
+function highlightRegion(regionName) {
+    clearHighlights();
+    
+    const regionsToHighlight = DUAL_REGIONS[regionName] || [regionName];
+    const overlay = document.getElementById('highlightOverlay');
+    const img = document.getElementById('capybaraBody');
+    
+    if (!overlay || !img) return;
+    
+    const imgRect = img.getBoundingClientRect();
+    const scaleX = imgRect.width / 758;
+    const scaleY = imgRect.height / 1162;
+    
+    regionsToHighlight.forEach(name => {
+        const region = REGIONS[name];
+        if (!region) return;
+        
+        const highlight = document.createElement('div');
+        highlight.className = 'highlight-region';
+        highlight.style.left = (region.x1 * scaleX) + 'px';
+        highlight.style.top = (region.y1 * scaleY) + 'px';
+        highlight.style.width = ((region.x2 - region.x1) * scaleX) + 'px';
+        highlight.style.height = ((region.y2 - region.y1) * scaleY) + 'px';
+        
+        overlay.appendChild(highlight);
+    });
+}
+
+function clearHighlights() {
+    const overlay = document.getElementById('highlightOverlay');
+    if (overlay) overlay.innerHTML = '';
+}
+
+// Atualiza highlights ao redimensionar
+window.addEventListener('resize', () => {
+    const activeInput = document.querySelector('#measurementForm input:focus');
+    if (activeInput?.dataset.region) {
+        highlightRegion(activeInput.dataset.region);
+    }
+});
+
+// ============================================
+// FOTOS
+// ============================================
+function previewPhoto(slot) {
+    const input = document.getElementById('photoInput' + slot);
+    const preview = document.getElementById('photoPreview' + slot);
+    const file = input.files[0];
+    
+    if (!file) return;
+    
+    photoFiles[slot - 1] = file;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+        const slotEl = document.getElementById('photoSlot' + slot);
+        if (slotEl) {
+            slotEl.querySelector('i').style.display = 'none';
+            slotEl.querySelector('span').style.display = 'none';
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+// ============================================
+// SALVAR AVALIAÇÃO
+// ============================================
+async function saveMeasurement() {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const btn = document.getElementById('btnFinishMeasurement');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    
+    try {
+        // Dados básicos
+        const date = document.getElementById('measurementDate').value || getToday();
+        const weight = parseFloat(document.getElementById('weightKg').value);
+        const height = parseFloat(document.getElementById('heightM').value);
+        
+        if (!weight || !height) {
+            showToast('Peso e altura são obrigatórios', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Avaliação';
+            return;
+        }
+        
+        // Perímetros (opcionais)
+        const getVal = (id) => {
+            const v = parseFloat(document.getElementById(id).value);
+            return isNaN(v) ? null : v;
+        };
+        
+        // Upload das fotos
+        const photoUrls = [null, null, null];
+        for (let i = 0; i < 3; i++) {
+            if (photoFiles[i]) {
+                const fileName = 'body_measurements/' + user.id + '/' + Date.now() + '_' + i + '.jpg';
+                const { error: upErr } = await db.storage.from('activity-photos')
+                    .upload(fileName, photoFiles[i], { contentType: 'image/jpeg', upsert: false });
+                
+                if (!upErr) {
+                    const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+                    photoUrls[i] = urlData.publicUrl;
+                }
+            }
+        }
+        
+        // Insere no banco
+        const { error } = await db.from('body_measurements').insert({
+            user_id: user.id,
+            measurement_date: date,
+            weight_kg: weight,
+            height_m: height,
+            arm_relaxed: getVal('armRelaxed'),
+            arm_contracted: getVal('armContracted'),
+            waist: getVal('waist'),
+            abdomen: getVal('abdomen'),
+            hip: getVal('hip'),
+            thigh_left: getVal('thighLeft'),
+            thigh_right: getVal('thighRight'),
+            calf_left: getVal('calfLeft'),
+            calf_right: getVal('calfRight'),
+            photo_1: photoUrls[0],
+            photo_2: photoUrls[1],
+            photo_3: photoUrls[2]
+        });
+        
+        if (error) {
+            showToast('Erro ao salvar: ' + error.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Avaliação';
+            return;
+        }
+        
+        // Mostra confirmação
+        const summary = document.getElementById('confirmSummary');
+        summary.innerHTML = '<p><strong>📅 Data:</strong> ' + formatDate(date) + '</p>' +
+            '<p><strong>⚖️ Peso:</strong> ' + weight + ' kg</p>' +
+            '<p><strong>📏 Altura:</strong> ' + height + ' m</p>' +
+            '<p><strong>📊 IMC:</strong> ' + (weight / (height * height)).toFixed(1) + '</p>' +
+            (photoUrls.some(u => u) ? '<p><strong>📸 Fotos:</strong> ' + photoUrls.filter(u => u).length + ' salva(s)</p>' : '');
+        
+        showStep('confirm');
+        
+        // Limpa dados
+        photoFiles = [null, null, null];
+        
+    } catch (err) {
+        console.error('Erro:', err);
+        showToast('Erro ao salvar avaliação', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Avaliação';
+    }
+}
+
+// ============================================
+// DASHBOARD
+// ============================================
+async function loadDashboard() {
+    const container = document.getElementById('dashboardContent');
+    if (!container) return;
+    
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data: measurements, error } = await db.from('body_measurements')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('measurement_date', { ascending: false });
+    
+    if (error || !measurements || measurements.length === 0) {
+        container.innerHTML = '<div class="empty-state"><img src="logo.png" alt="FATFIT" style="width:80px;height:80px;object-fit:contain;margin-bottom:12px;opacity:0.4;"><h3>Nenhuma avaliação ainda</h3><p class="text-sm text-muted">Clique em "Nova" para começar</p></div>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    for (const m of measurements) {
+        const card = document.createElement('div');
+        card.className = 'measurement-card';
+        card.innerHTML = 
+            '<div class="flex-between">' +
+            '<div class="measurement-date">📅 ' + formatDate(m.measurement_date) + '</div>' +
+            '<button class="btn-delete-measurement" data-id="' + m.id + '" title="Excluir"><i class="fas fa-trash"></i></button>' +
+            '</div>' +
+            '<div class="measurement-stats">' +
+            '<div class="measurement-stat"><div class="measurement-stat-value">' + (m.weight_kg || '-') + '</div><div class="measurement-stat-label">Peso (kg)</div></div>' +
+            '<div class="measurement-stat"><div class="measurement-stat-value">' + (m.bmi || '-') + '</div><div class="measurement-stat-label">IMC</div></div>' +
+            '<div class="measurement-stat"><div class="measurement-stat-value">' + (m.waist || '-') + '</div><div class="measurement-stat-label">Cintura (cm)</div></div>' +
+            '</div>' +
+            '<button class="btn btn-outline btn-sm mt-1 btn-compare" data-id="' + m.id + '" style="width:100%;"><i class="fas fa-balance-scale"></i> Comparar</button>';
+        
+        container.appendChild(card);
+    }
+    
+    // Eventos de deletar
+    document.querySelectorAll('.btn-delete-measurement').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('Excluir esta avaliação?')) return;
+            await db.from('body_measurements').delete().eq('id', btn.dataset.id);
+            showToast('Avaliação excluída', 'success');
+            loadDashboard();
+        });
+    });
+    
+    // Eventos de comparar
+    document.querySelectorAll('.btn-compare').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCompareModal(btn.dataset.id, measurements);
+        });
+    });
+}
+
+// ============================================
+// MODAL DE COMPARATIVO
+// ============================================
+function openCompareModal(currentId, allMeasurements) {
+    // Remove modal anterior se existir
+    const existing = document.getElementById('compareModal');
+    if (existing) existing.remove();
+    
+    const current = allMeasurements.find(m => m.id === currentId);
+    const others = allMeasurements.filter(m => m.id !== currentId);
+    
+    if (others.length === 0) {
+        showToast('Nenhuma avaliação anterior para comparar', 'warning');
+        return;
+    }
+    
+    let options = '<option value="">Selecione uma avaliação anterior...</option>';
+    others.forEach(m => {
+        options += '<option value="' + m.id + '">' + formatDate(m.measurement_date) + ' - ' + m.weight_kg + 'kg</option>';
+    });
+    
+    const modalHTML = 
+        '<div class="modal open" id="compareModal">' +
+        '<div class="modal-content">' +
+        '<div class="modal-header"><h3>📊 Comparar Avaliações</h3><button class="icon-btn modal-close" onclick="document.getElementById(\'compareModal\').remove()"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body">' +
+        '<p class="text-sm text-muted mb-2">Comparando com: <strong>' + formatDate(current.measurement_date) + '</strong></p>' +
+        '<select class="compare-select mb-2" id="compareSelect">' + options + '</select>' +
+        '<div id="compareResult"></div>' +
+        '</div></div></div>';
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    document.getElementById('compareSelect')?.addEventListener('change', async function() {
+        if (!this.value) {
+            document.getElementById('compareResult').innerHTML = '';
+            return;
+        }
+        await loadCompareData(currentId, this.value);
+    });
+}
+
+async function loadCompareData(currentId, previousId) {
+    const user = await getCurrentUser();
+    const resultDiv = document.getElementById('compareResult');
+    
+    resultDiv.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Calculando...</div>';
+    
+    const { data, error } = await db.rpc('get_measurement_delta', {
+        p_user_id: user.id,
+        p_current_id: currentId,
+        p_previous_id: previousId
+    });
+    
+    if (error || !data) {
+        resultDiv.innerHTML = '<p class="text-center text-muted">Erro ao carregar comparativo</p>';
+        return;
+    }
+    
+    let html = '<table class="compare-table"><thead><tr><th>Medida</th><th>Atual</th><th>Anterior</th><th>Δ</th></tr></thead><tbody>';
+    
+    for (const row of data) {
+        if (row.current_value === null && row.previous_value === null) continue;
+        
+        let deltaClass = 'delta-neutral';
+        let deltaArrow = '';
+        
+        if (row.delta > 0) { deltaClass = 'delta-negative'; deltaArrow = ' ↑'; }
+        else if (row.delta < 0) { deltaClass = 'delta-positive'; deltaArrow = ' ↓'; }
+        
+        html += '<tr>' +
+            '<td>' + row.field_name + '</td>' +
+            '<td>' + (row.current_value !== null ? row.current_value : '-') + '</td>' +
+            '<td>' + (row.previous_value !== null ? row.previous_value : '-') + '</td>' +
+            '<td class="delta-col ' + deltaClass + '">' + 
+            (row.delta !== null ? (row.delta > 0 ? '+' : '') + row.delta + deltaArrow : '-') + 
+            (row.delta_percent !== null ? ' (' + (row.delta_percent > 0 ? '+' : '') + row.delta_percent + '%)' : '') +
+            '</td>' +
+            '</tr>';
+    }
+    
+    html += '</tbody></table>';
+    resultDiv.innerHTML = html;
+}
