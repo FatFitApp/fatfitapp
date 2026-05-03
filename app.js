@@ -1430,7 +1430,7 @@ document.addEventListener('click', (e) => {
 });
 
 // ============================================
-// PÁGINA: body.html - Avaliação Antropométrica
+// PÁGINA: body.html - Avaliação Antropométrica v2
 // ============================================
 if (window.location.pathname.includes('body')) {
     document.addEventListener('DOMContentLoaded', async () => {
@@ -1440,7 +1440,7 @@ if (window.location.pathname.includes('body')) {
     });
 }
 
-// Coordenadas das regiões na capivara (imagem 758x1162)
+// Coordenadas das regiões (imagem 758x1162)
 const REGIONS = {
     braco_relaxado: { x1: 63, y1: 400, x2: 129, y2: 560 },
     braco_contraido: { x1: 580, y1: 340, x2: 634, y2: 484 },
@@ -1453,7 +1453,6 @@ const REGIONS = {
     panturrilha_direita: { x1: 461, y1: 1008, x2: 583, y2: 1045 }
 };
 
-// Regiões que destacam duas áreas (mapeamento)
 const DUAL_REGIONS = {
     perna_esquerda: ['perna_esquerda', 'perna_direita'],
     perna_direita: ['perna_esquerda', 'perna_direita'],
@@ -1461,129 +1460,108 @@ const DUAL_REGIONS = {
     panturrilha_direita: ['panturrilha_esquerda', 'panturrilha_direita']
 };
 
-let currentStep = 'dashboard';
 let photoFiles = [null, null, null];
+let editingId = null;
 
 async function setupBodyPage(session) {
-    // Configura data padrão como hoje
-    const dateInput = document.getElementById('measurementDate');
-    if (dateInput) dateInput.value = getToday();
-    
-    // Calcula IMC em tempo real
+    document.getElementById('measurementDate').value = getToday();
     document.getElementById('weightKg')?.addEventListener('input', updateIMCPreview);
     document.getElementById('heightM')?.addEventListener('input', updateIMCPreview);
-    
-    // Botão nova avaliação
-    document.getElementById('btnNewMeasurement')?.addEventListener('click', () => showStep('basic'));
-    
-    // Formulário dados básicos
-    document.getElementById('formBasic')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        showStep('perimeters');
-    });
-    
-    // Botão finalizar
-    document.getElementById('btnFinishMeasurement')?.addEventListener('click', saveMeasurement);
-    
-    // Configura highlights nos campos de medida
+    document.getElementById('btnNewMeasurement')?.addEventListener('click', () => startNewMeasurement());
+    document.getElementById('formBasic')?.addEventListener('submit', (e) => { e.preventDefault(); showStep('perimeters'); });
+    document.getElementById('btnSaveMeasurement')?.addEventListener('click', saveMeasurement);
     setupMeasurementHighlights();
-    
-    // Carrega dashboard
     await loadDashboard();
 }
 
 // ============================================
-// NAVEGAÇÃO ENTRE ETAPAS
+// NAVEGAÇÃO
 // ============================================
 function showStep(step) {
-    // Esconde todas as etapas
-    ['dashboard', 'basic', 'perimeters', 'photos', 'confirm'].forEach(s => {
+    ['dashboard', 'basic', 'perimeters', 'photos'].forEach(s => {
         const el = document.getElementById('step' + s.charAt(0).toUpperCase() + s.slice(1));
         if (el) el.style.display = 'none';
     });
-    
-    // Mostra a etapa desejada
-    const stepMap = {
-        'dashboard': 'stepDashboard',
-        'basic': 'stepBasic',
-        'perimeters': 'stepPerimeters',
-        'photos': 'stepPhotos',
-        'confirm': 'stepConfirm'
-    };
-    
-    const el = document.getElementById(stepMap[step]);
+    const el = document.getElementById('step' + step.charAt(0).toUpperCase() + step.slice(1));
     if (el) el.style.display = 'block';
-    
-    currentStep = step;
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function startNewMeasurement() {
+    editingId = null;
+    document.getElementById('editId').value = '';
+    document.getElementById('measurementDate').value = getToday();
+    document.getElementById('weightKg').value = '';
+    document.getElementById('heightM').value = '';
+    document.getElementById('imcDisplay').style.display = 'none';
+    // Limpa perímetros
+    ['armRelaxed','armContracted','waist','abdomen','hip','thighLeft','thighRight','calfLeft','calfRight'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    // Limpa fotos
+    photoFiles = [null, null, null];
+    [1,2,3].forEach(i => {
+        document.getElementById('photoPreview' + i).style.display = 'none';
+        document.getElementById('photoInput' + i).value = '';
+    });
+    document.getElementById('btnSaveMeasurement').textContent = 'Salvar';
+    showStep('basic');
+}
+
 // ============================================
-// IMC PREVIEW
+// IMC
 // ============================================
 function updateIMCPreview() {
-    const weight = parseFloat(document.getElementById('weightKg').value);
-    const height = parseFloat(document.getElementById('heightM').value);
-    const preview = document.getElementById('imcPreview');
-    
-    if (weight && height && height > 0) {
-        const bmi = weight / (height * height);
-        preview.style.display = 'block';
+    const w = parseFloat(document.getElementById('weightKg').value);
+    const h = parseFloat(document.getElementById('heightM').value);
+    const display = document.getElementById('imcDisplay');
+    if (w && h && h > 0) {
+        const bmi = w / (h * h);
+        display.style.display = 'block';
         document.getElementById('imcValue').textContent = bmi.toFixed(1);
-        
-        let classification = '';
-        let color = '';
-        if (bmi < 18.5) { classification = 'Abaixo do peso'; color = '#F59E0B'; }
-        else if (bmi < 25) { classification = 'Peso normal'; color = '#10B981'; }
-        else if (bmi < 30) { classification = 'Sobrepeso'; color = '#F59E0B'; }
-        else if (bmi < 35) { classification = 'Obesidade Grau I'; color = '#EF4444'; }
-        else if (bmi < 40) { classification = 'Obesidade Grau II'; color = '#EF4444'; }
-        else { classification = 'Obesidade Grau III'; color = '#DC2626'; }
-        
-        document.getElementById('imcClassification').textContent = classification;
+        let cls = ''; let color = '';
+        if (bmi < 18.5) { cls = 'Abaixo do peso'; color = '#F59E0B'; }
+        else if (bmi < 25) { cls = 'Peso normal'; color = '#34C759'; }
+        else if (bmi < 30) { cls = 'Sobrepeso'; color = '#F59E0B'; }
+        else if (bmi < 35) { cls = 'Obesidade Grau I'; color = '#FF3B30'; }
+        else if (bmi < 40) { cls = 'Obesidade Grau II'; color = '#FF3B30'; }
+        else { cls = 'Obesidade Grau III'; color = '#FF3B30'; }
+        document.getElementById('imcClassification').textContent = cls;
         document.getElementById('imcClassification').style.color = color;
     } else {
-        preview.style.display = 'none';
+        display.style.display = 'none';
     }
 }
 
 // ============================================
-// HIGHLIGHTS NA CAPIVARA
+// HIGHLIGHTS
 // ============================================
 function setupMeasurementHighlights() {
-    const inputs = document.querySelectorAll('#measurementForm input[data-region]');
-    
-    inputs.forEach(input => {
+    document.querySelectorAll('#stepPerimeters input[data-region]').forEach(input => {
         input.addEventListener('focus', () => highlightRegion(input.dataset.region));
         input.addEventListener('blur', () => clearHighlights());
     });
 }
 
-function highlightRegion(regionName) {
+function highlightRegion(name) {
     clearHighlights();
-    
-    const regionsToHighlight = DUAL_REGIONS[regionName] || [regionName];
+    const regions = DUAL_REGIONS[name] || [name];
     const overlay = document.getElementById('highlightOverlay');
     const img = document.getElementById('capybaraBody');
-    
     if (!overlay || !img) return;
-    
-    const imgRect = img.getBoundingClientRect();
-    const scaleX = imgRect.width / 758;
-    const scaleY = imgRect.height / 1162;
-    
-    regionsToHighlight.forEach(name => {
-        const region = REGIONS[name];
-        if (!region) return;
-        
-        const highlight = document.createElement('div');
-        highlight.className = 'highlight-region';
-        highlight.style.left = (region.x1 * scaleX) + 'px';
-        highlight.style.top = (region.y1 * scaleY) + 'px';
-        highlight.style.width = ((region.x2 - region.x1) * scaleX) + 'px';
-        highlight.style.height = ((region.y2 - region.y1) * scaleY) + 'px';
-        
-        overlay.appendChild(highlight);
+    const rect = img.getBoundingClientRect();
+    const sx = rect.width / 758;
+    const sy = rect.height / 1162;
+    regions.forEach(r => {
+        const reg = REGIONS[r];
+        if (!reg) return;
+        const div = document.createElement('div');
+        div.className = 'highlight-region';
+        div.style.left = (reg.x1 * sx) + 'px';
+        div.style.top = (reg.y1 * sy) + 'px';
+        div.style.width = ((reg.x2 - reg.x1) * sx) + 'px';
+        div.style.height = ((reg.y2 - reg.y1) * sy) + 'px';
+        overlay.appendChild(div);
     });
 }
 
@@ -1592,77 +1570,53 @@ function clearHighlights() {
     if (overlay) overlay.innerHTML = '';
 }
 
-// Atualiza highlights ao redimensionar
 window.addEventListener('resize', () => {
-    const activeInput = document.querySelector('#measurementForm input:focus');
-    if (activeInput?.dataset.region) {
-        highlightRegion(activeInput.dataset.region);
-    }
+    const active = document.querySelector('#stepPerimeters input:focus');
+    if (active?.dataset.region) highlightRegion(active.dataset.region);
 });
 
 // ============================================
-// FOTOS
+// FOTOS (Upload ou Câmera)
 // ============================================
 function previewPhoto(slot) {
     const input = document.getElementById('photoInput' + slot);
     const preview = document.getElementById('photoPreview' + slot);
     const file = input.files[0];
-    
     if (!file) return;
-    
     photoFiles[slot - 1] = file;
-    
     const reader = new FileReader();
     reader.onload = (e) => {
         preview.src = e.target.result;
         preview.style.display = 'block';
-        const slotEl = document.getElementById('photoSlot' + slot);
-        if (slotEl) {
-            slotEl.querySelector('i').style.display = 'none';
-            slotEl.querySelector('span').style.display = 'none';
-        }
     };
     reader.readAsDataURL(file);
 }
 
 // ============================================
-// SALVAR AVALIAÇÃO
+// SALVAR / EDITAR
 // ============================================
 async function saveMeasurement() {
     const user = await getCurrentUser();
     if (!user) return;
     
-    const btn = document.getElementById('btnFinishMeasurement');
+    const btn = document.getElementById('btnSaveMeasurement');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
     
     try {
-        // Dados básicos
         const date = document.getElementById('measurementDate').value || getToday();
         const weight = parseFloat(document.getElementById('weightKg').value);
         const height = parseFloat(document.getElementById('heightM').value);
+        if (!weight || !height) { showToast('Peso e altura são obrigatórios', 'error'); btn.disabled = false; btn.innerHTML = 'Salvar'; return; }
         
-        if (!weight || !height) {
-            showToast('Peso e altura são obrigatórios', 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Avaliação';
-            return;
-        }
+        const getVal = (id) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
         
-        // Perímetros (opcionais)
-        const getVal = (id) => {
-            const v = parseFloat(document.getElementById(id).value);
-            return isNaN(v) ? null : v;
-        };
-        
-        // Upload das fotos
+        // Upload fotos
         const photoUrls = [null, null, null];
         for (let i = 0; i < 3; i++) {
             if (photoFiles[i]) {
                 const fileName = 'body_measurements/' + user.id + '/' + Date.now() + '_' + i + '.jpg';
-                const { error: upErr } = await db.storage.from('activity-photos')
-                    .upload(fileName, photoFiles[i], { contentType: 'image/jpeg', upsert: false });
-                
+                const { error: upErr } = await db.storage.from('activity-photos').upload(fileName, photoFiles[i], { contentType: 'image/jpeg', upsert: false });
                 if (!upErr) {
                     const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
                     photoUrls[i] = urlData.publicUrl;
@@ -1670,9 +1624,7 @@ async function saveMeasurement() {
             }
         }
         
-        // Insere no banco
-        const { error } = await db.from('body_measurements').insert({
-            user_id: user.id,
+        const data = {
             measurement_date: date,
             weight_kg: weight,
             height_m: height,
@@ -1688,177 +1640,151 @@ async function saveMeasurement() {
             photo_1: photoUrls[0],
             photo_2: photoUrls[1],
             photo_3: photoUrls[2]
-        });
+        };
         
-        if (error) {
-            showToast('Erro ao salvar: ' + error.message, 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Avaliação';
-            return;
+        let error;
+        const editId = document.getElementById('editId').value;
+        
+        if (editId) {
+            // Atualiza existente
+            const { error: updateError } = await db.from('body_measurements').update(data).eq('id', editId);
+            error = updateError;
+        } else {
+            // Insere novo
+            const { error: insertError } = await db.from('body_measurements').insert({ ...data, user_id: user.id });
+            error = insertError;
         }
         
-        // Mostra confirmação
-        const summary = document.getElementById('confirmSummary');
-        summary.innerHTML = '<p><strong>📅 Data:</strong> ' + formatDate(date) + '</p>' +
-            '<p><strong>⚖️ Peso:</strong> ' + weight + ' kg</p>' +
-            '<p><strong>📏 Altura:</strong> ' + height + ' m</p>' +
-            '<p><strong>📊 IMC:</strong> ' + (weight / (height * height)).toFixed(1) + '</p>' +
-            (photoUrls.some(u => u) ? '<p><strong>📸 Fotos:</strong> ' + photoUrls.filter(u => u).length + ' salva(s)</p>' : '');
+        if (error) { showToast('Erro: ' + error.message, 'error'); btn.disabled = false; btn.innerHTML = 'Salvar'; return; }
         
-        showStep('confirm');
-        
-        // Limpa dados
+        showToast(editId ? 'Avaliação atualizada!' : 'Avaliação salva!', 'success');
         photoFiles = [null, null, null];
+        editingId = null;
+        document.getElementById('editId').value = '';
+        await loadDashboard();
+        showStep('dashboard');
         
     } catch (err) {
-        console.error('Erro:', err);
-        showToast('Erro ao salvar avaliação', 'error');
+        showToast('Erro ao salvar', 'error');
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check-circle"></i> Finalizar Avaliação';
+        btn.innerHTML = 'Salvar';
     }
 }
 
 // ============================================
-// DASHBOARD
+// CARREGAR PARA EDIÇÃO
+// ============================================
+async function editMeasurement(id) {
+    const { data: m } = await db.from('body_measurements').select('*').eq('id', id).single();
+    if (!m) return;
+    
+    editingId = id;
+    document.getElementById('editId').value = id;
+    document.getElementById('measurementDate').value = m.measurement_date;
+    document.getElementById('weightKg').value = m.weight_kg;
+    document.getElementById('heightM').value = m.height_m;
+    updateIMCPreview();
+    
+    // Preenche perímetros
+    const fields = { armRelaxed: 'arm_relaxed', armContracted: 'arm_contracted', waist: 'waist', abdomen: 'abdomen', hip: 'hip', thighLeft: 'thigh_left', thighRight: 'thigh_right', calfLeft: 'calf_left', calfRight: 'calf_right' };
+    for (const [inputId, dbField] of Object.entries(fields)) {
+        document.getElementById(inputId).value = m[dbField] || '';
+    }
+    
+    // Fotos existentes
+    photoFiles = [null, null, null];
+    [1,2,3].forEach(i => {
+        const url = m['photo_' + i];
+        const preview = document.getElementById('photoPreview' + i);
+        if (url) {
+            preview.src = url;
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('btnSaveMeasurement').innerHTML = '<i class="fas fa-save"></i> Atualizar';
+    showStep('basic');
+}
+
+// ============================================
+// DASHBOARD (Apple Health Style)
 // ============================================
 async function loadDashboard() {
     const container = document.getElementById('dashboardContent');
     if (!container) return;
-    
     const user = await getCurrentUser();
     if (!user) return;
     
-    const { data: measurements, error } = await db.from('body_measurements')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('measurement_date', { ascending: false });
+    const { data: measurements } = await db.from('body_measurements')
+        .select('*').eq('user_id', user.id).order('measurement_date', { ascending: false });
     
-    if (error || !measurements || measurements.length === 0) {
-        container.innerHTML = '<div class="empty-state"><img src="logo.png" alt="FATFIT" style="width:80px;height:80px;object-fit:contain;margin-bottom:12px;opacity:0.4;"><h3>Nenhuma avaliação ainda</h3><p class="text-sm text-muted">Clique em "Nova" para começar</p></div>';
+    if (!measurements || measurements.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><img src="logo.png" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px;opacity:0.4;"><p style="color:#8E8E93;">Nenhuma avaliação ainda</p></div>';
         return;
     }
     
-    container.innerHTML = '';
+    const months = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+    let html = '<div class="measurement-history-card">';
     
-    for (const m of measurements) {
-        const card = document.createElement('div');
-        card.className = 'measurement-card';
-        card.innerHTML = 
-            '<div class="flex-between">' +
-            '<div class="measurement-date">📅 ' + formatDate(m.measurement_date) + '</div>' +
-            '<button class="btn-delete-measurement" data-id="' + m.id + '" title="Excluir"><i class="fas fa-trash"></i></button>' +
-            '</div>' +
-            '<div class="measurement-stats">' +
-            '<div class="measurement-stat"><div class="measurement-stat-value">' + (m.weight_kg || '-') + '</div><div class="measurement-stat-label">Peso (kg)</div></div>' +
-            '<div class="measurement-stat"><div class="measurement-stat-value">' + (m.bmi || '-') + '</div><div class="measurement-stat-label">IMC</div></div>' +
-            '<div class="measurement-stat"><div class="measurement-stat-value">' + (m.waist || '-') + '</div><div class="measurement-stat-label">Cintura (cm)</div></div>' +
-            '</div>' +
-            '<button class="btn btn-outline btn-sm mt-1 btn-compare" data-id="' + m.id + '" style="width:100%;"><i class="fas fa-balance-scale"></i> Comparar</button>';
+    for (let i = 0; i < measurements.length; i++) {
+        const m = measurements[i];
+        const prev = measurements[i + 1];
+        const d = new Date(m.measurement_date + 'T00:00:00');
+        const day = d.getDate();
+        const monthYear = months[d.getMonth()] + ' ' + d.getFullYear();
+        const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         
-        container.appendChild(card);
-    }
-    
-    // Eventos de deletar
-    document.querySelectorAll('.btn-delete-measurement').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            if (!confirm('Excluir esta avaliação?')) return;
-            await db.from('body_measurements').delete().eq('id', btn.dataset.id);
-            showToast('Avaliação excluída', 'success');
-            loadDashboard();
-        });
-    });
-    
-    // Eventos de comparar
-    document.querySelectorAll('.btn-compare').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openCompareModal(btn.dataset.id, measurements);
-        });
-    });
-}
-
-// ============================================
-// MODAL DE COMPARATIVO
-// ============================================
-function openCompareModal(currentId, allMeasurements) {
-    // Remove modal anterior se existir
-    const existing = document.getElementById('compareModal');
-    if (existing) existing.remove();
-    
-    const current = allMeasurements.find(m => m.id === currentId);
-    const others = allMeasurements.filter(m => m.id !== currentId);
-    
-    if (others.length === 0) {
-        showToast('Nenhuma avaliação anterior para comparar', 'warning');
-        return;
-    }
-    
-    let options = '<option value="">Selecione uma avaliação anterior...</option>';
-    others.forEach(m => {
-        options += '<option value="' + m.id + '">' + formatDate(m.measurement_date) + ' - ' + m.weight_kg + 'kg</option>';
-    });
-    
-    const modalHTML = 
-        '<div class="modal open" id="compareModal">' +
-        '<div class="modal-content">' +
-        '<div class="modal-header"><h3>📊 Comparar Avaliações</h3><button class="icon-btn modal-close" onclick="document.getElementById(\'compareModal\').remove()"><i class="fas fa-times"></i></button></div>' +
-        '<div class="modal-body">' +
-        '<p class="text-sm text-muted mb-2">Comparando com: <strong>' + formatDate(current.measurement_date) + '</strong></p>' +
-        '<select class="compare-select mb-2" id="compareSelect">' + options + '</select>' +
-        '<div id="compareResult"></div>' +
-        '</div></div></div>';
-    
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    document.getElementById('compareSelect')?.addEventListener('change', async function() {
-        if (!this.value) {
-            document.getElementById('compareResult').innerHTML = '';
-            return;
+        // Delta de peso
+        let deltaHtml = '';
+        if (prev && prev.weight_kg) {
+            const diff = m.weight_kg - prev.weight_kg;
+            if (Math.abs(diff) > 0.05) {
+                const isDown = diff < 0;
+                deltaHtml = '<div class="measurement-delta-col">' +
+                    '<span class="' + (isDown ? 'delta-down' : 'delta-up') + '">' +
+                    (isDown ? '↓' : '↑') + ' ' + Math.abs(diff).toFixed(1) + ' kg</span></div>';
+            }
         }
-        await loadCompareData(currentId, this.value);
-    });
+        
+        html += '<div class="measurement-history-row" onclick="editMeasurement(\'' + m.id + '\')">' +
+            '<div class="measurement-date-col">' +
+            '<div class="measurement-date-day">' + day + '</div>' +
+            '<div class="measurement-date-full">' + monthYear + '</div>' +
+            '</div>' +
+            '<div class="measurement-icon-col"><i class="fas fa-heartbeat"></i></div>' +
+            deltaHtml +
+            '<div class="measurement-value-col">' +
+            '<div class="measurement-value-big">' + m.weight_kg + '</div>' +
+            '<div class="measurement-value-unit">kg</div>' +
+            '</div></div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
 }
 
+// Função global para edição
+window.editMeasurement = editMeasurement;
+
+// ============================================
+// COMPARATIVO (mantido)
+// ============================================
 async function loadCompareData(currentId, previousId) {
     const user = await getCurrentUser();
     const resultDiv = document.getElementById('compareResult');
-    
-    resultDiv.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Calculando...</div>';
-    
-    const { data, error } = await db.rpc('get_measurement_delta', {
-        p_user_id: user.id,
-        p_current_id: currentId,
-        p_previous_id: previousId
-    });
-    
-    if (error || !data) {
-        resultDiv.innerHTML = '<p class="text-center text-muted">Erro ao carregar comparativo</p>';
-        return;
-    }
-    
-    let html = '<table class="compare-table"><thead><tr><th>Medida</th><th>Atual</th><th>Anterior</th><th>Δ</th></tr></thead><tbody>';
-    
+    if (!resultDiv) return;
+    resultDiv.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
+    const { data } = await db.rpc('get_measurement_delta', { p_user_id: user.id, p_current_id: currentId, p_previous_id: previousId });
+    if (!data) { resultDiv.innerHTML = '<p class="text-center text-muted">Erro</p>'; return; }
+    let html = '<table class="compare-table"><thead><tr><th>Medida</th><th>Atual</th><th>Ant.</th><th>Δ</th></tr></thead><tbody>';
     for (const row of data) {
         if (row.current_value === null && row.previous_value === null) continue;
-        
-        let deltaClass = 'delta-neutral';
-        let deltaArrow = '';
-        
-        if (row.delta > 0) { deltaClass = 'delta-negative'; deltaArrow = ' ↑'; }
-        else if (row.delta < 0) { deltaClass = 'delta-positive'; deltaArrow = ' ↓'; }
-        
-        html += '<tr>' +
-            '<td>' + row.field_name + '</td>' +
-            '<td>' + (row.current_value !== null ? row.current_value : '-') + '</td>' +
-            '<td>' + (row.previous_value !== null ? row.previous_value : '-') + '</td>' +
-            '<td class="delta-col ' + deltaClass + '">' + 
-            (row.delta !== null ? (row.delta > 0 ? '+' : '') + row.delta + deltaArrow : '-') + 
-            (row.delta_percent !== null ? ' (' + (row.delta_percent > 0 ? '+' : '') + row.delta_percent + '%)' : '') +
-            '</td>' +
-            '</tr>';
+        let cls = 'delta-neutral'; let arrow = '';
+        if (row.delta > 0) { cls = 'delta-up'; arrow = ' ↑'; }
+        else if (row.delta < 0) { cls = 'delta-down'; arrow = ' ↓'; }
+        html += '<tr><td>' + row.field_name + '</td><td>' + (row.current_value ?? '-') + '</td><td>' + (row.previous_value ?? '-') + '</td><td class="delta-col ' + cls + '">' + (row.delta !== null ? (row.delta > 0 ? '+' : '') + row.delta + arrow : '-') + (row.delta_percent ? ' (' + (row.delta_percent > 0 ? '+' : '') + row.delta_percent + '%)' : '') + '</td></tr>';
     }
-    
     html += '</tbody></table>';
     resultDiv.innerHTML = html;
 }

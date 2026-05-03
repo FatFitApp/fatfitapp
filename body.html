@@ -4,43 +4,28 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#F2F2F7">
     <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT - Avaliação Física</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="app-page">
-    <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen">
-        <img src="logo.png" alt="FATFIT" class="loading-logo">
-        <p class="loading-text">Carregando</p>
-        <div class="loading-dots">
-            <div class="loading-dot"></div>
-            <div class="loading-dot"></div>
-            <div class="loading-dot"></div>
-        </div>
-    </div>
-
-    <header class="app-header">
-        <button class="icon-btn" onclick="history.back()">
-            <i class="fas fa-arrow-left"></i>
+<body class="body-page">
+    <header class="body-header">
+        <button class="body-back-btn" onclick="history.back()">
+            <i class="fas fa-chevron-left"></i>
         </button>
-        <h1 class="app-title">Avaliação Física</h1>
-        <div></div>
+        <h1 class="body-title">Avaliação Física</h1>
+        <button class="body-add-btn" id="btnNewMeasurement">
+            <i class="fas fa-plus"></i>
+        </button>
     </header>
 
-    <main class="main-content">
-        <!-- ETAPA 0: Dashboard / Histórico -->
+    <main class="body-main">
+        <!-- ETAPA 0: Dashboard -->
         <div id="stepDashboard">
-            <div class="section-header">
-                <h2>📊 Minhas Avaliações</h2>
-                <button class="btn btn-primary btn-sm" id="btnNewMeasurement">
-                    <i class="fas fa-plus"></i> Nova
-                </button>
-            </div>
-            
-            <div id="dashboardContent">
+            <h2 class="body-section-title">Histórico</h2>
+            <div class="body-card" id="dashboardContent">
                 <div class="loading-state">
                     <img src="logo.png" alt="Carregando" class="loading-mini-logo">
                     <p>Carregando histórico...</p>
@@ -50,201 +35,131 @@
 
         <!-- ETAPA 1: Dados Básicos -->
         <div id="stepBasic" style="display:none;">
-            <div class="step-indicator">
-                <span class="step-dot active">1</span>
-                <span class="step-line"></span>
-                <span class="step-dot">2</span>
-                <span class="step-line"></span>
-                <span class="step-dot">3</span>
+            <h2 class="body-section-title">Nova Avaliação</h2>
+            <div class="body-card">
+                <p class="body-card-subtitle">Dados Básicos</p>
+                <form id="formBasic">
+                    <input type="hidden" id="editId">
+                    <div class="body-input-group">
+                        <label>Data</label>
+                        <input type="date" id="measurementDate" required>
+                    </div>
+                    <div class="body-input-row">
+                        <div class="body-input-group" style="flex:1;">
+                            <label>Peso (kg)</label>
+                            <input type="number" id="weightKg" required min="20" max="300" step="0.1" placeholder="75.5">
+                        </div>
+                        <div class="body-input-group" style="flex:1;">
+                            <label>Altura (m)</label>
+                            <input type="number" id="heightM" required min="0.5" max="2.5" step="0.01" placeholder="1.75">
+                        </div>
+                    </div>
+                    <div class="imc-display" id="imcDisplay" style="display:none;">
+                        <div class="imc-big" id="imcValue">--</div>
+                        <div class="imc-label" id="imcClassification"></div>
+                    </div>
+                    <div class="body-btn-row">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="showStep('dashboard')">Voltar</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Próximo</button>
+                    </div>
+                </form>
             </div>
-            
-            <h2 class="mb-2">📋 Dados Básicos</h2>
-            <p class="text-sm text-muted mb-2">* Campos obrigatórios</p>
-            
-            <form id="formBasic">
-                <div class="input-group">
-                    <label><i class="fas fa-calendar"></i> Data da Avaliação *</label>
-                    <input type="date" id="measurementDate" required value="">
-                </div>
-                
-                <div class="input-group">
-                    <label><i class="fas fa-weight-scale"></i> Peso (kg) *</label>
-                    <input type="number" id="weightKg" required min="20" max="300" step="0.1" placeholder="Ex: 75.5">
-                </div>
-                
-                <div class="input-group">
-                    <label><i class="fas fa-ruler-vertical"></i> Altura (m) *</label>
-                    <input type="number" id="heightM" required min="0.5" max="2.5" step="0.01" placeholder="Ex: 1.75">
-                </div>
-                
-                <div class="imc-preview" id="imcPreview" style="display:none;">
-                    <div class="imc-value" id="imcValue">--</div>
-                    <div class="imc-classification" id="imcClassification"></div>
-                </div>
-                
-                <div class="flex-between mt-2">
-                    <button type="button" class="btn btn-outline" onclick="showStep('dashboard')">
-                        <i class="fas fa-arrow-left"></i> Voltar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        Avançar <i class="fas fa-arrow-right"></i>
-                    </button>
-                </div>
-            </form>
         </div>
 
         <!-- ETAPA 2: Perímetros -->
         <div id="stepPerimeters" style="display:none;">
-            <div class="step-indicator">
-                <span class="step-dot completed">✓</span>
-                <span class="step-line completed"></span>
-                <span class="step-dot active">2</span>
-                <span class="step-line"></span>
-                <span class="step-dot">3</span>
-            </div>
-            
-            <h2 class="mb-1">📏 Medidas Corporais</h2>
-            <p class="text-sm text-muted mb-2">Medidas em centímetros (cm) - Etapa opcional</p>
-            
-            <div class="measurement-layout">
-                <!-- Capivara Anatômica -->
-                <div class="capybara-container" id="capybaraContainer">
-                    <img src="corpo.png" alt="Guia Anatômico" class="capybara-body" id="capybaraBody">
-                    <div class="highlight-overlay" id="highlightOverlay"></div>
-                </div>
-                
-                <!-- Campos de Medidas -->
-                <div class="measurement-form" id="measurementForm">
-                    <div class="input-group">
-                        <label for="armRelaxed">💪 Braço Relaxado (cm)</label>
-                        <input type="number" id="armRelaxed" min="10" max="80" step="0.1" placeholder="Ex: 32.5" data-region="braco_relaxado">
+            <h2 class="body-section-title">Medidas Corporais</h2>
+            <div class="body-card">
+                <p class="body-card-subtitle">Perímetros (opcional)</p>
+                <div class="measure-row">
+                    <div class="capybara-side">
+                        <div class="capybara-box" id="capybaraContainer">
+                            <img src="corpo.png" alt="Guia" class="capybara-img" id="capybaraBody">
+                            <div class="highlight-overlay" id="highlightOverlay"></div>
+                        </div>
                     </div>
-                    
-                    <div class="input-group">
-                        <label for="armContracted">💪 Braço Contraído (cm)</label>
-                        <input type="number" id="armContracted" min="10" max="80" step="0.1" placeholder="Ex: 35.0" data-region="braco_contraido">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="waist">🟠 Cintura (cm)</label>
-                        <input type="number" id="waist" min="30" max="200" step="0.1" placeholder="Ex: 80.0" data-region="cintura">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="abdomen">🟡 Abdômen / Umbigo (cm)</label>
-                        <input type="number" id="abdomen" min="30" max="200" step="0.1" placeholder="Ex: 85.0" data-region="abdomen">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="hip">🟣 Quadril (cm)</label>
-                        <input type="number" id="hip" min="30" max="200" step="0.1" placeholder="Ex: 100.0" data-region="quadril">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="thighLeft">🦵 Coxa Esquerda (cm)</label>
-                        <input type="number" id="thighLeft" min="20" max="120" step="0.1" placeholder="Ex: 55.0" data-region="perna_esquerda">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="thighRight">🦵 Coxa Direita (cm)</label>
-                        <input type="number" id="thighRight" min="20" max="120" step="0.1" placeholder="Ex: 55.0" data-region="perna_direita">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="calfLeft">🦶 Panturrilha Esquerda (cm)</label>
-                        <input type="number" id="calfLeft" min="10" max="60" step="0.1" placeholder="Ex: 37.0" data-region="panturrilha_esquerda">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="calfRight">🦶 Panturrilha Direita (cm)</label>
-                        <input type="number" id="calfRight" min="10" max="60" step="0.1" placeholder="Ex: 37.0" data-region="panturrilha_direita">
+                    <div class="inputs-side">
+                        <div class="body-input-mini">
+                            <label>Braço Relaxado</label>
+                            <input type="number" id="armRelaxed" step="0.1" placeholder="32.5" data-region="braco_relaxado">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Braço Contraído</label>
+                            <input type="number" id="armContracted" step="0.1" placeholder="35.0" data-region="braco_contraido">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Cintura</label>
+                            <input type="number" id="waist" step="0.1" placeholder="80.0" data-region="cintura">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Abdômen</label>
+                            <input type="number" id="abdomen" step="0.1" placeholder="85.0" data-region="abdomen">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Quadril</label>
+                            <input type="number" id="hip" step="0.1" placeholder="100.0" data-region="quadril">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Coxa Esq.</label>
+                            <input type="number" id="thighLeft" step="0.1" placeholder="55.0" data-region="perna_esquerda">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Coxa Dir.</label>
+                            <input type="number" id="thighRight" step="0.1" placeholder="55.0" data-region="perna_direita">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Panturrilha Esq.</label>
+                            <input type="number" id="calfLeft" step="0.1" placeholder="37.0" data-region="panturrilha_esquerda">
+                        </div>
+                        <div class="body-input-mini">
+                            <label>Panturrilha Dir.</label>
+                            <input type="number" id="calfRight" step="0.1" placeholder="37.0" data-region="panturrilha_direita">
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="flex-between mt-2">
-                <button type="button" class="btn btn-outline" onclick="showStep('basic')">
-                    <i class="fas fa-arrow-left"></i> Voltar
-                </button>
-                <div>
-                    <button type="button" class="btn btn-text" onclick="showStep('photos')">
-                        Pular esta etapa <i class="fas fa-forward"></i>
-                    </button>
-                    <button type="button" class="btn btn-primary" onclick="showStep('photos')">
-                        Avançar <i class="fas fa-arrow-right"></i>
-                    </button>
+                <div class="body-btn-row">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="showStep('basic')">Voltar</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="showStep('photos')">Próximo</button>
                 </div>
             </div>
         </div>
 
         <!-- ETAPA 3: Fotos -->
         <div id="stepPhotos" style="display:none;">
-            <div class="step-indicator">
-                <span class="step-dot completed">✓</span>
-                <span class="step-line completed"></span>
-                <span class="step-dot completed">✓</span>
-                <span class="step-line completed"></span>
-                <span class="step-dot active">3</span>
-            </div>
-            
-            <h2 class="mb-1">📸 Fotos de Progresso</h2>
-            <p class="text-sm text-muted mb-2">Até 3 fotos - Etapa opcional</p>
-            
-            <div class="photo-protocol card mb-2">
-                <h4><i class="fas fa-info-circle"></i> Protocolo de Captura</h4>
-                <ul>
-                    <li>📷 Tire a foto sempre na <strong>mesma posição</strong></li>
-                    <li>💡 Use a <strong>mesma iluminação</strong> (preferência luz natural)</li>
-                    <li>📏 Mantenha a <strong>mesma distância</strong> da câmera</li>
-                    <li>👤 Fique de <strong>frente para a câmera</strong>, corpo inteiro</li>
-                    <li>🪞 Use um <strong>espelho</strong> se for tirar sozinho</li>
-                </ul>
-            </div>
-            
-            <div class="photos-grid" id="photosGrid">
-                <div class="photo-slot" id="photoSlot1" onclick="document.getElementById('photoInput1').click()">
-                    <i class="fas fa-camera"></i>
-                    <span>Foto 1</span>
-                    <input type="file" id="photoInput1" accept="image/*" capture="environment" hidden onchange="previewPhoto(1)">
-                    <img id="photoPreview1" class="photo-preview-img" style="display:none;">
+            <h2 class="body-section-title">Fotos de Progresso</h2>
+            <div class="body-card">
+                <p class="body-card-subtitle">Até 3 fotos (opcional)</p>
+                <div class="photo-protocol-mini">
+                    <i class="fas fa-lightbulb"></i> Mantenha sempre a mesma posição e iluminação
                 </div>
-                <div class="photo-slot" id="photoSlot2" onclick="document.getElementById('photoInput2').click()">
-                    <i class="fas fa-camera"></i>
-                    <span>Foto 2</span>
-                    <input type="file" id="photoInput2" accept="image/*" capture="environment" hidden onchange="previewPhoto(2)">
-                    <img id="photoPreview2" class="photo-preview-img" style="display:none;">
+                <div class="photos-row">
+                    <div class="photo-slot-mini" id="photoSlot1">
+                        <input type="file" id="photoInput1" accept="image/*" hidden onchange="previewPhoto(1)">
+                        <img id="photoPreview1" class="photo-thumb" style="display:none;">
+                        <div class="photo-placeholder" onclick="document.getElementById('photoInput1').click()">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                    </div>
+                    <div class="photo-slot-mini" id="photoSlot2">
+                        <input type="file" id="photoInput2" accept="image/*" hidden onchange="previewPhoto(2)">
+                        <img id="photoPreview2" class="photo-thumb" style="display:none;">
+                        <div class="photo-placeholder" onclick="document.getElementById('photoInput2').click()">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                    </div>
+                    <div class="photo-slot-mini" id="photoSlot3">
+                        <input type="file" id="photoInput3" accept="image/*" hidden onchange="previewPhoto(3)">
+                        <img id="photoPreview3" class="photo-thumb" style="display:none;">
+                        <div class="photo-placeholder" onclick="document.getElementById('photoInput3').click()">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="photo-slot" id="photoSlot3" onclick="document.getElementById('photoInput3').click()">
-                    <i class="fas fa-camera"></i>
-                    <span>Foto 3</span>
-                    <input type="file" id="photoInput3" accept="image/*" capture="environment" hidden onchange="previewPhoto(3)">
-                    <img id="photoPreview3" class="photo-preview-img" style="display:none;">
+                <div class="body-btn-row">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="showStep('perimeters')">Voltar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveMeasurement">Salvar</button>
                 </div>
             </div>
-            
-            <div class="flex-between mt-2">
-                <button type="button" class="btn btn-outline" onclick="showStep('perimeters')">
-                    <i class="fas fa-arrow-left"></i> Voltar
-                </button>
-                <button type="button" class="btn btn-primary" id="btnFinishMeasurement">
-                    <i class="fas fa-check-circle"></i> Finalizar Avaliação
-                </button>
-            </div>
-        </div>
-
-        <!-- ETAPA 4: Confirmação -->
-        <div id="stepConfirm" style="display:none;">
-            <div class="text-center mb-2">
-                <img src="logo.png" alt="FATFIT" style="width:100px;height:100px;object-fit:contain;">
-                <h2>✅ Avaliação Salva!</h2>
-                <p class="text-sm text-muted">Seus dados foram registrados com sucesso</p>
-            </div>
-            
-            <div id="confirmSummary" class="card mb-2"></div>
-            
-            <button class="btn btn-primary btn-block" onclick="showStep('dashboard')">
-                <i class="fas fa-list"></i> Ver Histórico
-            </button>
         </div>
     </main>
 
@@ -253,17 +168,5 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
-    
-    <script>
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                var loading = document.getElementById('loadingScreen');
-                if (loading) {
-                    loading.classList.add('hidden');
-                    setTimeout(function() { loading.remove(); }, 500);
-                }
-            }, 600);
-        });
-    </script>
 </body>
 </html>
