@@ -1711,6 +1711,9 @@ async function editMeasurement(id) {
 // ============================================
 // DASHBOARD (Apple Health Style)
 // ============================================
+// ============================================
+// DASHBOARD (Apple Health Style)
+// ============================================
 async function loadDashboard() {
     const container = document.getElementById('dashboardContent');
     if (!container) return;
@@ -1726,43 +1729,195 @@ async function loadDashboard() {
     }
     
     const months = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
-    let html = '<div class="measurement-history-card">';
+    let html = '';
     
     for (let i = 0; i < measurements.length; i++) {
         const m = measurements[i];
         const prev = measurements[i + 1];
+        const hasPrevious = i < measurements.length - 1;
+        
         const d = new Date(m.measurement_date + 'T00:00:00');
         const day = d.getDate();
-        const monthYear = months[d.getMonth()] + ' ' + d.getFullYear();
-        const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const monthAbbr = months[d.getMonth()];
+        const year = d.getFullYear();
         
         // Delta de peso
         let deltaHtml = '';
         if (prev && prev.weight_kg) {
             const diff = m.weight_kg - prev.weight_kg;
-            if (Math.abs(diff) > 0.05) {
+            if (Math.abs(diff) >= 0.05) {
                 const isDown = diff < 0;
-                deltaHtml = '<div class="measurement-delta-col">' +
-                    '<span class="' + (isDown ? 'delta-down' : 'delta-up') + '">' +
-                    (isDown ? '↓' : '↑') + ' ' + Math.abs(diff).toFixed(1) + ' kg</span></div>';
+                deltaHtml = '<span class="' + (isDown ? 'delta-down' : 'delta-up') + '">' +
+                    (isDown ? '↓' : '↑') + ' ' + Math.abs(diff).toFixed(1) + ' kg</span>';
+            } else {
+                deltaHtml = '<span class="delta-empty">--</span>';
             }
+        } else {
+            deltaHtml = '<span class="delta-empty">--</span>';
         }
         
-        html += '<div class="measurement-history-row" onclick="editMeasurement(\'' + m.id + '\')">' +
-            '<div class="measurement-date-col">' +
-            '<div class="measurement-date-day">' + day + '</div>' +
-            '<div class="measurement-date-full">' + monthYear + '</div>' +
-            '</div>' +
-            '<div class="measurement-icon-col"><i class="fas fa-heartbeat"></i></div>' +
-            deltaHtml +
-            '<div class="measurement-value-col">' +
-            '<div class="measurement-value-big">' + m.weight_kg + '</div>' +
-            '<div class="measurement-value-unit">kg</div>' +
-            '</div></div>';
+        // Card individual
+        html += '<div class="measurement-card" onclick="editMeasurement(\'' + m.id + '\')">';
+        
+        // Linha principal
+        html += '<div class="measurement-card-row">';
+        html += '<div class="measurement-date-col">';
+        html += '<div class="measurement-date-day">' + day + ' ' + monthAbbr + '</div>';
+        html += '<div class="measurement-date-year">' + year + '</div>';
+        html += '</div>';
+        html += '<div class="measurement-delta-col">' + deltaHtml + '</div>';
+        html += '<div class="measurement-value-col">';
+        html += '<span class="measurement-value-big">' + m.weight_kg + '</span> ';
+        html += '<span class="measurement-value-unit">kg</span>';
+        html += '</div>';
+        html += '<div class="measurement-delete-col" onclick="event.stopPropagation();">';
+        html += '<button class="btn-delete-mini" onclick="deleteMeasurement(\'' + m.id + '\')" title="Excluir">';
+        html += '<i class="fas fa-trash"></i></button>';
+        html += '</div>';
+        html += '</div>'; // Fecha row
+        
+        // Botão Comparar dentro do card
+        if (hasPrevious) {
+            html += '<div class="measurement-compare-row" onclick="event.stopPropagation();">';
+            html += '<button class="btn-compare-full" onclick="openCompareScreen(\'' + m.id + '\')">';
+            html += '<i class="fas fa-balance-scale"></i> Comparar</button>';
+            html += '</div>';
+        }
+        
+        html += '</div>'; // Fecha card
     }
-    html += '</div>';
+    
     container.innerHTML = html;
 }
+
+
+async function deleteMeasurement(id) {
+    if (!confirm('Tem certeza que deseja excluir esta avaliação?\n\nEsta ação não pode ser desfeita.')) return;
+    
+    const { error } = await db.from('body_measurements').delete().eq('id', id);
+    
+    if (error) {
+        showToast('Erro ao excluir: ' + error.message, 'error');
+    } else {
+        showToast('Avaliação excluída!', 'success');
+        await loadDashboard();
+    }
+}
+
+// Torna global
+window.deleteMeasurement = deleteMeasurement;
+
+
+// ============================================
+// TELA DE COMPARATIVO
+// ============================================
+let allMeasurementsCache = [];
+
+async function openCompareScreen(currentId) {
+    console.log('🔍 openCompareScreen chamado com ID:', currentId);
+    
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data: measurements } = await db.from('body_measurements')
+        .select('*').eq('user_id', user.id).order('measurement_date', { ascending: false });
+    
+    if (!measurements) {
+        console.log('❌ Nenhuma avaliação encontrada');
+        return;
+    }
+    
+    allMeasurementsCache = measurements;
+    console.log('📋 Avaliações carregadas:', measurements.length);
+    
+    const current = measurements.find(m => m.id === currentId);
+    if (!current) {
+        console.log('❌ Avaliação atual não encontrada');
+        return;
+    }
+    console.log('📅 Avaliação atual:', current.measurement_date);
+    
+    const previousOnes = measurements.filter(m => 
+        new Date(m.measurement_date) < new Date(current.measurement_date)
+    );
+    console.log('📋 Anteriores disponíveis:', previousOnes.length);
+    
+    if (previousOnes.length === 0) {
+        showToast('Nenhuma avaliação anterior disponível', 'warning');
+        return;
+    }
+    
+    let options = '<option value="">Selecione uma avaliação anterior...</option>';
+    for (const p of previousOnes) {
+        options += '<option value="' + p.id + '">' + formatDate(p.measurement_date) + ' - ' + p.weight_kg + ' kg</option>';
+    }
+    
+    const months = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+    const cd = new Date(current.measurement_date + 'T00:00:00');
+    const currentLabel = cd.getDate() + ' ' + months[cd.getMonth()] + ' ' + cd.getFullYear();
+    
+    const screenHTML = 
+        '<div class="compare-screen" id="compareScreen">' +
+        '<div class="compare-header">' +
+        '<button class="body-back-btn" onclick="window.closeCompareScreen()"><i class="fas fa-chevron-left"></i></button>' +
+        '<h2 class="compare-title">Comparar Avaliações</h2>' +
+        '<div style="width:36px;"></div>' +
+        '</div>' +
+        '<div class="compare-body">' +
+        '<div class="compare-select-card">' +
+        '<div class="compare-select-label">Avaliação atual: ' + currentLabel + ' • ' + current.weight_kg + ' kg</div>' +
+        '<select class="compare-select" id="compareSelect">' + options + '</select>' +
+        '</div>' +
+        '<div id="compareResultContainer"></div>' +
+        '</div>' +
+        '</div>';
+    
+    const existing = document.getElementById('compareScreen');
+    if (existing) existing.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', screenHTML);
+    document.body.style.overflow = 'hidden';
+    
+    console.log('✅ Tela de comparativo criada');
+    
+    // Evento do select - USANDO addEventListener
+    const selectEl = document.getElementById('compareSelect');
+    if (selectEl) {
+        console.log('✅ Select encontrado, adicionando evento');
+        selectEl.addEventListener('change', async function() {
+            console.log('🔄 Select mudou para:', this.value);
+            if (this.value) {
+                await loadCompareData(currentId, this.value);
+            } else {
+                document.getElementById('compareResultContainer').innerHTML = '';
+            }
+        });
+    } else {
+        console.log('❌ Select NÃO encontrado!');
+    }
+}
+
+window.closeCompareScreen = function() {
+    console.log('🔙 Fechando comparativo');
+    const screen = document.getElementById('compareScreen');
+    if (screen) screen.remove();
+    document.body.style.overflow = '';
+};
+
+window.openCompareScreen = openCompareScreen;
+
+function closeCompareScreen() {
+    const screen = document.getElementById('compareScreen');
+    if (screen) screen.remove();
+    document.body.style.overflow = '';
+}
+
+
+
+// Funções globais
+window.openCompareScreen = openCompareScreen;
+window.closeCompareScreen = closeCompareScreen;
+window.loadCompareData = loadCompareData;
 
 // Função global para edição
 window.editMeasurement = editMeasurement;
@@ -1771,20 +1926,103 @@ window.editMeasurement = editMeasurement;
 // COMPARATIVO (mantido)
 // ============================================
 async function loadCompareData(currentId, previousId) {
-    const user = await getCurrentUser();
-    const resultDiv = document.getElementById('compareResult');
-    if (!resultDiv) return;
-    resultDiv.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
-    const { data } = await db.rpc('get_measurement_delta', { p_user_id: user.id, p_current_id: currentId, p_previous_id: previousId });
-    if (!data) { resultDiv.innerHTML = '<p class="text-center text-muted">Erro</p>'; return; }
-    let html = '<table class="compare-table"><thead><tr><th>Medida</th><th>Atual</th><th>Ant.</th><th>Δ</th></tr></thead><tbody>';
-    for (const row of data) {
-        if (row.current_value === null && row.previous_value === null) continue;
-        let cls = 'delta-neutral'; let arrow = '';
-        if (row.delta > 0) { cls = 'delta-up'; arrow = ' ↑'; }
-        else if (row.delta < 0) { cls = 'delta-down'; arrow = ' ↓'; }
-        html += '<tr><td>' + row.field_name + '</td><td>' + (row.current_value ?? '-') + '</td><td>' + (row.previous_value ?? '-') + '</td><td class="delta-col ' + cls + '">' + (row.delta !== null ? (row.delta > 0 ? '+' : '') + row.delta + arrow : '-') + (row.delta_percent ? ' (' + (row.delta_percent > 0 ? '+' : '') + row.delta_percent + '%)' : '') + '</td></tr>';
+    console.log('🚀 loadCompareData INICIADO:', currentId, previousId);
+    
+    if (!previousId) return;
+    
+    let container = document.getElementById('compareResultContainer');
+    
+    if (!container) {
+        const screen = document.getElementById('compareScreen');
+        if (screen) container = screen.querySelector('#compareResultContainer');
     }
-    html += '</tbody></table>';
-    resultDiv.innerHTML = html;
+    
+    if (!container) return;
+    
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Calculando...</p></div>';
+    
+    const user = await getCurrentUser();
+    
+    const current = allMeasurementsCache.find(m => m.id === currentId);
+    const previous = allMeasurementsCache.find(m => m.id === previousId);
+    
+    console.log('📅 Atual:', current?.weight_kg, 'kg | Anterior:', previous?.weight_kg, 'kg');
+    console.log('📸 Fotos atual:', [current?.photo_1, current?.photo_2, current?.photo_3].filter(p => p));
+    console.log('📸 Fotos anterior:', [previous?.photo_1, previous?.photo_2, previous?.photo_3].filter(p => p));
+    
+    let html = '';
+    
+    // Tabela comparativa
+    html += '<div class="compare-table-card"><table class="compare-table">';
+    html += '<thead><tr><th>Medida</th><th>Atual</th><th>Anterior</th><th>Δ</th></tr></thead><tbody>';
+    
+    const fields = [
+        { label: 'Peso (kg)', curr: current?.weight_kg, prev: previous?.weight_kg, unit: 'kg' },
+        { label: 'IMC', curr: current?.bmi, prev: previous?.bmi, unit: '' },
+        { label: 'Braço Relaxado (cm)', curr: current?.arm_relaxed, prev: previous?.arm_relaxed, unit: 'cm' },
+        { label: 'Braço Contraído (cm)', curr: current?.arm_contracted, prev: previous?.arm_contracted, unit: 'cm' },
+        { label: 'Cintura (cm)', curr: current?.waist, prev: previous?.waist, unit: 'cm' },
+        { label: 'Abdômen (cm)', curr: current?.abdomen, prev: previous?.abdomen, unit: 'cm' },
+        { label: 'Quadril (cm)', curr: current?.hip, prev: previous?.hip, unit: 'cm' },
+        { label: 'Coxa Esquerda (cm)', curr: current?.thigh_left, prev: previous?.thigh_left, unit: 'cm' },
+        { label: 'Coxa Direita (cm)', curr: current?.thigh_right, prev: previous?.thigh_right, unit: 'cm' },
+        { label: 'Panturrilha Esq. (cm)', curr: current?.calf_left, prev: previous?.calf_left, unit: 'cm' },
+        { label: 'Panturrilha Dir. (cm)', curr: current?.calf_right, prev: previous?.calf_right, unit: 'cm' }
+    ];
+    
+    for (const f of fields) {
+        if (f.curr === null && f.prev === null) continue;
+        
+        const diff = (f.curr || 0) - (f.prev || 0);
+        let deltaClass = '';
+        let arrow = '';
+        if (diff > 0) { deltaClass = 'delta-negative'; arrow = ' ↑'; }
+        else if (diff < 0) { deltaClass = 'delta-positive'; arrow = ' ↓'; }
+        
+        html += '<tr>' +
+            '<td>' + f.label + '</td>' +
+            '<td>' + (f.curr !== null ? f.curr : '-') + '</td>' +
+            '<td>' + (f.prev !== null ? f.prev : '-') + '</td>' +
+            '<td class="delta-col ' + deltaClass + '">' +
+            (f.curr !== null && f.prev !== null ? (diff > 0 ? '+' : '') + diff.toFixed(1) + ' ' + f.unit + arrow : '-') +
+            '</td></tr>';
+    }
+    
+    html += '</tbody></table></div>';
+    
+    // FOTOS LADO A LADO
+    const currentPhotos = [current?.photo_1, current?.photo_2, current?.photo_3].filter(p => p);
+    const previousPhotos = [previous?.photo_1, previous?.photo_2, previous?.photo_3].filter(p => p);
+    
+    if (currentPhotos.length > 0 || previousPhotos.length > 0) {
+        html += '<div class="compare-photos-card">';
+        html += '<div class="compare-photos-title">📸 Comparativo de Fotos</div>';
+        html += '<div class="compare-photos-grid">';
+        
+        // Foto anterior
+        html += '<div class="compare-photo-item">';
+        html += '<div class="compare-photo-label">📅 ' + formatDate(previous?.measurement_date) + '</div>';
+        if (previousPhotos.length > 0) {
+            html += '<img src="' + previousPhotos[0] + '" class="compare-photo-img" onclick="window.open(\'' + previousPhotos[0] + '\')" style="cursor:pointer;">';
+        } else {
+            html += '<div class="compare-photo-img" style="display:flex;align-items:center;justify-content:center;color:#C7C7CC;background:#F9FAFB;">Sem foto</div>';
+        }
+        html += '</div>';
+        
+        // Foto atual
+        html += '<div class="compare-photo-item">';
+        html += '<div class="compare-photo-label">📅 ' + formatDate(current?.measurement_date) + '</div>';
+        if (currentPhotos.length > 0) {
+            html += '<img src="' + currentPhotos[0] + '" class="compare-photo-img" onclick="window.open(\'' + currentPhotos[0] + '\')" style="cursor:pointer;">';
+        } else {
+            html += '<div class="compare-photo-img" style="display:flex;align-items:center;justify-content:center;color:#C7C7CC;background:#F9FAFB;">Sem foto</div>';
+        }
+        html += '</div>';
+        
+        html += '</div></div>';
+    }
+    
+    console.log('✅ HTML gerado, inserindo...');
+    container.innerHTML = html;
+    console.log('✅ Pronto! Fotos:', currentPhotos.length, 'vs', previousPhotos.length);
 }
