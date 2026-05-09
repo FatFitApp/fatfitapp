@@ -671,7 +671,7 @@ if (tabId === 'tabChat') {
                     markMessagesAsRead();
                 }, 500);
             }
-            
+            toggleFAB();  
             // Atualiza badge ao trocar de aba
             if (tabId !== 'tabChat') {
                 updateUnreadBadge();
@@ -733,40 +733,229 @@ async function selectGroup(group, role) {
 async function loadTimeline() {
     const feed = document.getElementById('timelineFeed');
     if (!feed || !currentGroup) return;
-    feed.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Carregando...</p></div>';
+    feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
+    
     const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', currentGroup.id);
     if (!challengeIds || challengeIds.length === 0) {
         feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhum desafio no grupo</p></div>';
         return;
     }
+    
     const { data: activities } = await db.from('daily_activities')
         .select('*, profiles:user_id(name, avatar_url), challenges:challenge_id(name)')
         .in('challenge_id', challengeIds.map(c => c.id)).eq('status', 'valid')
-        .order('created_at', { ascending: false }).limit(50);
+        .order('created_at', { ascending: false }).limit(30);
+    
     if (!activities || activities.length === 0) {
         feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhuma atividade ainda</p></div>';
         return;
     }
+    
     feed.innerHTML = '';
+    const user = await getCurrentUser();
+    
     for (const a of activities) {
         const isExtra = a.is_extra === true;
+        
+        // Buscar curtidas e comentários
+        const { count: likesCount } = await db.from('activity_likes')
+            .select('*', { count: 'exact', head: true }).eq('activity_id', a.id);
+        
+        const { data: userLiked } = await db.from('activity_likes')
+            .select('id').eq('activity_id', a.id).eq('user_id', user.id).maybeSingle();
+        
+        const { data: comments } = await db.from('activity_comments')
+            .select('*, profiles:user_id(name, avatar_url)')
+            .eq('activity_id', a.id)
+            .order('created_at', { ascending: true })
+            .limit(10);
+        
+        // Localização
+        let locationHtml = '';
+        if (a.location && a.location.lat && a.location.lng) {
+            locationHtml = '<div class="timeline-location-full" id="loc-' + a.id + '">' +
+                '<i class="fas fa-map-pin"></i>' +
+                '<span>Carregando endereço...</span></div>';
+        }
+        
         const item = document.createElement('div');
         item.className = 'timeline-item';
         item.innerHTML = 
             '<div class="timeline-header">' +
-            '<img src="' + (a.profiles?.avatar_url || 'https://via.placeholder.com/40') + '" class="timeline-avatar">' +
+            '<img src="' + (a.profiles?.avatar_url || 'https://via.placeholder.com/36') + '" class="timeline-avatar">' +
             '<div class="timeline-user">' +
-            '<div class="timeline-name">' + escapeHtml(a.profiles?.name || 'Usuário') + (isExtra ? ' <span class="badge badge-warning" style="margin-left:6px;">Extra</span>' : '') + '</div>' +
-            '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + (a.challenges?.name || 'Desafio') + '</div>' +
+            '<div class="timeline-name">' + escapeHtml(a.profiles?.name || 'Usuário') + (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') + '</div>' +
+            '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + escapeHtml(a.challenges?.name || 'Desafio') + '</div>' +
             '</div>' +
-            (isExtra ? '<span class="badge badge-secondary" style="font-size:0.7rem;">+0</span>' : '<span class="timeline-points">+1 pt</span>') +
+            (isExtra ? '<span class="badge badge-secondary" style="font-size:0.7rem;">+0</span>' : '<span class="badge badge-success" style="font-size:0.7rem;">+1 pt</span>') +
             '</div>' +
             '<img src="' + a.photo_url + '" class="timeline-photo" onclick="window.open(\'' + a.photo_url + '\')" loading="lazy" onerror="this.style.display=\'none\'">' +
-            (a.comment ? '<div class="timeline-body"><p class="timeline-comment">' + escapeHtml(a.comment) + '</p></div>' : '') +
-            (a.location ? '<div class="timeline-body"><p class="timeline-location"><i class="fas fa-map-marker-alt"></i> Localização registrada</p></div>' : '');
+            locationHtml +
+            (a.comment ? '<div class="timeline-body">💬 ' + escapeHtml(a.comment) + '</div>' : '') +
+            '<div class="timeline-actions-bar">' +
+            '<button class="timeline-action-btn ' + (userLiked ? 'liked' : '') + '" onclick="toggleLike(\'' + a.id + '\', this)" data-activity="' + a.id + '">' +
+            '<i class="' + (userLiked ? 'fas' : 'far') + ' fa-heart"></i> ' + (likesCount || 0) +
+            '</button>' +
+            '<button class="timeline-action-btn" onclick="focusComment(\'' + a.id + '\')">' +
+            '<i class="far fa-comment"></i> ' + (comments?.length || 0) +
+            '</button>' +
+            '</div>';
+        
+        // Comentários
+        if (comments && comments.length > 0) {
+            let commentsHtml = '<div class="timeline-comments-section">';
+            for (const c of comments) {
+                commentsHtml += '<div class="timeline-comment-item">' +
+                    '<img src="' + (c.profiles?.avatar_url || 'https://via.placeholder.com/28') + '" class="timeline-comment-avatar">' +
+                    '<div class="timeline-comment-content">' +
+                    '<span class="timeline-comment-author">' + escapeHtml(c.profiles?.name || 'Usuário') + '</span>' +
+                    '<span class="timeline-comment-text">' + escapeHtml(c.comment) + '</span>' +
+                    '<div class="timeline-comment-time">' + formatTime(c.created_at) + '</div>' +
+                    '</div></div>';
+            }
+            commentsHtml += '</div>';
+            item.innerHTML += commentsHtml;
+        }
+        
+        // Input de comentário
+        item.innerHTML += '<div class="timeline-comment-input">' +
+            '<input type="text" id="commentInput-' + a.id + '" placeholder="Adicione um comentário..." autocomplete="off">' +
+            '<button onclick="addComment(\'' + a.id + '\')">Enviar</button>' +
+            '</div>';
+        
         feed.appendChild(item);
+        
+        // Carrega endereço da localização
+        if (a.location && a.location.lat && a.location.lng) {
+            loadLocationAddress(a.id, a.location.lat, a.location.lng);
+        }
     }
 }
+
+// ============================================
+// CURTIR / DESCURTIR
+// ============================================
+async function toggleLike(activityId, btn) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data: existing } = await db.from('activity_likes')
+        .select('id').eq('activity_id', activityId).eq('user_id', user.id).maybeSingle();
+    
+    if (existing) {
+        // Remove curtida
+        await db.from('activity_likes').delete().eq('id', existing.id);
+        btn.classList.remove('liked');
+        btn.querySelector('i').className = 'far fa-heart';
+    } else {
+        // Adiciona curtida
+        await db.from('activity_likes').insert({ activity_id: activityId, user_id: user.id });
+        btn.classList.add('liked');
+        btn.querySelector('i').className = 'fas fa-heart';
+    }
+    
+    // Atualiza contagem
+    const { count } = await db.from('activity_likes')
+        .select('*', { count: 'exact', head: true }).eq('activity_id', activityId);
+    btn.innerHTML = '<i class="' + (btn.classList.contains('liked') ? 'fas' : 'far') + ' fa-heart"></i> ' + (count || 0);
+}
+
+// ============================================
+// COMENTAR
+// ============================================
+async function addComment(activityId) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const input = document.getElementById('commentInput-' + activityId);
+    if (!input) return;
+    
+    const comment = input.value.trim();
+    if (!comment) return;
+    
+    const { error } = await db.from('activity_comments').insert({
+        activity_id: activityId,
+        user_id: user.id,
+        comment: comment
+    });
+    
+    if (error) {
+        showToast('Erro ao comentar', 'error');
+    } else {
+        input.value = '';
+        // Recarrega a timeline para mostrar o novo comentário
+        loadTimeline();
+    }
+}
+
+function focusComment(activityId) {
+    const input = document.getElementById('commentInput-' + activityId);
+    if (input) {
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// ============================================
+// LOCALIZAÇÃO (GEOCODIFICAÇÃO REVERSA)
+// ============================================
+async function loadLocationAddress(activityId, lat, lng) {
+    const locEl = document.getElementById('loc-' + activityId);
+    if (!locEl) return;
+    
+    try {
+        const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&addressdetails=1&accept-language=pt-BR');
+        const data = await res.json();
+        
+        if (data?.display_name) {
+            const addr = data.address || {};
+            const parts = [];
+            
+            // Nome do local (ponto de interesse)
+            if (data.name && data.name !== data.display_name.split(',')[0]) {
+                parts.push('📍 <strong>' + data.name + '</strong>');
+            }
+            
+            // Endereço
+            const street = addr.road || addr.street || addr.pedestrian || '';
+            const number = addr.house_number || '';
+            const suburb = addr.suburb || addr.neighbourhood || '';
+            const city = addr.city || addr.town || addr.municipality || '';
+            const state = addr.state || '';
+            
+            if (street) parts.push(street + (number ? ', ' + number : ''));
+            if (suburb && !parts.some(p => p.includes(suburb))) parts.push(suburb);
+            if (city || state) parts.push(city + (city && state ? ', ' : '') + state);
+            
+            locEl.innerHTML = '<i class="fas fa-map-pin"></i><span>' + parts.join(' • ') + '</span>';
+        } else {
+            locEl.innerHTML = '<i class="fas fa-map-pin"></i><span>📍 ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</span>';
+        }
+    } catch (e) {
+        locEl.innerHTML = '<i class="fas fa-map-pin"></i><span>📍 Localização registrada</span>';
+    }
+}
+
+// ============================================
+// FAB - ESCONDE NO CHAT
+// ============================================
+function toggleFAB() {
+    const fab = document.getElementById('fabRegister');
+    const chatActive = document.getElementById('tabChat')?.classList.contains('active');
+    
+    if (fab) {
+        if (chatActive) {
+            fab.style.display = 'none';
+        } else {
+            fab.style.display = currentGroup ? 'flex' : 'none';
+        }
+    }
+}
+
+// Funções globais
+window.toggleLike = toggleLike;
+window.addComment = addComment;
+window.focusComment = focusComment;
 
 async function loadDetalhes() {
     const container = document.getElementById('detalhesContent');

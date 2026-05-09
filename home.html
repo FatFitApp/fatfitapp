@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#F2F2F7">
     <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT</title>
     <link rel="stylesheet" href="style.css">
@@ -46,14 +46,15 @@
         <a href="profile.html" class="sidebar-item">
             <i class="fas fa-user"></i> Meu Perfil
         </a>
-                <a href="body.html" class="sidebar-item">
+        
+        <a href="body.html" class="sidebar-item">
             <i class="fas fa-heart-pulse"></i> Avaliação Física
         </a>
         
         <div class="sidebar-section-title">MEUS GRUPOS</div>
         <div class="sidebar-groups" id="sidebarGroups">
             <div class="loading-state" style="padding:10px;">
-                <img src="logo.png" alt="Carregando" class="loading-mini-logo" style="width:40px;height:40px;">
+                <img src="logo.png" alt="Carregando" class="loading-mini-logo" style="width:30px;height:30px;">
             </div>
         </div>
         
@@ -74,7 +75,7 @@
     <!-- Conteúdo Principal -->
     <main class="main-content">
         <div id="noGroupState" class="empty-state" style="display:none;">
-            <img src="logo.png" alt="FATFIT" style="width:100px;height:100px;object-fit:contain;margin-bottom:16px;opacity:0.5;">
+            <img src="logo.png" alt="FATFIT" style="width:80px;height:80px;object-fit:contain;margin-bottom:16px;opacity:0.4;">
             <h3>Nenhum grupo selecionado</h3>
             <p>Abra o menu ☰ e escolha um grupo</p>
         </div>
@@ -142,7 +143,7 @@
     </button>
 
     <!-- Modal Criar Grupo -->
- <div class="modal" id="createGroupModal">
+    <div class="modal" id="createGroupModal">
         <div class="modal-content" style="max-width:480px;border-radius:20px;background:#F2F2F7;">
             <div class="body-header" style="border-radius:20px 20px 0 0;padding:16px 20px;background:#FFFFFF;border-bottom:1px solid #E5E5EA;">
                 <h3 style="font-size:1.1rem;font-weight:700;color:#1C1C1E;margin:0;">Criar Novo Grupo</h3>
@@ -172,12 +173,12 @@
 
     <!-- Modal de Registro -->
     <div class="modal" id="registerSelectModal">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" style="max-width:480px;border-radius:20px;">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
                 <h3>📸 Registrar Atividade</h3>
                 <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;">
                 <p class="text-sm text-muted mb-2">Selecione os grupos para registrar atividade:</p>
                 <div id="groupsChecklist"></div>
                 <button class="btn btn-primary btn-block mt-2" id="confirmRegisterBtn">
@@ -189,24 +190,22 @@
 
     <!-- Modal de Detalhes do Dia -->
     <div class="modal" id="dayDetailModal">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" style="border-radius:20px;">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
                 <h3 id="dayDetailTitle">Detalhes do Dia</h3>
                 <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body" id="dayDetailBody"></div>
+            <div class="modal-body" id="dayDetailBody" style="background:#FFFFFF;border-radius:0 0 20px 20px;"></div>
         </div>
     </div>
 
     <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
 
-    <!-- Esconde loading screen -->
     <script>
         window.addEventListener('load', function() {
             setTimeout(function() {
