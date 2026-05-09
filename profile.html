@@ -22,107 +22,13 @@
     </header>
 
     <main class="main-content">
-        <!-- Cabeçalho do Perfil -->
-        <section class="profile-section-new">
-            <div class="avatar-container">
-                <img id="avatarImg" src="https://via.placeholder.com/88" alt="Avatar" class="profile-avatar-new">
-                <button class="avatar-upload-btn" id="avatarUploadBtn">
-                    <i class="fas fa-camera"></i>
-                </button>
-                <input type="file" id="avatarInput" accept="image/*" hidden>
-            </div>
-            <h2 class="profile-name-new" id="profileName">Usuário</h2>
-            <p class="profile-email-new" id="profileEmail">email@exemplo.com</p>
-        </section>
-
-        <!-- Estatísticas -->
-        <div class="profile-stats-new">
-            <div class="profile-stat-new">
-                <div class="profile-stat-value-new" id="totalChallenges">0</div>
-                <div class="profile-stat-label-new">Desafios</div>
-            </div>
-            <div class="profile-stat-new">
-                <div class="profile-stat-value-new" id="totalWins">0</div>
-                <div class="profile-stat-label-new">Vitórias</div>
-            </div>
-            <div class="profile-stat-new">
-                <div class="profile-stat-value-new" id="totalEarnings">R$0</div>
-                <div class="profile-stat-label-new">Ganhos</div>
+        <!-- Container principal que será preenchido pelo setupProfile -->
+        <div class="profile-container">
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Carregando perfil...</p>
             </div>
         </div>
-
-        <!-- Calendário de Atividades -->
-        <section class="section">
-            <div class="section-header">
-                <h2>📅 Minhas Atividades</h2>
-            </div>
-            <div id="profileCalendar">
-                <div class="loading-state">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <p>Carregando calendário...</p>
-                </div>
-            </div>
-            <div class="calendar-legend">
-                <div class="calendar-legend-item">
-                    <div class="calendar-legend-dot"></div>
-                    <span>Dia com atividade</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Ações -->
-        <div class="profile-actions">
-            <button class="btn btn-outline btn-sm" id="openEditProfileBtn">
-                <i class="fas fa-user-edit"></i> Editar Perfil
-            </button>
-            <button class="btn btn-outline btn-sm" id="openChangePasswordBtn">
-                <i class="fas fa-key"></i> Trocar Senha
-            </button>
-        </div>
-
-        <!-- Editar Perfil (inicialmente escondido) -->
-        <section class="section" id="editProfileSection" style="display:none;">
-            <form id="profileForm">
-                <div class="input-group">
-                    <label for="editName">Nome</label>
-                    <input type="text" id="editName" required maxlength="100">
-                </div>
-                <div class="input-group">
-                    <label for="editPixKey">Chave Pix (opcional)</label>
-                    <input type="text" id="editPixKey" maxlength="100" placeholder="Sua chave Pix">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">
-                    <i class="fas fa-save"></i> Salvar
-                </button>
-            </form>
-        </section>
-
-        <!-- Trocar Senha (inicialmente escondido) -->
-        <section class="section" id="changePasswordSection" style="display:none;">
-            <form id="changePasswordForm">
-                <div class="input-group">
-                    <label for="currentPassword">Senha Atual</label>
-                    <input type="password" id="currentPassword" required placeholder="Digite sua senha atual">
-                </div>
-                <div class="input-group">
-                    <label for="newPassword">Nova Senha</label>
-                    <input type="password" id="newPassword" required minlength="6" placeholder="Mínimo 6 caracteres">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">
-                    <i class="fas fa-key"></i> Trocar Senha
-                </button>
-            </form>
-        </section>
-
-        <!-- Vitórias -->
-        <section class="section">
-            <div class="section-header">
-                <h2>🏆 Vitórias</h2>
-            </div>
-            <div id="winsList">
-                <p class="empty-state">Nenhuma vitória ainda</p>
-            </div>
-        </section>
     </main>
 
     <!-- Modal de Detalhes do Dia -->
@@ -138,10 +44,202 @@
         </div>
     </div>
 
+    <!-- Modal de Edição de Perfil (Fallback) -->
+    <div class="modal" id="editProfileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Editar Perfil</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="editProfileFormModal">
+                    <div class="input-group">
+                        <label>Nome completo</label>
+                        <input type="text" id="editNameModal" class="modern-input" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Chave PIX</label>
+                        <input type="text" id="editPixKeyModal" class="modern-input" placeholder="CPF, E-mail, Telefone ou Chave aleatória">
+                    </div>
+                    <button type="submit" class="btn-modern" style="width: 100%; margin-top: 15px;">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Troca de Senha (Fallback) -->
+    <div class="modal" id="changePasswordModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Alterar Senha</h3>
+                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="changePasswordFormModal">
+                    <div class="input-group">
+                        <label>Senha atual</label>
+                        <input type="password" id="currentPasswordModal" class="modern-input" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Nova senha</label>
+                        <input type="password" id="newPasswordModal" class="modern-input" required>
+                        <small class="text-muted">Mínimo 6 caracteres</small>
+                    </div>
+                    <button type="submit" class="btn-outline-modern" style="width: 100%; margin-top: 15px;">
+                        <i class="fas fa-key"></i> Alterar Senha
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
+
+    <!-- Script adicional para compatibilidade -->
+    <script>
+        // Script para gerenciar os modais de fallback e integração com o setupProfile
+        document.addEventListener('DOMContentLoaded', function() {
+            // Botão de editar perfil (canto superior direito)
+            const editProfileBtn = document.getElementById('editProfileBtn');
+            if (editProfileBtn) {
+                editProfileBtn.addEventListener('click', function() {
+                    // Preencher o modal com os dados atuais
+                    const nameEl = document.getElementById('profileName');
+                    const pixKeyEl = document.getElementById('editPixKey');
+                    
+                    const editNameInput = document.getElementById('editNameModal');
+                    const editPixInput = document.getElementById('editPixKeyModal');
+                    
+                    if (editNameInput && nameEl) {
+                        editNameInput.value = nameEl.textContent !== 'Usuário' ? nameEl.textContent : '';
+                    }
+                    if (editPixInput && pixKeyEl) {
+                        editPixInput.value = pixKeyEl.value || '';
+                    }
+                    
+                    document.getElementById('editProfileModal').classList.add('open');
+                });
+            }
+            
+            // Formulário de edição de perfil do modal
+            const editProfileFormModal = document.getElementById('editProfileFormModal');
+            if (editProfileFormModal) {
+                editProfileFormModal.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const name = document.getElementById('editNameModal').value.trim();
+                    const pix = document.getElementById('editPixKeyModal').value.trim();
+                    
+                    if (!name) {
+                        showToast('Nome obrigatório', 'error');
+                        return;
+                    }
+                    
+                    const user = await window.getCurrentUser();
+                    if (user) {
+                        const { error } = await window.db.from('profiles').update({ 
+                            name, 
+                            pix_key: pix || null 
+                        }).eq('id', user.id);
+                        
+                        if (error) {
+                            showToast('Erro ao salvar: ' + error.message, 'error');
+                        } else {
+                            // Atualizar a interface
+                            const profileNameEl = document.getElementById('profileName');
+                            if (profileNameEl) profileNameEl.textContent = name;
+                            
+                            const editPixField = document.getElementById('editPixKey');
+                            if (editPixField) editPixField.value = pix;
+                            
+                            showToast('Perfil atualizado!', 'success');
+                            document.getElementById('editProfileModal').classList.remove('open');
+                            
+                            // Recarregar a página para atualizar tudo
+                            setTimeout(() => location.reload(), 1000);
+                        }
+                    }
+                });
+            }
+            
+            // Botão de trocar senha (se existir na nova interface ou via fallback)
+            const openChangePwBtn = document.getElementById('openChangePasswordBtn');
+            if (openChangePwBtn) {
+                openChangePwBtn.addEventListener('click', function() {
+                    document.getElementById('changePasswordModal').classList.add('open');
+                });
+            }
+            
+            // Formulário de troca de senha
+            const changePwFormModal = document.getElementById('changePasswordFormModal');
+            if (changePwFormModal) {
+                changePwFormModal.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const currentPw = document.getElementById('currentPasswordModal').value;
+                    const newPw = document.getElementById('newPasswordModal').value;
+                    
+                    if (newPw.length < 6) {
+                        showToast('Nova senha deve ter no mínimo 6 caracteres', 'error');
+                        return;
+                    }
+                    
+                    const user = await window.getCurrentUser();
+                    if (user) {
+                        const { error } = await window.db.auth.signInWithPassword({ 
+                            email: user.email, 
+                            password: currentPw 
+                        });
+                        
+                        if (error) {
+                            showToast('Senha atual incorreta', 'error');
+                            return;
+                        }
+                        
+                        const { error: updateError } = await window.db.auth.updateUser({ password: newPw });
+                        if (updateError) {
+                            showToast('Erro ao trocar senha: ' + updateError.message, 'error');
+                        } else {
+                            showToast('Senha alterada com sucesso!', 'success');
+                            document.getElementById('changePasswordModal').classList.remove('open');
+                            changePwFormModal.reset();
+                        }
+                    }
+                });
+            }
+            
+            // Fechar modais
+            document.querySelectorAll('.modal-close').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    this.closest('.modal').classList.remove('open');
+                });
+            });
+            
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.classList.remove('open');
+                    }
+                });
+            });
+        });
+        
+        // Função auxiliar para mostrar toast (caso não exista)
+        if (typeof window.showToast !== 'function') {
+            window.showToast = function(message, type) {
+                const container = document.getElementById('toastContainer');
+                if (!container) return;
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${message}`;
+                container.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            };
+        }
+    </script>
 </body>
 </html>

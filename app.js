@@ -127,7 +127,10 @@ function setupAuthForms() {
         if (password.length < 6) { showToast('Senha deve ter no mínimo 6 caracteres', 'error'); return; }
         const { error } = await db.auth.signUp({ email, password, options: { data: { name } } });
         if (error) { showToast(error.message, 'error'); }
-        else { showToast('Conta criada! Faça login.', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
+        else { 
+            showToast('✅ Conta criada! Verifique seu e-mail para confirmar.', 'success'); 
+            setTimeout(() => showForm('loginForm'), 3000); 
+        }
     });
 
     document.getElementById('recoverForm')?.addEventListener('submit', async (e) => {
@@ -138,6 +141,433 @@ function setupAuthForms() {
         else { showToast('Email de recuperação enviado!', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
     });
 }
+
+
+
+// ============================================
+// PÁGINA: profile.html
+// ============================================
+if (window.location.pathname.includes('profile')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        setupProfile(session);
+    });
+}
+
+async function setupProfile(session) {
+    const user = session.user;
+    
+    const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
+    
+    // Buscar atividades do usuário usando a função RPC
+    const { data: activities, error: actError } = await db.rpc('get_calendar_data', {
+        p_user_id: user.id,
+        p_group_id: null,
+        p_month: new Date().getMonth() + 1,
+        p_year: new Date().getFullYear()
+    });
+    
+    console.log('📊 Atividades carregadas:', activities?.length, 'Erro:', actError);
+    
+    // Agrupar atividades por data
+    const activitiesByDate = {};
+    if (activities) {
+        activities.forEach(act => {
+            const date = act.activity_date;
+            if (!activitiesByDate[date]) {
+                activitiesByDate[date] = [];
+            }
+            activitiesByDate[date].push({
+                photo_url: act.photo_url,
+                comment: act.comment,
+                user_name: act.user_name,
+                group_name: act.group_name,
+                challenge_name: act.challenge_name,
+                is_extra: act.is_extra
+            });
+        });
+    }
+    
+    // Criar estrutura HTML moderna com calendário
+    const container = document.querySelector('.profile-container');
+    if (container) {
+        container.innerHTML = `
+            <!-- Header com capa -->
+            <div class="profile-header">
+                <div class="profile-avatar-container">
+                    <div class="profile-avatar-wrapper">
+                        <img id="avatarImg" class="profile-avatar-img" 
+                             src="${profile?.avatar_url || 'https://via.placeholder.com/120'}" 
+                             alt="Avatar">
+                        <div class="profile-avatar-overlay" id="avatarUploadBtn">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-info">
+                <h1 class="profile-name" id="profileName">${escapeHtml(profile?.name || 'Usuário')}</h1>
+                <p class="profile-email" id="profileEmail">${escapeHtml(profile?.email || user.email)}</p>
+            </div>
+            
+            <!-- Cards de estatísticas -->
+            <div class="stats-grid">
+                <div class="stat-card-modern">
+                    <div class="stat-icon challenges"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-value" id="totalChallenges">0</div>
+                    <div class="stat-label">Desafios</div>
+                </div>
+                <div class="stat-card-modern">
+                    <div class="stat-icon wins"><i class="fas fa-medal"></i></div>
+                    <div class="stat-value" id="totalWins">0</div>
+                    <div class="stat-label">Vitórias</div>
+                </div>
+                <div class="stat-card-modern">
+                    <div class="stat-icon earnings"><i class="fas fa-coins"></i></div>
+                    <div class="stat-value" id="totalEarnings">R$ 0</div>
+                    <div class="stat-label">Ganhos</div>
+                </div>
+            </div>
+            
+            <!-- Calendário de Atividades -->
+            <div class="profile-card">
+                <div class="profile-card-title">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Minhas Atividades</span>
+                </div>
+                <div id="profileCalendarContainer">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando calendário...</p>
+                    </div>
+                </div>
+                <div class="calendar-legend">
+                    <div class="calendar-legend-item">
+                        <div class="calendar-legend-dot" style="background: #667eea;"></div>
+                        <span>1 atividade no dia</span>
+                    </div>
+                    <div class="calendar-legend-item">
+                        <div class="calendar-legend-dot" style="background: #10b981;"></div>
+                        <span>Múltiplas atividades</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Editar Perfil -->
+            <div class="profile-card">
+                <div class="profile-card-title">
+                    <i class="fas fa-user-edit"></i>
+                    <span>Editar Perfil</span>
+                </div>
+                <form id="profileForm">
+                    <div class="input-group" style="margin-bottom: 15px;">
+                        <label>Nome completo</label>
+                        <input type="text" id="editName" class="modern-input" 
+                               value="${escapeHtml(profile?.name || '')}" required>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 15px;">
+                        <label>Chave PIX</label>
+                        <input type="text" id="editPixKey" class="modern-input" 
+                               value="${escapeHtml(profile?.pix_key || '')}" 
+                               placeholder="CPF, E-mail, Telefone ou Chave aleatória">
+                    </div>
+                    <button type="submit" class="btn-modern">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Alterar Senha -->
+            <div class="profile-card">
+                <div class="profile-card-title">
+                    <i class="fas fa-lock"></i>
+                    <span>Segurança</span>
+                </div>
+                <form id="changePasswordForm">
+                    <div class="input-group" style="margin-bottom: 15px;">
+                        <label>Senha atual</label>
+                        <input type="password" id="currentPassword" class="modern-input" required>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 15px;">
+                        <label>Nova senha</label>
+                        <input type="password" id="newPassword" class="modern-input" required>
+                        <small class="text-muted">Mínimo 6 caracteres</small>
+                    </div>
+                    <button type="submit" class="btn-outline-modern" style="width: 100%;">
+                        <i class="fas fa-key"></i> Alterar Senha
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Histórico de Vitórias -->
+            <div class="profile-card">
+                <div class="profile-card-title">
+                    <i class="fas fa-history"></i>
+                    <span>Histórico de Vitórias</span>
+                </div>
+                <div id="winsList" class="wins-list">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando vitórias...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Renderiza o calendário com miniaturas
+    renderProfileCalendar(activitiesByDate);
+    
+    // Resto das estatísticas e eventos...
+    await loadProfileStats(user);
+    
+    // Evento de upload de avatar
+    document.getElementById('avatarUploadBtn')?.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file || file.size > 5*1024*1024) { showToast('Máx 5MB', 'error'); return; }
+            const fileName = 'avatars/' + user.id + '/' + Date.now() + '.jpg';
+            await db.storage.from('activity-photos').upload(fileName, file, { contentType: file.type, upsert: true });
+            const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+            await db.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id);
+            document.getElementById('avatarImg').src = urlData.publicUrl;
+            showToast('Avatar atualizado!', 'success');
+        };
+        input.click();
+    });
+    
+    // Evento do formulário de perfil
+    document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('editName').value.trim();
+        if (!name) { showToast('Nome obrigatório', 'error'); return; }
+        await db.from('profiles').update({ name, pix_key: document.getElementById('editPixKey').value.trim() || null }).eq('id', user.id);
+        document.getElementById('profileName').textContent = name;
+        showToast('Salvo!', 'success');
+    });
+    
+    // Evento do formulário de senha
+    document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const curr = document.getElementById('currentPassword').value;
+        const newPw = document.getElementById('newPassword').value;
+        if (newPw.length < 6) { showToast('Mínimo 6 caracteres', 'error'); return; }
+        const { error } = await db.auth.signInWithPassword({ email: user.email, password: curr });
+        if (error) { showToast('Senha atual incorreta', 'error'); return; }
+        await db.auth.updateUser({ password: newPw });
+        showToast('Senha alterada!', 'success');
+        document.getElementById('changePasswordForm').reset();
+    });
+}
+
+// ============================================
+// FUNÇÃO AUXILIAR - RENDERIZAR CALENDÁRIO COM MINIATURAS
+// ============================================
+function renderProfileCalendar(activitiesByDate) {
+    const container = document.getElementById('profileCalendarContainer');
+    if (!container) return;
+    
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    
+    // Agrupa atividades com timestamps próximos (< 5s de diferença = mesmo registro)
+    const dedupedByDate = {};
+    for (const [dateStr, acts] of Object.entries(activitiesByDate)) {
+        const sorted = [...acts].sort((a, b) => {
+            const ta = parseInt((a.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+            const tb = parseInt((b.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+            return ta - tb;
+        });
+        
+        const merged = [];
+        for (const a of sorted) {
+            const ts = parseInt((a.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+            let found = false;
+            for (const m of merged) {
+                const mts = parseInt((m.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+                if (Math.abs(ts - mts) < 5000) {
+                    if (!m.groups.includes(a.group_name)) m.groups.push(a.group_name);
+                    if (!m.challenges.includes(a.challenge_name)) m.challenges.push(a.challenge_name);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                merged.push({
+                    ...a,
+                    groups: [a.group_name].filter(Boolean),
+                    challenges: [a.challenge_name].filter(Boolean)
+                });
+            }
+        }
+        dedupedByDate[dateStr] = merged;
+    }
+    
+    let html = '<div class="activity-calendar">';
+    html += '<div class="calendar-header">';
+    html += '<button class="calendar-nav" onclick="window.profilePrevMonth()"><i class="fas fa-chevron-left"></i></button>';
+    html += '<h4>' + monthNames[month] + ' ' + year + '</h4>';
+    html += '<button class="calendar-nav" onclick="window.profileNextMonth()"><i class="fas fa-chevron-right"></i></button>';
+    html += '</div>';
+    html += '<div class="calendar-weekdays"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>';
+    html += '<div class="calendar-days">';
+    
+    for (let i = 0; i < startWeekday; i++) {
+        html += '<div class="calendar-day other-month"></div>';
+    }
+    
+    const todayStr = getToday();
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        const acts = dedupedByDate[dateStr] || [];
+        const hasActivity = acts.length > 0;
+        const hasMultiple = acts.length > 1;
+        const isToday = dateStr === todayStr;
+        
+        let dayClass = 'calendar-day';
+        if (hasActivity) dayClass += ' has-activity';
+        if (hasMultiple) dayClass += ' has-multiple';
+        if (isToday) dayClass += ' today';
+        
+        html += '<div class="' + dayClass + '" data-date="' + dateStr + '" ' + (hasActivity ? 'onclick="showDayActivities(\'' + dateStr + '\')"' : '') + '>';
+        html += '<div class="calendar-day-inner" style="width:100%;height:100%;position:relative;">';
+        
+        if (hasActivity) {
+            html += '<img src="' + acts[0].photo_url + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display=\'none\'">';
+            html += '<span style="position:absolute;top:2px;left:4px;font-size:0.7rem;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);z-index:1;">' + d + '</span>';
+            if (hasMultiple) {
+                html += '<span style="position:absolute;bottom:2px;right:2px;background:var(--secondary);color:#fff;width:18px;height:18px;border-radius:50%;font-size:0.55rem;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:1;">+' + (acts.length - 1) + '</span>';
+            }
+        } else {
+            html += '<span class="day-number" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">' + d + '</span>';
+        }
+        
+        html += '</div></div>';
+    }
+    
+    html += '</div></div>';
+    container.innerHTML = html;
+    container.dataset.activities = JSON.stringify(dedupedByDate);
+}
+
+// Funções de navegação do mês no perfil
+window.profilePrevMonth = function() { console.log('Mês anterior'); };
+window.profileNextMonth = function() { console.log('Próximo mês'); };
+// ============================================
+// FUNÇÃO - MOSTRAR ATIVIDADES DO DIA (AGRUPADO POR FOTO)
+// ============================================
+function showDayActivities(dateStr) {
+    const container = document.getElementById('profileCalendarContainer');
+    if (!container) return;
+    
+    let activitiesByDate;
+    try {
+        activitiesByDate = JSON.parse(container.dataset.activities);
+    } catch(e) { return; }
+    
+    const acts = activitiesByDate[dateStr] || [];
+    if (acts.length === 0) return;
+    
+    // Agrupa atividades pela URL da foto (mesma foto em grupos diferentes = mesma atividade)
+    const groupedByPhoto = {};
+    acts.forEach(a => {
+        const key = a.photo_url;
+        if (!groupedByPhoto[key]) {
+            groupedByPhoto[key] = {
+                photo_url: a.photo_url,
+                comment: a.comment,
+                groups: [],
+                challenges: []
+            };
+        }
+        if (a.group_name && !groupedByPhoto[key].groups.includes(a.group_name)) {
+            groupedByPhoto[key].groups.push(a.group_name);
+        }
+        if (a.challenge_name && !groupedByPhoto[key].challenges.includes(a.challenge_name)) {
+            groupedByPhoto[key].challenges.push(a.challenge_name);
+        }
+        // Mantém o comentário mais completo
+        if (a.comment && a.comment.length > (groupedByPhoto[key].comment || '').length) {
+            groupedByPhoto[key].comment = a.comment;
+        }
+    });
+    
+    const uniqueActivities = Object.values(groupedByPhoto);
+    
+    const modal = document.getElementById('dayDetailModal');
+    const title = document.getElementById('dayDetailTitle');
+    const body = document.getElementById('dayDetailBody');
+    if (!modal || !title || !body) return;
+    
+    const [y, m, d] = dateStr.split('-');
+    title.textContent = '📅 ' + d + '/' + m + '/' + y;
+    
+    body.innerHTML = uniqueActivities.map(a => `
+        <div class="day-detail-item">
+            <img src="${a.photo_url}" class="day-detail-photo" onclick="window.open('${a.photo_url}')" alt="Foto" onerror="this.style.display='none'">
+            <div class="day-detail-info">
+                <div class="day-detail-name">
+                    ${a.challenges.length > 0 ? a.challenges.map(c => '🎯 ' + escapeHtml(c)).join('<br>') : 'Atividade'}
+                </div>
+                <div class="day-detail-meta">
+                    <span>👥 ${a.groups.map(g => escapeHtml(g)).join(', ')}</span>
+                </div>
+                ${a.comment ? '<p class="day-detail-comment">💬 ' + escapeHtml(a.comment) + '</p>' : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    modal.classList.add('open');
+}
+
+// Torna global
+window.showDayActivities = showDayActivities;
+
+// ============================================
+// FUNÇÃO - CARREGAR ESTATÍSTICAS
+// ============================================
+async function loadProfileStats(user) {
+    const { count: challenges } = await db.from('challenge_participants')
+        .select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    document.getElementById('totalChallenges') && (document.getElementById('totalChallenges').textContent = challenges || 0);
+    
+    const { data: wins } = await db.from('challenge_winners')
+        .select('*, challenges:challenge_id(name, groups:group_id(name))')
+        .eq('user_id', user.id).order('declared_at', { ascending: false });
+    document.getElementById('totalWins') && (document.getElementById('totalWins').textContent = wins?.length || 0);
+    document.getElementById('totalEarnings') && (document.getElementById('totalEarnings').textContent = formatCurrency(wins?.reduce((s, w) => s + Number(w.prize_share), 0) || 0));
+    
+    const list = document.getElementById('winsList');
+    if (list) {
+        if (!wins?.length) {
+            list.innerHTML = '<div class="empty-state"><i class="fas fa-trophy"></i><p>Nenhuma vitória ainda</p><small>Participe de desafios e ganhe prêmios!</small></div>';
+        } else {
+            list.innerHTML = wins.map(w => `
+                <div class="win-item">
+                    <div class="win-info">
+                        <h4>${escapeHtml(w.challenges?.groups?.name || 'Grupo')}</h4>
+                        <p>${escapeHtml(w.challenges?.name || 'Desafio')}</p>
+                        <p class="text-muted" style="font-size:11px;"><i class="far fa-calendar-alt"></i> ${formatDate(w.declared_at)}</p>
+                    </div>
+                    <div class="win-value">${formatCurrency(w.prize_share)}</div>
+                </div>
+            `).join('');
+        }
+    }
+}
+
 
 // ============================================
 // PÁGINA: home.html
@@ -1118,87 +1548,13 @@ async function loadAllGroups(reset = false) {
         });
     });
 }
-// ============================================
-// PÁGINA: profile.html
-// ============================================
-if (window.location.pathname.includes('profile')) {
-    document.addEventListener('DOMContentLoaded', async () => {
-        const session = await requireAuth();
-        if (!session) return;
-        setupNewProfile(session);
-    });
-}
 
-async function setupNewProfile(session) {
-    const user = session.user;
-    const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
-    if (profile) {
-        document.getElementById('profileName').textContent = profile.name || 'Usuário';
-        document.getElementById('profileEmail').textContent = profile.email || user.email;
-        document.getElementById('editName').value = profile.name || '';
-        document.getElementById('editPixKey').value = profile.pix_key || '';
-        if (profile.avatar_url) document.getElementById('avatarImg').src = profile.avatar_url;
-    }
-    document.getElementById('avatarUploadBtn')?.addEventListener('click', () => document.getElementById('avatarInput').click());
-    document.getElementById('avatarInput')?.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file || file.size > 5*1024*1024) { showToast('Máx 5MB', 'error'); return; }
-        const fileName = 'avatars/' + user.id + '/' + Date.now() + '.jpg';
-        await db.storage.from('activity-photos').upload(fileName, file, { contentType: file.type, upsert: true });
-        const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
-        await db.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id);
-        document.getElementById('avatarImg').src = urlData.publicUrl;
-        showToast('Avatar atualizado!', 'success');
-    });
-    document.getElementById('openEditProfileBtn')?.addEventListener('click', () => {
-        document.getElementById('editProfileSection').style.display = document.getElementById('editProfileSection').style.display === 'none' ? 'block' : 'none';
-    });
-    document.getElementById('openChangePasswordBtn')?.addEventListener('click', () => {
-        document.getElementById('changePasswordSection').style.display = document.getElementById('changePasswordSection').style.display === 'none' ? 'block' : 'none';
-    });
-    document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('editName').value.trim();
-        if (!name) { showToast('Nome obrigatório', 'error'); return; }
-        await db.from('profiles').update({ name, pix_key: document.getElementById('editPixKey').value.trim() || null }).eq('id', user.id);
-        document.getElementById('profileName').textContent = name;
-        document.getElementById('editProfileSection').style.display = 'none';
-        showToast('Salvo!', 'success');
-    });
-    document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const curr = document.getElementById('currentPassword').value;
-        const newPw = document.getElementById('newPassword').value;
-        if (newPw.length < 6) { showToast('Mínimo 6 caracteres', 'error'); return; }
-        const { error } = await db.auth.signInWithPassword({ email: user.email, password: curr });
-        if (error) { showToast('Senha atual incorreta', 'error'); return; }
-        await db.auth.updateUser({ password: newPw });
-        showToast('Senha alterada!', 'success');
-        document.getElementById('changePasswordForm').reset();
-        document.getElementById('changePasswordSection').style.display = 'none';
-    });
-    const { count: challenges } = await db.from('challenge_participants').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-    document.getElementById('totalChallenges').textContent = challenges || 0;
-    const { data: wins } = await db.from('challenge_winners').select('*, challenges:challenge_id(name, groups:group_id(name))').eq('user_id', user.id).order('declared_at', { ascending: false });
-    document.getElementById('totalWins').textContent = wins?.length || 0;
-    document.getElementById('totalEarnings').textContent = formatCurrency(wins?.reduce((s, w) => s + Number(w.prize_share), 0) || 0);
-    const list = document.getElementById('winsList');
-    if (!wins?.length) { list.innerHTML = '<p class="empty-state"><i class="fas fa-trophy"></i> Nenhuma vitória ainda</p>'; }
-    else {
-        list.innerHTML = '';
-        wins.forEach(w => {
-            const card = document.createElement('div');
-            card.className = 'card mb-1';
-            card.style.borderLeft = '4px solid #FCD34D';
-            card.innerHTML = '<div class="flex-between"><div><strong>' + escapeHtml(w.challenges?.groups?.name || 'Grupo') + '</strong><p class="text-sm">' + escapeHtml(w.challenges?.name || 'Desafio') + '</p><p class="text-xs text-muted">' + formatDate(w.declared_at) + '</p></div><div><span class="badge badge-warning" style="font-size:1rem;">' + formatCurrency(w.prize_share) + '</span></div></div>';
-            list.appendChild(card);
-        });
-    }
-    await loadProfileCalendar();
-}
 
 // ============================================
 // PÁGINA: person.html
+// ============================================
+// ============================================
+// PÁGINA: person.html (REDESIGN)
 // ============================================
 if (window.location.pathname.includes('person')) {
     document.addEventListener('DOMContentLoaded', async () => {
@@ -1212,42 +1568,264 @@ async function setupPersonPage(session) {
     const params = new URLSearchParams(window.location.search);
     const userId = params.get('user');
     const groupId = params.get('group');
-    if (!userId || !groupId) { showToast('Parâmetros inválidos', 'error'); setTimeout(() => history.back(), 1500); return; }
+    
+    if (!userId || !groupId) { 
+        showToast('Parâmetros inválidos', 'error'); 
+        setTimeout(() => history.back(), 1500); 
+        return; 
+    }
+    
     const profile = await getProfile(userId);
     const { data: group } = await db.from('groups').select('name').eq('id', groupId).single();
-    if (profile) {
-        document.getElementById('personName').textContent = profile.name || 'Usuário';
-        document.getElementById('personAvatar').src = profile.avatar_url || 'https://via.placeholder.com/80';
-        document.getElementById('personGroup').textContent = '👥 ' + (group?.name || 'Grupo');
-        document.getElementById('personPageTitle').textContent = profile.name || 'Atividades';
-    }
-    const { data: activities } = await db.rpc('get_calendar_data', { p_user_id: userId, p_group_id: groupId });
+    
+    // Buscar atividades da pessoa
+    const { data: activities } = await db.rpc('get_calendar_data', {
+        p_user_id: userId,
+        p_group_id: groupId,
+        p_month: new Date().getMonth() + 1,
+        p_year: new Date().getFullYear()
+    });
+    
+    // Agrupar atividades por data
+    const activitiesByDate = {};
     if (activities) {
-        document.getElementById('personDays').textContent = new Set(activities.map(a => a.activity_date)).size;
+        activities.forEach(act => {
+            const date = act.activity_date;
+            if (!activitiesByDate[date]) activitiesByDate[date] = [];
+            activitiesByDate[date].push(act);
+        });
+    }
+    
+    // Estatísticas
+    const uniqueDays = activities ? new Set(activities.map(a => a.activity_date)).size : 0;
+    let maxStreak = 0;
+    if (activities) {
         const dates = [...new Set(activities.map(a => a.activity_date))].sort();
-        let maxStreak = 0, currentStreak = 1;
+        let currentStreak = 1;
         for (let i = 1; i < dates.length; i++) {
             const diff = (new Date(dates[i]) - new Date(dates[i-1])) / 86400000;
             if (diff === 1) currentStreak++;
             else { maxStreak = Math.max(maxStreak, currentStreak); currentStreak = 1; }
         }
-        document.getElementById('personStreak').textContent = Math.max(maxStreak, currentStreak);
+        maxStreak = Math.max(maxStreak, currentStreak);
     }
-    const { data: activeChallenge } = await db.from('challenges').select('id').eq('group_id', groupId).eq('status', 'active').maybeSingle();
+    
+    let points = 0;
+    const { data: activeChallenge } = await db.from('challenges')
+        .select('id').eq('group_id', groupId).eq('status', 'active').maybeSingle();
     if (activeChallenge) {
-        const { data: p } = await db.from('challenge_participants').select('points').eq('challenge_id', activeChallenge.id).eq('user_id', userId).maybeSingle();
-        document.getElementById('personPoints').textContent = p?.points || 0;
+        const { data: p } = await db.from('challenge_participants')
+            .select('points').eq('challenge_id', activeChallenge.id).eq('user_id', userId).maybeSingle();
+        points = p?.points || 0;
     }
-    await loadPersonCalendar(userId, groupId);
-    const { data: recent } = await db.from('daily_activities').select('*, challenges:challenge_id(name)').eq('user_id', userId).in('challenge_id', (await db.from('challenges').select('id').eq('group_id', groupId)).data?.map(c => c.id) || []).order('created_at', { ascending: false }).limit(20);
-    const actContainer = document.getElementById('personActivities');
-    if (recent?.length) {
-        actContainer.innerHTML = recent.map(a => '<div class="card activity-card mb-1"><img src="' + a.photo_url + '" class="day-detail-photo" onclick="window.open(\'' + a.photo_url + '\')" style="cursor:pointer;"><div class="day-detail-info"><div class="text-sm">📅 ' + formatDate(a.activity_date) + '</div><div class="text-xs text-muted">🎯 ' + escapeHtml(a.challenges?.name || 'Desafio') + '</div>' + (a.comment ? '<p class="text-sm mt-1">' + escapeHtml(a.comment) + '</p>' : '') + '</div><span class="badge badge-success">+1</span></div>').join('');
-    } else {
-        actContainer.innerHTML = '<p class="empty-state">Nenhuma atividade ainda</p>';
+    
+    // Renderizar HTML
+    const container = document.getElementById('personContainer');
+    if (container) {
+        container.innerHTML = `
+            <!-- Cabeçalho com capa -->
+            <div class="profile-header">
+                <div class="profile-avatar-container">
+                    <div class="profile-avatar-wrapper">
+                        <img src="${profile?.avatar_url || 'https://via.placeholder.com/120'}" 
+                             class="profile-avatar-img" alt="Avatar">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-info">
+                <h1 class="profile-name">${escapeHtml(profile?.name || 'Usuário')}</h1>
+                <p class="profile-email">👥 ${escapeHtml(group?.name || 'Grupo')}</p>
+            </div>
+            
+            <!-- Cards de estatísticas -->
+            <div class="stats-grid">
+                <div class="stat-card-modern">
+                    <div class="stat-icon challenges"><i class="fas fa-star"></i></div>
+                    <div class="stat-value">${points}</div>
+                    <div class="stat-label">Pontos</div>
+                </div>
+                <div class="stat-card-modern">
+                    <div class="stat-icon wins"><i class="fas fa-calendar-check"></i></div>
+                    <div class="stat-value">${uniqueDays}</div>
+                    <div class="stat-label">Dias Ativos</div>
+                </div>
+                <div class="stat-card-modern">
+                    <div class="stat-icon earnings"><i class="fas fa-fire"></i></div>
+                    <div class="stat-value">${maxStreak}</div>
+                    <div class="stat-label">Sequência</div>
+                </div>
+            </div>
+            
+            <!-- Calendário -->
+            <div class="profile-card">
+                <div class="profile-card-title">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Calendário de Atividades</span>
+                </div>
+                <div id="personCalendarContainer">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando calendário...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Atividades Recentes - Timeline -->
+            <div class="profile-card">
+                <div class="profile-card-title">
+                    <i class="fas fa-clock"></i>
+                    <span>Atividades Recentes</span>
+                </div>
+                <div id="personRecentActivities">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        `;
     }
+    
+    // Atualiza título
+    document.getElementById('personPageTitle') && (document.getElementById('personPageTitle').textContent = profile?.name || 'Atividades');
+    
+    // Renderiza calendário
+    renderPersonCalendar(activitiesByDate);
+    
+    // Renderiza atividades recentes
+    renderPersonRecentActivities(activities);
 }
 
+// ============================================
+// CALENDÁRIO DA PESSOA
+// ============================================
+function renderPersonCalendar(activitiesByDate) {
+    const container = document.getElementById('personCalendarContainer');
+    if (!container) return;
+    
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    
+    let html = '<div class="activity-calendar">';
+    html += '<div class="calendar-header">';
+    html += '<button class="calendar-nav" onclick="window.personPrevMonth()"><i class="fas fa-chevron-left"></i></button>';
+    html += '<h4>' + monthNames[month] + ' ' + year + '</h4>';
+    html += '<button class="calendar-nav" onclick="window.personNextMonth()"><i class="fas fa-chevron-right"></i></button>';
+    html += '</div>';
+    html += '<div class="calendar-weekdays"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>';
+    html += '<div class="calendar-days">';
+    
+    for (let i = 0; i < startWeekday; i++) {
+        html += '<div class="calendar-day other-month"></div>';
+    }
+    
+    const todayStr = getToday();
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        const acts = activitiesByDate[dateStr] || [];
+        const hasActivity = acts.length > 0;
+        const hasMultiple = acts.length > 1;
+        const isToday = dateStr === todayStr;
+        
+        let dayClass = 'calendar-day';
+        if (hasActivity) dayClass += ' has-activity';
+        if (hasMultiple) dayClass += ' has-multiple';
+        if (isToday) dayClass += ' today';
+        
+        html += '<div class="' + dayClass + '" data-date="' + dateStr + '" ' + (hasActivity ? 'onclick="window.showPersonDayActivities(\'' + dateStr + '\')"' : '') + '>';
+        html += '<div class="calendar-day-inner" style="width:100%;height:100%;position:relative;">';
+        
+        if (hasActivity) {
+            html += '<img src="' + acts[0].photo_url + '" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display=\'none\'">';
+            html += '<span style="position:absolute;top:2px;left:4px;font-size:0.7rem;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);z-index:1;">' + d + '</span>';
+            if (hasMultiple) {
+                html += '<span style="position:absolute;bottom:2px;right:2px;background:var(--secondary);color:#fff;width:18px;height:18px;border-radius:50%;font-size:0.55rem;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:1;">+' + (acts.length - 1) + '</span>';
+            }
+        } else {
+            html += '<span class="day-number" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">' + d + '</span>';
+        }
+        
+        html += '</div></div>';
+    }
+    
+    html += '</div></div>';
+    container.innerHTML = html;
+    container.dataset.activities = JSON.stringify(activitiesByDate);
+}
+
+// Navegação
+window.personPrevMonth = function() { console.log('Mês anterior'); };
+window.personNextMonth = function() { console.log('Próximo mês'); };
+
+// Modal de detalhes do dia
+window.showPersonDayActivities = function(dateStr) {
+    const container = document.getElementById('personCalendarContainer');
+    if (!container) return;
+    
+    let activitiesByDate;
+    try { activitiesByDate = JSON.parse(container.dataset.activities); } catch(e) { return; }
+    
+    const acts = activitiesByDate[dateStr] || [];
+    if (acts.length === 0) return;
+    
+    const modal = document.getElementById('dayDetailModal');
+    const title = document.getElementById('dayDetailTitle');
+    const body = document.getElementById('dayDetailBody');
+    if (!modal || !title || !body) return;
+    
+    const [y, m, d] = dateStr.split('-');
+    title.textContent = '📅 ' + d + '/' + m + '/' + y;
+    
+    body.innerHTML = acts.map(a => `
+        <div class="day-detail-item">
+            <img src="${a.photo_url}" class="day-detail-photo" onclick="window.open('${a.photo_url}')" alt="Foto" onerror="this.style.display='none'">
+            <div class="day-detail-info">
+                <div class="day-detail-name">🎯 ${escapeHtml(a.challenge_name || 'Desafio')}</div>
+                ${a.comment ? '<p class="day-detail-comment">💬 ' + escapeHtml(a.comment) + '</p>' : ''}
+                ${a.location ? '<span class="text-xs text-muted">📍 Localização registrada</span>' : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    modal.classList.add('open');
+};
+
+// ============================================
+// ATIVIDADES RECENTES - TIMELINE MODERNA
+// ============================================
+function renderPersonRecentActivities(activities) {
+    const container = document.getElementById('personRecentActivities');
+    if (!container) return;
+    
+    if (!activities || activities.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro"></i><p>Nenhuma atividade ainda</p></div>';
+        return;
+    }
+    
+    // Pega as 15 mais recentes, ordenadas por data
+    const recent = [...activities]
+        .sort((a, b) => new Date(b.activity_date) - new Date(a.activity_date))
+        .slice(0, 15);
+    
+    container.innerHTML = recent.map(a => `
+        <div class="win-item" style="cursor:default;">
+            <div class="win-info">
+                <h4>📅 ${formatDate(a.activity_date)}</h4>
+                <p>🎯 ${escapeHtml(a.challenge_name || 'Desafio')}</p>
+                ${a.comment ? '<p style="font-size:0.8rem;color:#666;margin-top:4px;">💬 ' + escapeHtml(a.comment) + '</p>' : ''}
+            </div>
+            <img src="${a.photo_url}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;cursor:pointer;" onclick="window.open('${a.photo_url}')" onerror="this.style.display='none'">
+        </div>
+    `).join('');
+}
 // ============================================
 // FUNÇÕES DE CALENDÁRIO
 // ============================================

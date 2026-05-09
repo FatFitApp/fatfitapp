@@ -960,3 +960,512 @@ body {
     .capybara-side { flex: 0 0 38%; max-width: 140px; }
     .inputs-side { max-height: 350px; }
 }
+
+/* ============================================
+   PÁGINA DE PERFIL - DESIGN MODERNO
+   ============================================ */
+
+/* Container principal do perfil */
+.profile-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header do perfil com capa */
+.profile-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 30px 20px 70px;
+    position: relative;
+    margin-bottom: 50px;
+}
+
+/* Avatar container */
+.profile-avatar-container {
+    position: absolute;
+    bottom: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.profile-avatar-wrapper {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: white;
+    padding: 4px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.profile-avatar-img:hover {
+    transform: scale(1.05);
+}
+
+.profile-avatar-overlay {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background: #667eea;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 3px solid white;
+    transition: all 0.3s ease;
+}
+
+.profile-avatar-overlay:hover {
+    background: #764ba2;
+    transform: scale(1.1);
+}
+
+.profile-avatar-overlay i {
+    color: white;
+    font-size: 14px;
+}
+
+/* Informações do usuário */
+.profile-info {
+    text-align: center;
+    margin-top: 70px;
+    padding: 0 20px;
+}
+
+.profile-name {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.profile-email {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+/* Cards de estatísticas modernos */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin: 25px 0;
+}
+
+.stat-card-modern {
+    background: white;
+    border-radius: 15px;
+    padding: 20px 15px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.15);
+}
+
+.stat-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+.stat-icon.challenges { color: #667eea; }
+.stat-icon.wins { color: #fbbf24; }
+.stat-icon.earnings { color: #10b981; }
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Cards de formulário */
+.profile-card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.profile-card-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.profile-card-title i {
+    color: #667eea;
+    font-size: 20px;
+}
+
+/* Inputs modernos */
+.modern-input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.modern-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.modern-input:hover {
+    border-color: #764ba2;
+}
+
+/* Botões modernos */
+.btn-modern {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+.btn-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-outline-modern {
+    background: transparent;
+    border: 2px solid #667eea;
+    color: #667eea;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-modern:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-2px);
+}
+
+/* Lista de vitórias */
+.wins-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.win-item {
+    background: linear-gradient(135deg, #fff 0%, #f9fafb 100%);
+    border-radius: 12px;
+    padding: 15px;
+    border-left: 4px solid #fbbf24;
+    transition: all 0.3s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.win-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.win-info h4 {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.win-info p {
+    font-size: 12px;
+    color: #666;
+    margin: 0;
+}
+
+.win-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: #10b981;
+}
+
+/* Loading e Empty states */
+.loading-state {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+}
+
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .profile-container {
+        padding: 15px;
+    }
+    
+    .profile-avatar-wrapper {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .profile-name {
+        font-size: 24px;
+    }
+    
+    .stats-grid {
+        gap: 10px;
+    }
+    
+    .stat-card-modern {
+        padding: 15px 10px;
+    }
+    
+    .stat-value {
+        font-size: 22px;
+    }
+    
+    .stat-icon {
+        font-size: 24px;
+    }
+}
+
+/* ============================================
+   CALENDÁRIO DE ATIVIDADES
+   ============================================ */
+
+.activity-calendar {
+    background: white;
+    border-radius: 15px;
+    padding: 15px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.calendar-nav {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #667eea;
+    padding: 5px 10px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.calendar-nav:hover {
+    background: #f0f0f0;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #666;
+    font-size: 12px;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+}
+
+.calendar-day:hover {
+    background: #e9ecef;
+    transform: scale(1.05);
+}
+
+.calendar-day.has-activity {
+    background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+}
+
+.calendar-day.has-multiple {
+    background: linear-gradient(135deg, #10b98120 0%, #05966920 100%);
+}
+
+.calendar-day.today {
+    border: 2px solid #667eea;
+    font-weight: bold;
+}
+
+.calendar-day.other-month {
+    opacity: 0.3;
+}
+
+.day-number {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.activity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-top: 3px;
+}
+
+.activity-dot.has-activity {
+    background: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.activity-dot.has-multiple {
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.calendar-legend {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.calendar-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #666;
+}
+
+.calendar-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+/* Modal de detalhes do dia */
+.activity-detail-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    transition: all 0.3s ease;
+}
+
+.activity-detail-item:hover {
+    background: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.activity-detail-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.activity-detail-icon i {
+    color: #667eea;
+    font-size: 20px;
+}
+
+.activity-detail-info {
+    flex: 1;
+}
+
+.activity-detail-info strong {
+    display: block;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.activity-detail-info small {
+    font-size: 11px;
+    color: #666;
+}
+
+/* Responsividade do calendário */
+@media (max-width: 768px) {
+    .calendar-day {
+        font-size: 12px;
+    }
+    
+    .day-number {
+        font-size: 12px;
+    }
+    
+    .calendar-weekdays {
+        font-size: 10px;
+    }
+}
