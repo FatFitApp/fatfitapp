@@ -873,19 +873,64 @@ async function addComment(activityId) {
     const comment = input.value.trim();
     if (!comment) return;
     
-    const { error } = await db.from('activity_comments').insert({
+    const { data: newComment, error } = await db.from('activity_comments').insert({
         activity_id: activityId,
         user_id: user.id,
         comment: comment
-    });
+    }).select('*, profiles:user_id(name, avatar_url)').single();
     
     if (error) {
         showToast('Erro ao comentar', 'error');
-    } else {
-        input.value = '';
-        // Recarrega a timeline para mostrar o novo comentário
-        loadTimeline();
+        return;
     }
+    
+    // Limpa o input
+    input.value = '';
+    
+    // Encontra a seção de comentários desta atividade
+    const activityItem = input.closest('.timeline-item');
+    if (!activityItem) return;
+    
+    // Verifica se já existe a seção de comentários
+    let commentsSection = activityItem.querySelector('.timeline-comments-section');
+    
+    if (!commentsSection) {
+        // Cria a seção de comentários
+        commentsSection = document.createElement('div');
+        commentsSection.className = 'timeline-comments-section';
+        
+        // Insere após a barra de ações (antes do input de comentário)
+        const actionsBar = activityItem.querySelector('.timeline-actions-bar');
+        if (actionsBar) {
+            actionsBar.insertAdjacentElement('afterend', commentsSection);
+        }
+    }
+    
+    // Adiciona o novo comentário
+    const commentEl = document.createElement('div');
+    commentEl.className = 'timeline-comment-item';
+    commentEl.innerHTML = 
+        '<img src="' + (newComment.profiles?.avatar_url || 'https://via.placeholder.com/28') + '" class="timeline-comment-avatar">' +
+        '<div class="timeline-comment-content">' +
+        '<span class="timeline-comment-author">' + escapeHtml(newComment.profiles?.name || 'Usuário') + '</span>' +
+        '<span class="timeline-comment-text">' + escapeHtml(newComment.comment) + '</span>' +
+        '<div class="timeline-comment-time">Agora</div>' +
+        '</div>';
+    
+    commentsSection.appendChild(commentEl);
+    
+    // Atualiza contagem de comentários na barra de ações
+    const commentBtn = activityItem.querySelector('.timeline-action-btn[onclick*="focusComment"]');
+    if (commentBtn) {
+        const { count } = await db.from('activity_comments')
+            .select('*', { count: 'exact', head: true }).eq('activity_id', activityId);
+        commentBtn.innerHTML = '<i class="far fa-comment"></i> ' + (count || 0);
+    }
+    
+    // Scroll suave para o novo comentário
+    commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    showToast('Comentário adicionado!', 'success');
 }
 
 function focusComment(activityId) {
