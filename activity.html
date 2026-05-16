@@ -18,6 +18,9 @@
             height: 100%;
         }
     </style>
+    <!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4F46E5">
 </head>
 <body class="activity-page">
     
@@ -109,5 +112,15 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
+    <!-- Registrar Service Worker -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(reg => console.log('✅ Service Worker registrado'))
+                .catch(err => console.log('❌ Service Worker falhou:', err));
+        });
+    }
+</script>
 </body>
 </html>

@@ -9,6 +9,9 @@
     <title>FATFIT</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4F46E5">
 </head>
 <body class="app-page">
     <!-- Loading Screen -->
@@ -217,5 +220,15 @@
             }, 600);
         });
     </script>
+    <!-- Registrar Service Worker -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(reg => console.log('✅ Service Worker registrado'))
+                .catch(err => console.log('❌ Service Worker falhou:', err));
+        });
+    }
+</script>
 </body>
 </html>
