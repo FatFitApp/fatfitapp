@@ -6,6 +6,7 @@ const db = window.db;
 let currentGroup = null;
 let currentUserRole = null;
 let chatSubscription = null;
+let currentFacingMode = 'environment'; // 'environment' = traseira, 'user' = frontal
 
 // ============================================
 // UTILITÁRIOS
@@ -1465,23 +1466,55 @@ async function setupActivity(session) {
 async function startCameraFullscreen() {
     const video = document.getElementById('cameraPreview');
     if (!video) return;
+    
+    // Para qualquer stream anterior
+    stopCamera();
+    
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
+        console.log('🎥 Iniciando câmera fullscreen (' + currentFacingMode + ')...');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: currentFacingMode,
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            } 
+        });
         video.srcObject = stream;
         await video.play();
-    } catch (e) { showToast('Erro ao acessar câmera', 'error'); }
+        console.log('✅ Câmera fullscreen iniciada');
+    } catch (e) { 
+        console.error('❌ Erro câmera:', e);
+        showToast('Erro ao acessar câmera', 'error'); 
+    }
+    
+    // Capturar foto
     document.getElementById('captureBtn')?.addEventListener('click', capturePhoto);
-    addCameraBackButton();
+    
+    // Botão de inverter câmera
+    document.getElementById('flipCameraBtn')?.addEventListener('click', flipCamera);
+}
+
+// NOVA FUNÇÃO - Inverter câmera
+function flipCamera() {
+    console.log('🔄 Invertendo câmera...');
+    
+    // Alterna entre frontal e traseira
+    currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+    
+    // Reinicia a câmera com o novo modo
+    startCameraFullscreen();
+    
+    // Pequena animação no botão
+    const btn = document.getElementById('flipCameraBtn');
+    if (btn) {
+        btn.style.transform = 'rotate(180deg)';
+        setTimeout(() => { btn.style.transform = 'rotate(0deg)'; }, 300);
+    }
 }
 
 function addCameraBackButton() {
-    const existing = document.querySelector('.camera-back-btn');
-    if (existing) existing.remove();
-    const backBtn = document.createElement('button');
-    backBtn.className = 'camera-back-btn';
-    backBtn.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    backBtn.addEventListener('click', () => { stopCamera(); window.location.href = 'home.html'; });
-    document.getElementById('cameraState')?.appendChild(backBtn);
+    // O botão voltar já está no HTML, não precisa criar dinamicamente
+    // Mas se quiser manter, pode deixar vazio
 }
 
 function stopCamera() {
@@ -1522,14 +1555,26 @@ function retakePhoto() {
 }
 
 function usePhoto() {
+    console.log('✅ Usar esta foto');
+    
     document.getElementById('previewState').style.display = 'none';
     document.getElementById('detailsState').style.display = 'block';
+    
     document.body.style.overflow = 'auto';
     document.body.style.height = 'auto';
+    
+    // Configura botões de localização
     setupLocationButtons();
-    document.getElementById('activityForm')?.addEventListener('submit', submitActivity);
+    
+    // Configura envio
+    const form = document.getElementById('activityForm');
+    if (form) {
+        // Remove listener antigo
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        newForm.addEventListener('submit', submitActivity);
+    }
 }
-
 function setupLocationButtons() {
     document.getElementById('getLocationBtn')?.addEventListener('click', captureLocation);
     document.getElementById('skipLocationBtn')?.addEventListener('click', () => {
@@ -1542,18 +1587,89 @@ function setupLocationButtons() {
 }
 
 async function captureLocation() {
-    if (!navigator.geolocation) { showToast('Geolocalização não suportada', 'warning'); return; }
+    if (!navigator.geolocation) { 
+        showToast('Geolocalização não suportada', 'warning'); 
+        return; 
+    }
+    
     const btn = document.getElementById('getLocationBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obtendo...';
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-        activityLocationData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        document.getElementById('locationStatus').textContent = '✓ Capturada';
-        document.getElementById('locationStatus').style.color = 'var(--secondary)';
-        await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Capturar';
-    }, () => { showToast('Falha na localização', 'warning'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar'; }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    
+    navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+            activityLocationData = { 
+                lat: pos.coords.latitude, 
+                lng: pos.coords.longitude 
+            };
+            
+            document.getElementById('locationStatus').textContent = '✓ Localização capturada';
+            document.getElementById('locationStatus').style.color = 'var(--secondary)';
+            
+            // Geocodificação reversa
+            await reverseGeocodeModern(pos.coords.latitude, pos.coords.longitude);
+            
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Capturar';
+        },
+        (err) => {
+            console.error('Erro localização:', err);
+            showToast('Falha ao obter localização', 'warning');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente';
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+}
+
+// NOVA FUNÇÃO - Geocodificação reversa moderna
+async function reverseGeocodeModern(lat, lng) {
+    const addrDiv = document.getElementById('locationAddress');
+    if (!addrDiv) return;
+    
+    addrDiv.style.display = 'flex';
+    addrDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando endereço...';
+    
+    try {
+        const res = await fetch(
+            'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + 
+            '&lon=' + lng + '&addressdetails=1&accept-language=pt-BR'
+        );
+        const data = await res.json();
+        
+        if (data?.display_name) {
+            const addr = data.address || {};
+            const parts = [];
+            
+            // Nome do local
+            if (data.name && data.name !== data.display_name.split(',')[0]) {
+                parts.push('<strong>' + data.name + '</strong>');
+            }
+            
+            // Endereço
+            const street = addr.road || addr.street || '';
+            const number = addr.house_number || '';
+            const suburb = addr.suburb || addr.neighbourhood || '';
+            const city = addr.city || addr.town || addr.municipality || '';
+            const state = addr.state || '';
+            
+            if (street) parts.push(street + (number ? ', ' + number : ''));
+            if (suburb) parts.push(suburb);
+            if (city || state) parts.push(city + (city && state ? ', ' : '') + state);
+            
+            let html = '<i class="fas fa-map-pin"></i><div>';
+            html += parts.join('<br>');
+            html += '<small>📍 ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</small>';
+            html += '</div>';
+            
+            addrDiv.innerHTML = html;
+            showToast('Localização capturada!', 'success');
+        } else {
+            addrDiv.innerHTML = '<i class="fas fa-map-marker-alt"></i><div>Endereço não encontrado<small>📍 ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</small></div>';
+        }
+    } catch (e) {
+        addrDiv.innerHTML = '<i class="fas fa-map-marker-alt"></i><div>Endereço indisponível<small>📍 ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</small></div>';
+    }
 }
 
 async function reverseGeocode(lat, lng) {
@@ -1619,13 +1735,50 @@ async function submitActivity(e) {
         if (pointsEarned > 0) msg += ' 🎉 +' + pointsEarned + ' pontos';
         if (extraCount > 0) msg += ' (' + extraCount + ' extra)';
         showToast(msg, 'success');
+        
+        // Para a câmera
         stopCamera();
-        setTimeout(() => { window.location.href = 'home.html'; }, 2000);
-    } else {
+        
+        // Limpa estados
+        document.getElementById('detailsState').style.display = 'none';
+        document.getElementById('cameraState').style.display = 'none';
+        document.getElementById('previewState').style.display = 'none';
+        
+        // Redireciona
+        setTimeout(() => { 
+            window.location.href = 'home.html'; 
+        }, 2000);
+    }
+    
+    else {
         showToast('Erro ao registrar', 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
+}
+
+
+// Funções auxiliares da activity page (fallback)
+if (typeof skipLocation === 'undefined') {
+    function skipLocation() {
+        activityLocationData = null;
+        document.getElementById('locationStatus').textContent = 'Localização ignorada';
+        document.getElementById('locationStatus').style.color = 'var(--gray-500)';
+        const addrDiv = document.getElementById('locationAddress');
+        if (addrDiv) addrDiv.style.display = 'none';
+    }
+}
+
+if (typeof window.goBackToCamera === 'undefined') {
+    window.goBackToCamera = function() {
+        activityPhotoFile = null;
+        activityLocationData = null;
+        document.getElementById('detailsState').style.display = 'none';
+        document.getElementById('cameraState').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        document.body.style.height = '100%';
+        startCameraFullscreen();
+    };
 }
 
 // ============================================

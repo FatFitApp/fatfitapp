@@ -3,35 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT - Registrar Atividade</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/png" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
-        /* Reset para tela cheia */
-        html, body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            height: 100%;
-        }
+        html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
     </style>
-    <!-- PWA -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#4F46E5">
-
-<!-- Apple PWA -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body class="activity-page">
     
     <!-- ESTADO 1: CÂMERA FULLSCREEN -->
     <div id="cameraState" class="camera-fullscreen">
         <video id="cameraPreview" autoplay playsinline></video>
+        
+        <!-- Botão voltar -->
+        <button class="camera-back-btn" onclick="window.location.href='home.html'">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        
+        <!-- Botão inverter câmera -->
+        <button class="camera-flip-btn" id="flipCameraBtn" title="Inverter câmera">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+        
+        <!-- Botão capturar -->
         <div class="camera-controls">
             <button class="camera-capture-btn" id="captureBtn">
                 <div class="capture-ring"></div>
@@ -52,80 +54,66 @@
         </div>
     </div>
 
-    <!-- ESTADO 3: DETALHES -->
-    <div id="detailsState" style="display:none; overflow-y:auto; height:100vh;">
-        <header class="app-header">
-            <button class="icon-btn" onclick="goBackToCamera()">
+    <!-- ESTADO 3: DETALHES (APPLE HEALTH STYLE) -->
+    <div id="detailsState" style="display:none; overflow-y:auto; height:100vh; background:#F2F2F7;">
+        <header class="app-header" style="background:#FFFFFF;color:#1C1C1E;border-bottom:1px solid #E5E5EA;">
+            <button class="icon-btn" onclick="goBackToCamera()" style="color:#1C1C1E;">
                 <i class="fas fa-arrow-left"></i>
             </button>
-            <h1 class="app-title">Registrar Atividade</h1>
+            <h1 class="app-title" style="color:#1C1C1E;">Registrar Atividade</h1>
             <div></div>
         </header>
 
-        <main class="main-content">
-            <!-- Grupos selecionados -->
-            <section class="section">
-                <div id="selectedGroups" class="mb-2"></div>
-                <p class="text-xs text-muted" id="registerInfo"></p>
-            </section>
+        <main class="body-main">
+            <!-- Miniatura da foto -->
+            <div class="text-center mt-2">
+                <img id="photoThumb" src="" alt="Foto" class="photo-thumb-modern">
+            </div>
 
-            <!-- Foto miniatura -->
-            <section class="section text-center">
-                <img id="photoThumb" src="" alt="Foto" class="photo-thumb">
-            </section>
+            <!-- Grupos selecionados -->
+            <div class="body-card mt-2">
+                <div class="body-card-subtitle">📋 Grupos</div>
+                <div id="selectedGroups" class="mb-1"></div>
+                <p class="text-xs text-muted" id="registerInfo"></p>
+            </div>
 
             <!-- Localização -->
-            <section class="section">
-                <div class="card">
-                    <div class="flex-between mb-1">
-                        <span>📍 Localização</span>
-                        <span id="locationStatus">Não capturada</span>
-                    </div>
-                    <div id="locationAddress" class="location-address" style="display:none;"></div>
-                    <div class="flex-between mt-1">
-                        <button class="btn btn-outline btn-sm" id="getLocationBtn">
-                            <i class="fas fa-map-marker-alt"></i> Capturar
-                        </button>
-                        <button class="btn btn-text btn-sm" id="skipLocationBtn">
-                            Pular
-                        </button>
-                    </div>
+            <div class="body-card">
+                <div class="body-card-subtitle">📍 Localização</div>
+                <div id="locationStatus" class="text-sm mb-1" style="color:#8E8E93;">Não capturada</div>
+                <div id="locationAddress" class="location-address-modern" style="display:none;"></div>
+                <div class="flex-between mt-1">
+                    <button class="btn btn-outline btn-sm" id="getLocationBtn">
+                        <i class="fas fa-map-marker-alt"></i> Capturar
+                    </button>
+                    <button class="btn btn-text btn-sm" id="skipLocationBtn">
+                        Pular
+                    </button>
                 </div>
-            </section>
+            </div>
 
             <!-- Comentário -->
-            <section class="section">
+            <div class="body-card">
+                <div class="body-card-subtitle">💬 Comentário</div>
                 <form id="activityForm">
-                    <div class="input-group">
-                        <label for="activityComment">💬 Comentário (opcional)</label>
-                        <textarea id="activityComment" rows="3" placeholder="Como foi seu treino hoje?" maxlength="500"></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+                    <textarea id="activityComment" rows="3" placeholder="Como foi seu treino hoje?" 
+                              maxlength="500" class="modern-textarea"></textarea>
+                    <button type="submit" class="btn btn-primary btn-block mt-2" id="submitBtn" style="border-radius:10px;padding:14px;">
                         <i class="fas fa-check-circle"></i> Registrar Atividade
                     </button>
                     <p class="text-xs text-muted text-center mt-1" id="submitInfo"></p>
                 </form>
-            </section>
+            </div>
         </main>
 
         <div class="toast-container" id="toastContainer"></div>
     </div>
 
     <canvas id="photoCanvas" hidden></canvas>
-    <div class="toast-container" id="toastContainerFixed" style="position:fixed; top:20px; left:20px; right:20px; z-index:9999;"></div>
+    <div class="toast-container" id="toastContainerFixed" style="position:fixed;top:20px;left:20px;right:20px;z-index:9999;"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
-    <!-- Registrar Service Worker -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(reg => console.log('✅ Service Worker registrado'))
-                .catch(err => console.log('❌ Service Worker falhou:', err));
-        });
-    }
-</script>
 </body>
 </html>
