@@ -141,6 +141,33 @@ function setupAuthForms() {
         if (error) { showToast(error.message, 'error'); }
         else { showToast('Email de recuperação enviado!', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
     });
+
+        // Verifica se veio do link de recuperação
+    const hash = window.location.hash;
+    if (hash && hash.includes('type=recovery')) {
+        showForm('resetForm');
+    }
+
+    // Redefinir senha
+    document.getElementById('resetForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPassword = document.getElementById('resetPassword').value;
+        
+        if (newPassword.length < 6) {
+            showToast('A senha deve ter no mínimo 6 caracteres', 'error');
+            return;
+        }
+        
+        const { error } = await db.auth.updateUser({ password: newPassword });
+        
+        if (error) {
+            showToast('Erro ao redefinir senha: ' + error.message, 'error');
+        } else {
+            showToast('Senha redefinida com sucesso! Faça login.', 'success');
+            setTimeout(() => showForm('loginForm'), 2000);
+        }
+    });
+
 }
 
 
