@@ -125,14 +125,21 @@
     </main>
 
     <!-- Navegação Inferior -->
+    <!-- Navegação Inferior -->
     <nav class="bottom-nav" id="bottomNav" style="display:none;">
-        <button class="bottom-nav-item active" data-tab="tabTimeline">
+        <button class="bottom-nav-item" data-tab="tabTimeline">
             <i class="fas fa-home"></i>
             <span>Timeline</span>
         </button>
         <button class="bottom-nav-item" data-tab="tabDetalhes">
             <i class="fas fa-info-circle"></i>
             <span>Detalhes</span>
+        </button>
+        <button class="bottom-nav-item bottom-nav-center" id="btnRegisterNav">
+            <div class="nav-register-btn">
+                <i class="fas fa-camera"></i>
+            </div>
+            <span>Registrar</span>
         </button>
         <button class="bottom-nav-item" data-tab="tabRanking">
             <i class="fas fa-trophy"></i>
@@ -144,10 +151,6 @@
         </button>
     </nav>
 
-    <!-- FAB -->
-    <button class="fab" id="fabRegister" title="Registrar Atividade">
-        <i class="fas fa-camera"></i>
-    </button>
 
     <!-- Modal Criar Grupo -->
     <div class="modal" id="createGroupModal">

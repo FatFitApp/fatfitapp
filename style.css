@@ -1954,3 +1954,52 @@ body.chat-open .fab {
     background: var(--primary);
     color: #fff;
 }
+
+/* ============================================
+   BOTÃO REGISTRAR NA BOTTOM NAV
+   ============================================ */
+
+.bottom-nav-center {
+    position: relative;
+}
+
+.nav-register-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    transition: all 0.2s ease;
+    margin-top: -8px;
+}
+
+.nav-register-btn:hover {
+    background: var(--primary-dark);
+    transform: scale(1.08);
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+}
+
+.nav-register-btn:active {
+    transform: scale(0.95);
+}
+
+.bottom-nav-center.active .nav-register-btn {
+    background: var(--primary-dark);
+    box-shadow: 0 0 0 6px rgba(79, 70, 229, 0.2);
+}
+
+.bottom-nav-center span {
+    font-size: 0.6rem;
+    margin-top: 2px;
+    color: var(--gray-500);
+}
+
+/* Remove estilos do FAB antigo (se ainda existirem) */
+.fab {
+    display: none !important;
+}

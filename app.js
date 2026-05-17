@@ -617,8 +617,8 @@ async function setupHome(session) {
     
     setupBottomNav();
     
-    const fab = document.getElementById('fabRegister');
-    if (fab) fab.addEventListener('click', openRegisterModal);
+    // Botão Registrar na bottom nav
+    document.getElementById('btnRegisterNav')?.addEventListener('click', openRegisterModal);
     
     await loadSidebarGroups(user.id);
     
@@ -637,7 +637,7 @@ async function setupHome(session) {
     
     document.getElementById('noGroupState').style.display = 'block';
     document.getElementById('bottomNav').style.display = 'none';
-    document.getElementById('fabRegister').style.display = 'none';
+
     document.getElementById('headerGroupName').textContent = 'FATFIT';
 }
 
@@ -681,10 +681,7 @@ if (tabId === 'tabChat') {
     });
 }
 
-function toggleFAB() {
-    const fab = document.getElementById('fabRegister');
-    if (fab) fab.style.display = currentGroup ? 'flex' : 'none';
-}
+
 
 async function loadSidebarGroups(userId) {
     const container = document.getElementById('sidebarGroups');
@@ -986,16 +983,7 @@ async function loadLocationAddress(activityId, lat, lng) {
 // FAB - ESCONDE NO CHAT
 // ============================================
 function toggleFAB() {
-    const fab = document.getElementById('fabRegister');
-    const chatActive = document.getElementById('tabChat')?.classList.contains('active');
-    
-    if (fab) {
-        if (chatActive) {
-            fab.style.display = 'none';
-        } else {
-            fab.style.display = currentGroup ? 'flex' : 'none';
-        }
-    }
+    // Não faz mais nada - FAB removido
 }
 
 // Funções globais
