@@ -41,22 +41,21 @@ async function initFirebaseMessaging() {
     try {
         firebaseMessaging = firebase.messaging();
         
-
-                // 🔧 CORREÇÃO: Registra o SW manualmente
-        if ('serviceWorker' in navigator) {
-            const registration = await navigator.serviceWorker.register('/fatfitapp/firebase-messaging-sw.js');
-            console.log('✅ Firebase SW registrado manualmente');
-        }
-
-        // Solicita permissão
+        // 🔧 CORREÇÃO: Diz ao Firebase onde está o SW
+        const registration = await navigator.serviceWorker.register('/fatfitapp/firebase-messaging-sw.js');
+        firebaseMessaging.useServiceWorker(registration);
+        
+        console.log('✅ Firebase SW registrado manualmente');
+        
+        // Agora solicita permissão e token
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             const token = await firebaseMessaging.getToken({
-                vapidKey: 'BGVh1FnGAVjARr2FeZYbWqtMBcwV0m2DTmvnHc2ZLvbEVHGtyVNbwU_Jsoac3Vvr7IMwNhQFyxV_LmbQOuvKJ-4'
+                vapidKey: 'BGVh1FnGAVjARr2FeZYbWqtMBcwV0m2DTmvnHc2ZLvbEVHGtyVNbwU_Jsoac3Vvr7IMwNhQFyxV_LmbQOuvKJ-4',
+                serviceWorkerRegistration: registration  // 🔧 Passa o registration
             });
             console.log('🔔 Token FCM:', token);
             
-            // Salva o token no perfil
             const user = await getCurrentUser();
             if (user) {
                 await db.from('profiles').update({ fcm_token: token }).eq('id', user.id);
