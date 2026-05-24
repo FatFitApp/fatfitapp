@@ -4,22 +4,19 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
-    <title>FATFIT</title>
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>FATFIT - Login</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- PWA -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#4F46E5">
-<!-- Apple PWA -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Apple PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body class="auth-page">
     <!-- Loading Screen -->
@@ -146,7 +143,7 @@
                 </div>
             </form>
 
-                        <!-- Formulário de Redefinir Senha (acessado via link do email) -->
+            <!-- Formulário de Redefinir Senha -->
             <form id="resetForm" class="auth-form">
                 <h2>Redefinir Senha</h2>
                 <p class="form-description">Digite sua nova senha</p>
@@ -195,15 +192,5 @@
             }, 800);
         });
     </script>
-    <!-- Registrar Service Worker -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(reg => console.log('✅ Service Worker registrado'))
-                .catch(err => console.log('❌ Service Worker falhou:', err));
-        });
-    }
-</script>
 </body>
 </html>

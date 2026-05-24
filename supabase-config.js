@@ -1,9 +1,11 @@
+// ============================================
+// FATFIT - Configuração Supabase
+// ============================================
 
-// Configuração do Supabase para FATFIT
 const SUPABASE_URL = 'https://wrxgwfllndphyshzdmqu.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_bDNhWmTp0a0z5jZ-0aZ-Pg_OVxj7tII';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndyeGd3ZmxsbmRwaHlzaHpkbXF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjY0MzAsImV4cCI6MjA5MjgwMjQzMH0.ebqAcoQfoG7gAqaq07b4LlU4dr5jHKXhOuD3xI5bCZQ';
 
-// Inicializa o cliente
+// Inicializa o cliente Supabase
 const { createClient } = supabase;
 window.db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     realtime: {
@@ -14,56 +16,3 @@ window.db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 console.log('FATFIT - Supabase inicializado');
-
-
-// ============================================
-// FIREBASE - Configuração de Notificações
-// ============================================
-
-// Inicializa Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyCuqjWq74Sn-JaujjAbJ6CA8a0Nyvtys7w",
-    authDomain: "fatfit-notificacoes.firebaseapp.com",
-    projectId: "fatfit-notificacoes",
-    storageBucket: "fatfit-notificacoes.firebasestorage.app",
-    messagingSenderId: "842531835544",
-    appId: "1:842531835544:web:f5e2d198bf4689c6ac8aed"
-};
-
-// Importa Firebase (carregado via CDN no index.html)
-let firebaseMessaging = null;
-
-async function initFirebaseMessaging() {
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    
-    try {
-        firebaseMessaging = firebase.messaging();
-        
-        // 🔧 CORREÇÃO: Diz ao Firebase onde está o SW
-        const registration = await navigator.serviceWorker.register('/fatfitapp/firebase-messaging-sw.js');
-        firebaseMessaging.useServiceWorker(registration);
-        
-        console.log('✅ Firebase SW registrado manualmente');
-        
-        // Agora solicita permissão e token
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            const token = await firebaseMessaging.getToken({
-                vapidKey: 'BGVh1FnGAVjARr2FeZYbWqtMBcwV0m2DTmvnHc2ZLvbEVHGtyVNbwU_Jsoac3Vvr7IMwNhQFyxV_LmbQOuvKJ-4',
-                serviceWorkerRegistration: registration  // 🔧 Passa o registration
-            });
-            console.log('🔔 Token FCM:', token);
-            
-            const user = await getCurrentUser();
-            if (user) {
-                await db.from('profiles').update({ fcm_token: token }).eq('id', user.id);
-            }
-            return token;
-        }
-    } catch (e) {
-        console.error('Erro Firebase:', e);
-    }
-    return null;
-}
