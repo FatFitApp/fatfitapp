@@ -642,6 +642,15 @@ async function setupHome(session) {
     
     setupSidebar();
     
+        // Inicializa Firebase Messaging
+    setTimeout(() => {
+        initFirebaseMessaging().then(token => {
+            if (token) {
+                console.log('🔔 Notificações ativadas!');
+            }
+        });
+    }, 2000);
+
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
         await db.auth.signOut();
         window.location.href = 'index.html';
@@ -688,6 +697,10 @@ async function setupHome(session) {
 
     document.getElementById('headerGroupName').textContent = 'FATFIT';
 }
+
+
+
+
 
 function setupSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -756,6 +769,13 @@ async function loadSidebarGroups(userId) {
         container.appendChild(btn);
     }
 }
+
+
+
+
+
+
+
 
 async function selectGroup(group, role) {
     currentGroup = group;
@@ -2139,9 +2159,16 @@ async function submitActivity(e) {
         if (pointsEarned > 0) msg += ' 🎉 +' + pointsEarned + ' pontos';
         if (extraCount > 0) msg += ' (' + extraCount + ' extra)';
         showToast(msg, 'success');
+
+                // 🔔 NOTIFICAÇÕES: Envia para cada grupo
+        for (const cs of challengesWithStatus) {
+            notifyGroupActivity(null, user.id, cs.challenge.group_id);
+        }
         stopCamera();
         setTimeout(() => { window.location.href = 'home.html'; }, 2000);
-    } else {
+    } 
+    
+    else {
         showToast('Erro ao registrar', 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -3380,4 +3407,66 @@ async function loadCompareData(currentId, previousId) {
     console.log('✅ HTML gerado, inserindo...');
     container.innerHTML = html;
     console.log('✅ Pronto! Fotos:', currentPhotos.length, 'vs', previousPhotos.length);
+}
+
+
+// ============================================
+// NOTIFICAÇÕES - ATIVIDADE PUBLICADA
+// ============================================
+
+async function notifyGroupActivity(activityId, userId, groupId) {
+    try {
+        // Busca nome do usuário e grupo
+        const { data: profile } = await db.from('profiles').select('name').eq('id', userId).single();
+        const { data: group } = await db.from('groups').select('name').eq('id', groupId).single();
+        
+        // Busca tokens FCM dos membros do grupo (exceto quem publicou)
+        const { data: members } = await db.from('group_members')
+            .select('user_id, profiles:fcm_token')
+            .eq('group_id', groupId)
+            .neq('user_id', userId);
+        
+        if (!members || members.length === 0) return;
+        
+        const tokens = members
+            .filter(m => m.profiles?.fcm_token)
+            .map(m => m.profiles.fcm_token);
+        
+        if (tokens.length === 0) return;
+        
+        // Envia notificação via Firebase Cloud Messaging
+        const message = {
+            title: '🏋️ Nova Atividade!',
+            body: `${profile?.name || 'Alguém'} registrou uma atividade no grupo ${group?.name || ''}`,
+            icon: '/fatfitapp/logo.png',
+            data: {
+                groupId: groupId,
+                url: `/fatfitapp/home.html`
+            }
+        };
+        
+        // Envia para cada token
+        for (const token of tokens) {
+            await fetch('https://fcm.googleapis.com/fcm/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'key=AIzaSyCuqjWq74Sn-JaujjAbJ6CA8a0Nyvtys7w'
+                },
+                body: JSON.stringify({
+                    to: token,
+                    notification: {
+                        title: message.title,
+                        body: message.body,
+                        icon: message.icon
+                    },
+                    data: message.data
+                })
+            });
+        }
+        
+        console.log('📩 Notificações enviadas para', tokens.length, 'usuários');
+    } catch (e) {
+        console.error('Erro ao enviar notificações:', e);
+    }
 }

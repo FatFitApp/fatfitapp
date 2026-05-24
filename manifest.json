@@ -8,14 +8,15 @@
     "theme_color": "#4F46E5",
     "orientation": "portrait",
     "lang": "pt-BR",
+    "gcm_sender_id": "842531835544",
     "icons": [
         {
-            "src": "logosite.png",
+            "src": "logo.png",
             "sizes": "192x192",
             "type": "image/png"
         },
         {
-            "src": "logosite.png",
+            "src": "logo.png",
             "sizes": "512x512",
             "type": "image/png"
         }
