@@ -632,6 +632,22 @@ if (window.location.pathname.includes('home')) {
 async function setupHome(session) {
     const user = session.user;
     const profile = await getProfile(user.id);
+
+    // 🔔 SOLICITAR PERMISSÃO DE NOTIFICAÇÃO
+    if ('Notification' in window && Notification.permission === 'default') {
+        // Mostra um toast informativo antes de pedir permissão
+        showToast('🔔 Ative as notificações para receber atualizações!', 'info');
+        
+        setTimeout(async () => {
+            const granted = await requestNotificationPermission();
+            if (granted) {
+                showToast('✅ Notificações ativadas!', 'success');
+            }
+        }, 2000);
+    } else if (Notification.permission === 'granted') {
+        // Já tem permissão, só inicializa
+        initFirebaseMessaging();
+    }
     
     document.getElementById('headerAvatarImg').src = profile?.avatar_url || 'perfil_padrao.png';
     document.getElementById('headerAvatar').addEventListener('click', () => window.location.href = 'profile.html');
@@ -3468,5 +3484,24 @@ async function notifyGroupActivity(activityId, userId, groupId) {
         console.log('📩 Notificações enviadas para', tokens.length, 'usuários');
     } catch (e) {
         console.error('Erro ao enviar notificações:', e);
+    }
+}
+
+
+async function requestNotificationPermission() {
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            console.log('✅ Permissão concedida');
+            const token = await initFirebaseMessaging();
+            return !!token;
+        } else {
+            console.log('❌ Permissão negada:', permission);
+            showToast('Notificações desativadas. Você pode ativar nas configurações.', 'warning');
+            return false;
+        }
+    } catch (e) {
+        console.error('Erro ao solicitar permissão:', e);
+        return false;
     }
 }

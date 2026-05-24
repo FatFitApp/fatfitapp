@@ -41,12 +41,6 @@ async function initFirebaseMessaging() {
     try {
         firebaseMessaging = firebase.messaging();
         
-        // Registra o service worker do Firebase
-        if ('serviceWorker' in navigator) {
-            const registration = await navigator.serviceWorker.register('/fatfitapp/firebase-messaging-sw.js');
-            console.log('✅ Firebase SW registrado');
-        }
-        
         // Solicita permissão
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
@@ -55,14 +49,12 @@ async function initFirebaseMessaging() {
             });
             console.log('🔔 Token FCM:', token);
             
-            // Salva o token no perfil do usuário
+            // Salva o token no perfil
             const user = await getCurrentUser();
             if (user) {
                 await db.from('profiles').update({ fcm_token: token }).eq('id', user.id);
             }
             return token;
-        } else {
-            console.log('❌ Permissão de notificação negada');
         }
     } catch (e) {
         console.error('Erro Firebase:', e);
