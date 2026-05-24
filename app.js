@@ -88,8 +88,20 @@ async function getProfile(userId) {
 // ============================================
 if (document.querySelector('.auth-page')) {
     document.addEventListener('DOMContentLoaded', async () => {
+        // Verifica PRIMEIRO se veio do link de recuperação
+        const hash = window.location.hash;
+        if (hash && hash.includes('type=recovery')) {
+            // Força logout e mostra tela de redefinição
+            await db.auth.signOut();
+            setupAuthForms();
+            showForm('resetForm');
+            return;
+        }
+        
+        // Depois verifica se já está logado
         const session = await checkAuth();
         if (session) { window.location.href = 'home.html'; return; }
+        
         setupAuthForms();
     });
 }
