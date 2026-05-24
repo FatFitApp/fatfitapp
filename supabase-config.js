@@ -41,6 +41,13 @@ async function initFirebaseMessaging() {
     try {
         firebaseMessaging = firebase.messaging();
         
+
+                // 🔧 CORREÇÃO: Registra o SW manualmente
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.register('/fatfitapp/firebase-messaging-sw.js');
+            console.log('✅ Firebase SW registrado manualmente');
+        }
+
         // Solicita permissão
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
