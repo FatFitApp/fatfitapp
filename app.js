@@ -8,6 +8,15 @@ let currentUserRole = null;
 let chatSubscription = null;
 let currentFacingMode = 'environment'; // 'environment' = traseira, 'user' = frontal
 
+
+let isVideoMode = false;
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingStartTime = null;
+let recordingTimer = null;
+const MAX_VIDEO_DURATION = 6000; // 6 segundos
+
+
 // ============================================
 // UTILITÁRIOS
 // ============================================
@@ -793,26 +802,23 @@ async function loadTimeline() {
     
     for (const a of activities) {
         const isExtra = a.is_extra === true;
+        const isVideo = a.photo_url && (a.photo_url.endsWith('.webm') || a.photo_url.includes('video'));
         
-        // Buscar curtidas e comentários
-        const { count: likesCount } = await db.from('activity_likes')
-            .select('*', { count: 'exact', head: true }).eq('activity_id', a.id);
+        const { count: likesCount } = await db.from('activity_likes').select('*', { count: 'exact', head: true }).eq('activity_id', a.id);
+        const { data: userLiked } = await db.from('activity_likes').select('id').eq('activity_id', a.id).eq('user_id', user.id).maybeSingle();
+        const { data: comments } = await db.from('activity_comments').select('*, profiles:user_id(name, avatar_url)').eq('activity_id', a.id).order('created_at', { ascending: true }).limit(10);
         
-        const { data: userLiked } = await db.from('activity_likes')
-            .select('id').eq('activity_id', a.id).eq('user_id', user.id).maybeSingle();
-        
-        const { data: comments } = await db.from('activity_comments')
-            .select('*, profiles:user_id(name, avatar_url)')
-            .eq('activity_id', a.id)
-            .order('created_at', { ascending: true })
-            .limit(10);
-        
-        // Localização
         let locationHtml = '';
         if (a.location && a.location.lat && a.location.lng) {
-            locationHtml = '<div class="timeline-location-full" id="loc-' + a.id + '">' +
-                '<i class="fas fa-map-pin"></i>' +
-                '<span>Carregando endereço...</span></div>';
+            locationHtml = '<div class="timeline-location-full" id="loc-' + a.id + '"><i class="fas fa-map-pin"></i><span>Carregando endereço...</span></div>';
+        }
+        
+        // Mídia: vídeo ou foto
+        let mediaHtml = '';
+        if (isVideo) {
+            mediaHtml = '<video src="' + a.photo_url + '" class="timeline-video" autoplay muted loop playsinline onerror="this.style.display=\'none\'"></video>';
+        } else {
+            mediaHtml = '<img src="' + a.photo_url + '" class="timeline-photo" onclick="window.open(\'' + a.photo_url + '\')" loading="lazy" onerror="this.style.display=\'none\'">';
         }
         
         const item = document.createElement('div');
@@ -822,11 +828,11 @@ async function loadTimeline() {
             '<img src="' + (a.profiles?.avatar_url || 'perfil_padrao.png') + '" class="timeline-avatar">' +
             '<div class="timeline-user">' +
             '<div class="timeline-name">' + escapeHtml(a.profiles?.name || 'Usuário') + (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') + '</div>' +
-            '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + escapeHtml(a.challenges?.name || 'Desafio') + '</div>' +
+            '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + escapeHtml(a.challenges?.name || 'Desafio') + (isVideo ? ' 🎥' : '') + '</div>' +
             '</div>' +
             (isExtra ? '<span class="badge badge-secondary" style="font-size:0.7rem;">+0</span>' : '<span class="badge badge-success" style="font-size:0.7rem;">+1 pt</span>') +
             '</div>' +
-            '<img src="' + a.photo_url + '" class="timeline-photo" onclick="window.open(\'' + a.photo_url + '\')" loading="lazy" onerror="this.style.display=\'none\'">' +
+            mediaHtml +
             locationHtml +
             (a.comment ? '<div class="timeline-body">💬 ' + escapeHtml(a.comment) + '</div>' : '') +
             '<div class="timeline-actions-bar">' +
@@ -838,7 +844,6 @@ async function loadTimeline() {
             '</button>' +
             '</div>';
         
-        // Comentários
         if (comments && comments.length > 0) {
             let commentsHtml = '<div class="timeline-comments-section">';
             for (const c of comments) {
@@ -854,7 +859,6 @@ async function loadTimeline() {
             item.innerHTML += commentsHtml;
         }
         
-        // Input de comentário
         item.innerHTML += '<div class="timeline-comment-input">' +
             '<input type="text" id="commentInput-' + a.id + '" placeholder="Adicione um comentário..." autocomplete="off">' +
             '<button onclick="addComment(\'' + a.id + '\')">Enviar</button>' +
@@ -862,13 +866,11 @@ async function loadTimeline() {
         
         feed.appendChild(item);
         
-        // Carrega endereço da localização
         if (a.location && a.location.lat && a.location.lng) {
             loadLocationAddress(a.id, a.location.lat, a.location.lng);
         }
     }
 }
-
 // ============================================
 // CURTIR / DESCURTIR
 // ============================================
@@ -1500,32 +1502,259 @@ async function startCameraFullscreen() {
     const video = document.getElementById('cameraPreview');
     if (!video) return;
     
-    // Para qualquer stream anterior
     stopCamera();
     
     try {
-        console.log('🎥 Iniciando câmera fullscreen (' + currentFacingMode + ')...');
+        console.log('🎥 Iniciando câmera (' + currentFacingMode + ')');
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: currentFacingMode,
                 width: { ideal: 1920 },
                 height: { ideal: 1080 }
-            } 
+            },
+            audio: isVideoMode // Habilita áudio só no modo vídeo
         });
         video.srcObject = stream;
+        video.muted = true; // Evita eco
         await video.play();
-        console.log('✅ Câmera fullscreen iniciada');
+        console.log('✅ Câmera iniciada');
     } catch (e) { 
         console.error('❌ Erro câmera:', e);
         showToast('Erro ao acessar câmera', 'error'); 
     }
     
-    // Capturar foto
-    document.getElementById('captureBtn')?.addEventListener('click', capturePhoto);
-    
-    // Botão de inverter câmera
+    // Configura modo
+    setupCameraMode();
     document.getElementById('flipCameraBtn')?.addEventListener('click', flipCamera);
 }
+
+// NOVA FUNÇÃO - Configurar modo foto/vídeo
+function setupCameraMode() {
+    const captureBtn = document.getElementById('captureBtn');
+    if (!captureBtn) return;
+    
+    // Remove listeners antigos
+    const newBtn = captureBtn.cloneNode(true);
+    captureBtn.parentNode.replaceChild(newBtn, captureBtn);
+    
+    if (isVideoMode) {
+        // Modo vídeo: pressionar para gravar
+        newBtn.addEventListener('mousedown', startRecording);
+        newBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
+        newBtn.addEventListener('mouseup', stopRecording);
+        newBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
+        newBtn.addEventListener('mouseleave', stopRecording);
+    } else {
+        // Modo foto: clique simples
+        newBtn.addEventListener('click', capturePhoto);
+    }
+}
+
+// NOVA FUNÇÃO - Iniciar gravação de vídeo
+function startRecording() {
+    const video = document.getElementById('cameraPreview');
+    const stream = video?.srcObject;
+    if (!stream) return;
+    
+    console.log('🔴 Iniciando gravação...');
+    
+    recordedChunks = [];
+    recordingStartTime = Date.now();
+    
+    try {
+        // Tenta formato MP4 primeiro, fallback para webm
+        let mimeType = 'video/webm;codecs=vp8,opus';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/webm';
+        }
+        
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            console.log('⏹️ Gravação finalizada');
+            const blob = new Blob(recordedChunks, { type: mimeType });
+            activityPhotoFile = new File([blob], 'video_' + Date.now() + '.webm', { type: mimeType });
+            
+            // Mostra preview do vídeo
+            const url = URL.createObjectURL(blob);
+            showVideoPreview(url);
+        };
+        
+        mediaRecorder.start(100); // Coleta dados a cada 100ms
+        
+        // Timer e barra de progresso
+        showRecordingUI();
+        
+        // Para automaticamente após 6 segundos
+        setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            }
+        }, MAX_VIDEO_DURATION);
+        
+    } catch (e) {
+        console.error('❌ Erro ao gravar:', e);
+        showToast('Erro ao iniciar gravação', 'error');
+    }
+}
+
+// NOVA FUNÇÃO - Parar gravação
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        hideRecordingUI();
+    }
+}
+
+// NOVA FUNÇÃO - Mostrar UI de gravação
+function showRecordingUI() {
+    // Barra de progresso
+    const progressBar = document.createElement('div');
+    progressBar.className = 'recording-progress';
+    progressBar.id = 'recordingProgress';
+    document.getElementById('cameraState')?.appendChild(progressBar);
+    
+    // Timer
+    const timer = document.createElement('div');
+    timer.className = 'recording-timer';
+    timer.id = 'recordingTimer';
+    timer.innerHTML = '<span class="recording-dot"></span> 0.0s';
+    document.getElementById('cameraState')?.appendChild(timer);
+    
+    // Botão em modo recording
+    document.getElementById('captureBtn')?.classList.add('recording');
+    
+    // Atualiza progresso
+    recordingTimer = setInterval(() => {
+        const elapsed = Date.now() - recordingStartTime;
+        const seconds = Math.min(elapsed / 1000, 6).toFixed(1);
+        const progress = Math.min((elapsed / MAX_VIDEO_DURATION) * 100, 100);
+        
+        const timerEl = document.getElementById('recordingTimer');
+        const progressEl = document.getElementById('recordingProgress');
+        
+        if (timerEl) timerEl.innerHTML = '<span class="recording-dot"></span> ' + seconds + 's';
+        if (progressEl) progressEl.style.width = progress + '%';
+    }, 100);
+}
+
+// NOVA FUNÇÃO - Esconder UI de gravação
+function hideRecordingUI() {
+    clearInterval(recordingTimer);
+    document.getElementById('recordingProgress')?.remove();
+    document.getElementById('recordingTimer')?.remove();
+    document.getElementById('captureBtn')?.classList.remove('recording');
+}
+
+// NOVA FUNÇÃO - Preview de vídeo
+function showVideoPreview(url) {
+    stopCamera();
+    
+    document.getElementById('cameraState').style.display = 'none';
+    document.getElementById('previewState').style.display = 'flex';
+    
+    // Substitui img por video
+    const previewContainer = document.getElementById('previewState');
+    const existingImg = document.getElementById('photoPreview');
+    const existingVideo = document.getElementById('videoPreview');
+    
+    if (existingVideo) existingVideo.remove();
+    
+    const videoEl = document.createElement('video');
+    videoEl.id = 'videoPreview';
+    videoEl.src = url;
+    videoEl.controls = true;
+    videoEl.autoplay = true;
+    videoEl.loop = true;
+    videoEl.muted = true;
+    videoEl.style.width = '100%';
+    videoEl.style.height = '100%';
+    videoEl.style.objectFit = 'contain';
+    
+    if (existingImg) existingImg.style.display = 'none';
+    previewContainer.insertBefore(videoEl, previewContainer.querySelector('.preview-controls'));
+    
+    document.getElementById('retakeBtn')?.addEventListener('click', retakeMedia);
+    document.getElementById('usePhotoBtn')?.addEventListener('click', useMedia);
+}
+
+// NOVA FUNÇÃO - Refazer mídia (foto ou vídeo)
+function retakeMedia() {
+    activityPhotoFile = null;
+    recordedChunks = [];
+    
+    // Limpa preview
+    const videoEl = document.getElementById('videoPreview');
+    if (videoEl) {
+        URL.revokeObjectURL(videoEl.src);
+        videoEl.remove();
+    }
+    document.getElementById('photoPreview').style.display = 'block';
+    
+    document.getElementById('previewState').style.display = 'none';
+    document.getElementById('cameraState').style.display = 'flex';
+    startCameraFullscreen();
+}
+
+// NOVA FUNÇÃO - Usar mídia
+function useMedia() {
+    document.getElementById('previewState').style.display = 'none';
+    document.getElementById('detailsState').style.display = 'block';
+    document.body.style.overflow = 'auto';
+    document.body.style.height = 'auto';
+    
+    // Mostra thumbnail
+    if (activityPhotoFile) {
+        if (activityPhotoFile.type.startsWith('video/')) {
+            const thumb = document.getElementById('photoThumb');
+            if (thumb) {
+                thumb.style.display = 'none';
+                // Cria thumbnail de vídeo
+                const videoThumb = document.createElement('video');
+                videoThumb.src = URL.createObjectURL(activityPhotoFile);
+                videoThumb.muted = true;
+                videoThumb.autoplay = true;
+                videoThumb.loop = true;
+                videoThumb.style.width = '140px';
+                videoThumb.style.height = '140px';
+                videoThumb.style.borderRadius = '20px';
+                videoThumb.style.objectFit = 'cover';
+                videoThumb.id = 'videoThumb';
+                thumb.parentNode.insertBefore(videoThumb, thumb);
+            }
+        } else {
+            document.getElementById('photoThumb').src = URL.createObjectURL(activityPhotoFile);
+        }
+    }
+    
+    setupLocationButtons();
+    
+    const form = document.getElementById('activityForm');
+    if (form) {
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        newForm.addEventListener('submit', submitActivity);
+    }
+}
+
+// Modo foto/vídeo
+document.getElementById('photoModeBtn')?.addEventListener('click', () => {
+    isVideoMode = false;
+    document.getElementById('photoModeBtn').classList.add('active');
+    document.getElementById('videoModeBtn').classList.remove('active');
+    startCameraFullscreen();
+});
+
+document.getElementById('videoModeBtn')?.addEventListener('click', () => {
+    isVideoMode = true;
+    document.getElementById('videoModeBtn').classList.add('active');
+    document.getElementById('photoModeBtn').classList.remove('active');
+    startCameraFullscreen();
+});
 
 // NOVA FUNÇÃO - Inverter câmera
 function flipCamera() {
@@ -1736,7 +1965,7 @@ async function reverseGeocode(lat, lng) {
 
 async function submitActivity(e) {
     e.preventDefault();
-    if (!activityPhotoFile) { showToast('Tire uma foto primeiro!', 'error'); return; }
+    if (!activityPhotoFile) { showToast('Tire uma foto ou grave um vídeo primeiro!', 'error'); return; }
     const user = await getCurrentUser();
     const btn = document.getElementById('submitBtn');
     const originalText = btn.innerHTML;
@@ -1745,13 +1974,19 @@ async function submitActivity(e) {
     const today = getToday();
     let successCount = 0, pointsEarned = 0, extraCount = 0;
     
+    // Determina extensão do arquivo
+    const isVideo = activityPhotoFile.type.startsWith('video/');
+    const fileExt = isVideo ? 'webm' : 'jpg';
+    const mimeType = isVideo ? 'video/webm' : 'image/jpeg';
+    
     for (let i = 0; i < challengesWithStatus.length; i++) {
         const cs = challengesWithStatus[i];
         const isExtra = cs.hasValidToday;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando ' + (i + 1) + '/' + challengesWithStatus.length + '...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando ' + (i + 1) + '/' + challengesWithStatus.length + '...';
+        
         try {
-            const fileName = user.id + '/' + cs.challenge.id + '/' + Date.now() + '_' + i + '.jpg';
-            const { error: upErr } = await db.storage.from('activity-photos').upload(fileName, activityPhotoFile, { contentType: 'image/jpeg', upsert: false });
+            const fileName = user.id + '/' + cs.challenge.id + '/' + Date.now() + '_' + i + '.' + fileExt;
+            const { error: upErr } = await db.storage.from('activity-photos').upload(fileName, activityPhotoFile, { contentType: mimeType, upsert: false });
             if (upErr) continue;
             const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
             const { error: actErr } = await db.from('daily_activities').insert({ user_id: user.id, challenge_id: cs.challenge.id, activity_date: today, photo_url: urlData.publicUrl, location: activityLocationData, comment, status: 'valid', is_extra: isExtra });
@@ -1768,28 +2003,14 @@ async function submitActivity(e) {
         if (pointsEarned > 0) msg += ' 🎉 +' + pointsEarned + ' pontos';
         if (extraCount > 0) msg += ' (' + extraCount + ' extra)';
         showToast(msg, 'success');
-        
-        // Para a câmera
         stopCamera();
-        
-        // Limpa estados
-        document.getElementById('detailsState').style.display = 'none';
-        document.getElementById('cameraState').style.display = 'none';
-        document.getElementById('previewState').style.display = 'none';
-        
-        // Redireciona
-        setTimeout(() => { 
-            window.location.href = 'home.html'; 
-        }, 2000);
-    }
-    
-    else {
+        setTimeout(() => { window.location.href = 'home.html'; }, 2000);
+    } else {
         showToast('Erro ao registrar', 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
 }
-
 
 // Funções auxiliares da activity page (fallback)
 if (typeof skipLocation === 'undefined') {
