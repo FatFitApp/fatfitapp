@@ -16,6 +16,7 @@ const CACHE_FILES = [
     '/fatfitapp/supabase-config.js',
     '/fatfitapp/logo.png',
     '/fatfitapp/corpo.png',
+    '/fatfitapp/perfil_padrao.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js'
 ];

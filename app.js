@@ -238,7 +238,7 @@ async function setupProfile(session) {
                 <div class="profile-avatar-container">
                     <div class="profile-avatar-wrapper">
                         <img id="avatarImg" class="profile-avatar-img" 
-                             src="${profile?.avatar_url || 'https://via.placeholder.com/120'}" 
+                             src="${profile?.avatar_url || 'perfil_padrao.png'}" 
                              alt="Avatar">
                         <div class="profile-avatar-overlay" id="avatarUploadBtn">
                             <i class="fas fa-camera"></i>
@@ -624,10 +624,10 @@ async function setupHome(session) {
     const user = session.user;
     const profile = await getProfile(user.id);
     
-    document.getElementById('headerAvatarImg').src = profile?.avatar_url || 'https://via.placeholder.com/32';
+    document.getElementById('headerAvatarImg').src = profile?.avatar_url || 'perfil_padrao.png';
     document.getElementById('headerAvatar').addEventListener('click', () => window.location.href = 'profile.html');
     
-    document.getElementById('sidebarAvatar').src = profile?.avatar_url || 'https://via.placeholder.com/48';
+    document.getElementById('sidebarAvatar').src = profile?.avatar_url || 'perfil_padrao.png';
     document.getElementById('sidebarName').textContent = profile?.name || 'Usuário';
     document.getElementById('sidebarEmail').textContent = profile?.email || user.email;
     
@@ -819,7 +819,7 @@ async function loadTimeline() {
         item.className = 'timeline-item';
         item.innerHTML = 
             '<div class="timeline-header">' +
-            '<img src="' + (a.profiles?.avatar_url || 'https://via.placeholder.com/36') + '" class="timeline-avatar">' +
+            '<img src="' + (a.profiles?.avatar_url || 'perfil_padrao.png') + '" class="timeline-avatar">' +
             '<div class="timeline-user">' +
             '<div class="timeline-name">' + escapeHtml(a.profiles?.name || 'Usuário') + (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') + '</div>' +
             '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + escapeHtml(a.challenges?.name || 'Desafio') + '</div>' +
@@ -843,7 +843,7 @@ async function loadTimeline() {
             let commentsHtml = '<div class="timeline-comments-section">';
             for (const c of comments) {
                 commentsHtml += '<div class="timeline-comment-item">' +
-                    '<img src="' + (c.profiles?.avatar_url || 'https://via.placeholder.com/28') + '" class="timeline-comment-avatar">' +
+                    '<img src="' + (c.profiles?.avatar_url || 'perfil_padrao.png') + '" class="timeline-comment-avatar">' +
                     '<div class="timeline-comment-content">' +
                     '<span class="timeline-comment-author">' + escapeHtml(c.profiles?.name || 'Usuário') + '</span>' +
                     '<span class="timeline-comment-text">' + escapeHtml(c.comment) + '</span>' +
@@ -947,7 +947,7 @@ async function addComment(activityId) {
     const commentEl = document.createElement('div');
     commentEl.className = 'timeline-comment-item';
     commentEl.innerHTML = 
-        '<img src="' + (newComment.profiles?.avatar_url || 'https://via.placeholder.com/28') + '" class="timeline-comment-avatar">' +
+        '<img src="' + (newComment.profiles?.avatar_url || 'perfil_padrao.png') + '" class="timeline-comment-avatar">' +
         '<div class="timeline-comment-content">' +
         '<span class="timeline-comment-author">' + escapeHtml(newComment.profiles?.name || 'Usuário') + '</span>' +
         '<span class="timeline-comment-text">' + escapeHtml(newComment.comment) + '</span>' +
@@ -1055,7 +1055,7 @@ async function loadDetalhes() {
     html += '<div class="group-detail-card"><h3>👥 Membros</h3><div>';
     if (members) {
         for (const m of members) {
-            html += '<span class="member-chip"><img src="' + (m.profiles?.avatar_url || 'https://via.placeholder.com/24') + '" alt="">' + escapeHtml(m.profiles?.name || 'Usuário') + (m.role === 'admin' ? ' <span class="badge badge-info">Admin</span>' : '') + '</span>';
+            html += '<span class="member-chip"><img src="' + (m.profiles?.avatar_url || 'perfil_padrao.png') + '" alt="">' + escapeHtml(m.profiles?.name || 'Usuário') + (m.role === 'admin' ? ' <span class="badge badge-info">Admin</span>' : '') + '</span>';
         }
     }
     html += '</div></div>';
@@ -1171,7 +1171,7 @@ async function loadRanking() {
         const isMe = p.user_id === user.id;
         html += '<div class="ranking-item" style="' + (isMe ? 'border: 2px solid var(--primary);' : '') + '">';
         html += '<div class="ranking-pos ' + posClass + '">' + (i + 1) + '</div>';
-        html += '<img src="' + (p.profiles?.avatar_url || 'https://via.placeholder.com/40') + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;cursor:pointer;" onclick="window.openPersonCalendar(\'' + p.user_id + '\', \'' + currentGroup.id + '\')">';
+        html += '<img src="' + (p.profiles?.avatar_url || 'perfil_padrao.png') + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;cursor:pointer;" onclick="window.openPersonCalendar(\'' + p.user_id + '\', \'' + currentGroup.id + '\')">';
         html += '<div class="ranking-info" style="cursor:pointer;" onclick="window.openPersonCalendar(\'' + p.user_id + '\', \'' + currentGroup.id + '\')">';
         html += '<div class="ranking-name">' + escapeHtml(p.profiles?.name || 'Usuário') + ' ' + (isMe ? '(você)' : '') + '</div>';
         html += '<div class="ranking-bar"><div class="ranking-bar-fill" style="width:' + ((p.points / maxPoints) * 100) + '%"></div></div>';
@@ -2047,7 +2047,7 @@ async function setupPersonPage(session) {
             <div class="profile-header">
                 <div class="profile-avatar-container">
                     <div class="profile-avatar-wrapper">
-                        <img src="${profile?.avatar_url || 'https://via.placeholder.com/120'}" 
+                        <img src="${profile?.avatar_url || 'perfil_padrao.png'}" 
                              class="profile-avatar-img" alt="Avatar">
                     </div>
                 </div>
