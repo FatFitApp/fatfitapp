@@ -878,9 +878,32 @@ body {
 .camera-fullscreen video { width: 100%; height: 100%; object-fit: cover; }
 
 .camera-controls { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); z-index: 20; }
-.camera-capture-btn { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.3); border: 4px solid #fff; cursor: pointer; padding: 0; backdrop-filter: blur(10px); }
+.camera-capture-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: 4px solid #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    backdrop-filter: blur(10px);
+    position: relative;
+}
 .camera-capture-btn:active { transform: scale(0.9); }
-.capture-ring { width: 68px; height: 68px; border-radius: 50%; background: #fff; }
+
+.capture-ring {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
 .camera-capture-btn:active .capture-ring { width: 60px; height: 60px; }
 
 .camera-back-btn { position: absolute; top: 20px; left: 20px; z-index: 20; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.4); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }

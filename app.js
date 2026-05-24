@@ -1528,25 +1528,134 @@ async function startCameraFullscreen() {
     document.getElementById('flipCameraBtn')?.addEventListener('click', flipCamera);
 }
 
-// NOVA FUNÇÃO - Configurar modo foto/vídeo
+let pressStartTime = 0;
+let isLongPress = false;
+let isVideoRecording = false;
+
 function setupCameraMode() {
     const captureBtn = document.getElementById('captureBtn');
     if (!captureBtn) return;
     
-    // Remove listeners antigos
     const newBtn = captureBtn.cloneNode(true);
     captureBtn.parentNode.replaceChild(newBtn, captureBtn);
     
+    // Eventos de mouse
+    newBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        pressStartTime = Date.now();
+        isLongPress = false;
+        
+        if (isVideoMode && !isVideoRecording) {
+            // Modo vídeo: toggle gravação
+            startVideoRecording();
+        } else if (isVideoMode && isVideoRecording) {
+            // Modo vídeo: para gravação
+            stopVideoRecording();
+        }
+    });
+    
+    newBtn.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        handleRelease();
+    });
+    
+    newBtn.addEventListener('mouseleave', (e) => {
+        if (isVideoRecording && !isVideoMode) {
+            stopVideoRecording();
+        }
+    });
+    
+    // Eventos de toque
+    newBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        pressStartTime = Date.now();
+        isLongPress = false;
+        
+        if (isVideoMode && !isVideoRecording) {
+            startVideoRecording();
+        } else if (isVideoMode && isVideoRecording) {
+            stopVideoRecording();
+        }
+    });
+    
+    newBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        handleRelease();
+    });
+}
+
+function handleRelease() {
+    const pressDuration = Date.now() - pressStartTime;
+    
     if (isVideoMode) {
-        // Modo vídeo: pressionar para gravar
-        newBtn.addEventListener('mousedown', startRecording);
-        newBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
-        newBtn.addEventListener('mouseup', stopRecording);
-        newBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
-        newBtn.addEventListener('mouseleave', stopRecording);
+        // Modo vídeo: já tratado no mousedown/touchstart
+        return;
+    }
+    
+    // Modo foto
+    if (isVideoRecording) {
+        // Estava gravando vídeo (segurou) - para
+        stopVideoRecording();
+    } else if (pressDuration < 300) {
+        // Clique rápido = foto
+        capturePhoto();
     } else {
-        // Modo foto: clique simples
-        newBtn.addEventListener('click', capturePhoto);
+        // Segurou > 300ms = começa vídeo
+        startVideoRecording();
+    }
+}
+
+function startVideoRecording() {
+    const video = document.getElementById('cameraPreview');
+    const stream = video?.srcObject;
+    if (!stream || isVideoRecording) return;
+    
+    console.log('🔴 Iniciando gravação...');
+    isVideoRecording = true;
+    recordedChunks = [];
+    recordingStartTime = Date.now();
+    
+    try {
+        let mimeType = 'video/webm;codecs=vp8,opus';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/webm';
+        }
+        
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            console.log('⏹️ Gravação finalizada');
+            isVideoRecording = false;
+            const blob = new Blob(recordedChunks, { type: mimeType });
+            activityPhotoFile = new File([blob], 'video_' + Date.now() + '.webm', { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            showVideoPreview(url);
+        };
+        
+        mediaRecorder.start(100);
+        showRecordingUI();
+        
+        setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopVideoRecording();
+            }
+        }, MAX_VIDEO_DURATION);
+        
+    } catch (e) {
+        console.error('❌ Erro ao gravar:', e);
+        showToast('Erro ao iniciar gravação', 'error');
+        isVideoRecording = false;
+    }
+}
+
+function stopVideoRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        hideRecordingUI();
     }
 }
 
@@ -1612,23 +1721,29 @@ function stopRecording() {
 
 // NOVA FUNÇÃO - Mostrar UI de gravação
 function showRecordingUI() {
-    // Barra de progresso
     const progressBar = document.createElement('div');
     progressBar.className = 'recording-progress';
     progressBar.id = 'recordingProgress';
     document.getElementById('cameraState')?.appendChild(progressBar);
     
-    // Timer
     const timer = document.createElement('div');
     timer.className = 'recording-timer';
     timer.id = 'recordingTimer';
     timer.innerHTML = '<span class="recording-dot"></span> 0.0s';
     document.getElementById('cameraState')?.appendChild(timer);
     
-    // Botão em modo recording
-    document.getElementById('captureBtn')?.classList.add('recording');
+    const captureBtn = document.getElementById('captureBtn');
+    captureBtn?.classList.add('recording');
     
-    // Atualiza progresso
+    // Muda o círculo interno para quadrado vermelho
+    const ring = captureBtn?.querySelector('.capture-ring');
+    if (ring) {
+        ring.style.width = '28px';
+        ring.style.height = '28px';
+        ring.style.borderRadius = '4px';
+        ring.style.background = '#FF3B30';
+    }
+    
     recordingTimer = setInterval(() => {
         const elapsed = Date.now() - recordingStartTime;
         const seconds = Math.min(elapsed / 1000, 6).toFixed(1);
@@ -1647,7 +1762,18 @@ function hideRecordingUI() {
     clearInterval(recordingTimer);
     document.getElementById('recordingProgress')?.remove();
     document.getElementById('recordingTimer')?.remove();
-    document.getElementById('captureBtn')?.classList.remove('recording');
+    
+    const captureBtn = document.getElementById('captureBtn');
+    captureBtn?.classList.remove('recording');
+    
+    // Restaura o círculo branco
+    const ring = captureBtn?.querySelector('.capture-ring');
+    if (ring) {
+        ring.style.width = '64px';
+        ring.style.height = '64px';
+        ring.style.borderRadius = '50%';
+        ring.style.background = '#fff';
+    }
 }
 
 // NOVA FUNÇÃO - Preview de vídeo
@@ -1811,6 +1937,16 @@ function showPreview(dataUrl) {
 
 function retakePhoto() {
     activityPhotoFile = null;
+    recordedChunks = [];
+    
+    const videoEl = document.getElementById('videoPreview');
+    if (videoEl) {
+        URL.revokeObjectURL(videoEl.src);
+        videoEl.remove();
+    }
+    const photoEl = document.getElementById('photoPreview');
+    if (photoEl) photoEl.style.display = 'block';
+    
     document.getElementById('previewState').style.display = 'none';
     document.getElementById('cameraState').style.display = 'flex';
     startCameraFullscreen();
