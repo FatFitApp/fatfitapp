@@ -1067,14 +1067,7 @@ async function loadDetalhes() {
         html += '<p>💰 R$' + activeChallenge.amount_per_person + '/pessoa | Total: R$' + activeChallenge.total_prize + '</p>';
         html += '<p>' + escapeHtml(activeChallenge.description || '') + '</p>';
         html += '<span class="badge">' + (activeChallenge.status === 'active' ? 'Em andamento' : 'Aguardando') + '</span>';
-        html += '<div class="mt-1">';
-        if (!isParticipant) {
-            html += '<button class="btn btn-primary btn-block btn-sm confirm-participation-btn" data-id="' + activeChallenge.id + '">✅ Confirmar Participação</button>';
-        }
-        if (isParticipant) {
-            html += '<a href="activity.html?challenge=' + activeChallenge.id + '" class="btn btn-secondary btn-block btn-sm">📸 Registrar Atividade</a>';
-        }
-        html += '</div>';
+
         if (currentUserRole === 'admin') {
             html += '<button class="btn btn-outline btn-sm mt-2 edit-dates-btn" data-id="' + activeChallenge.id + '" data-start="' + activeChallenge.start_date + '" data-end="' + activeChallenge.end_date + '" style="width:100%;"><i class="fas fa-edit"></i> Alterar Datas</button>';
         }
@@ -1107,13 +1100,7 @@ async function loadDetalhes() {
     
     container.innerHTML = html;
     
-    document.querySelectorAll('.confirm-participation-btn').forEach(b => {
-        b.addEventListener('click', async () => {
-            await db.from('challenge_participants').insert({ challenge_id: b.dataset.id, user_id: user.id });
-            showToast('Participação confirmada!', 'success');
-            loadDetalhes();
-        });
-    });
+
     
     document.querySelectorAll('.edit-dates-btn').forEach(b => {
         b.addEventListener('click', async () => {
@@ -1156,7 +1143,26 @@ async function loadRanking() {
     const user = await getCurrentUser();
     const { data: activeChallenge } = await db.from('challenges').select('*').eq('group_id', currentGroup.id).in('status', ['pending', 'active']).maybeSingle();
     if (!activeChallenge) { container.innerHTML = '<div class="empty-state"><i class="fas fa-trophy"></i><p>Nenhum desafio ativo</p></div>'; return; }
-    const { data: participants } = await db.from('challenge_participants').select('*, profiles:user_id(name, avatar_url)').eq('challenge_id', activeChallenge.id).order('points', { ascending: false });
+        // Busca participantes E membros que não pontuaram ainda
+    const { data: participants } = await db.from('challenge_participants')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('challenge_id', activeChallenge.id)
+        .order('points', { ascending: false });
+    
+    // Se não tem participantes, busca todos os membros do grupo
+    if (!participants || participants.length === 0) {
+        const { data: members } = await db.from('group_members')
+            .select('user_id, profiles:user_id(name, avatar_url)')
+            .eq('group_id', currentGroup.id);
+        
+        if (members) {
+            // Mostra membros com 0 pontos
+            const { data: allParticipants } = await db.from('challenge_participants')
+                .select('*, profiles:user_id(name, avatar_url)')
+                .eq('challenge_id', activeChallenge.id)
+                .order('points', { ascending: false });
+        }
+    }
     if (!participants || participants.length === 0) { container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>Nenhum participante ainda</p></div>'; return; }
     const maxPoints = Math.max(...participants.map(p => p.points), 1);
     let html = '<div class="ranking-header"><h3>🏆 ' + escapeHtml(activeChallenge.name || 'Desafio') + '</h3><p class="text-sm">📅 ' + formatDate(activeChallenge.start_date) + ' → ' + formatDate(activeChallenge.end_date) + '</p><p class="text-sm">💰 Prêmio total: ' + formatCurrency(activeChallenge.total_prize) + '</p></div><div class="ranking-list">';
