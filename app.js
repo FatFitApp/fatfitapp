@@ -3430,60 +3430,53 @@ async function loadCompareData(currentId, previousId) {
 // NOTIFICAÇÕES - ATIVIDADE PUBLICADA
 // ============================================
 
+// ============================================
+// NOTIFICAÇÕES VIA SERVICE WORKER (SEM FCM)
+// ============================================
+
 async function notifyGroupActivity(activityId, userId, groupId) {
     try {
-        // Busca nome do usuário e grupo
         const { data: profile } = await db.from('profiles').select('name').eq('id', userId).single();
         const { data: group } = await db.from('groups').select('name').eq('id', groupId).single();
         
-        // Busca tokens FCM dos membros do grupo (exceto quem publicou)
+        // Busca todos os membros do grupo
         const { data: members } = await db.from('group_members')
-            .select('user_id, profiles:fcm_token')
+            .select('user_id')
             .eq('group_id', groupId)
             .neq('user_id', userId);
         
         if (!members || members.length === 0) return;
         
-        const tokens = members
-            .filter(m => m.profiles?.fcm_token)
-            .map(m => m.profiles.fcm_token);
+        const title = '🏋️ Nova Atividade!';
+        const body = `${profile?.name || 'Alguém'} registrou uma atividade no grupo ${group?.name || ''}`;
         
-        if (tokens.length === 0) return;
-        
-        // Envia notificação via Firebase Cloud Messaging
-        const message = {
-            title: '🏋️ Nova Atividade!',
-            body: `${profile?.name || 'Alguém'} registrou uma atividade no grupo ${group?.name || ''}`,
-            icon: '/fatfitapp/logo.png',
-            data: {
-                groupId: groupId,
-                url: `/fatfitapp/home.html`
-            }
-        };
-        
-        // Envia para cada token
-        for (const token of tokens) {
-            await fetch('https://fcm.googleapis.com/fcm/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'key=AIzaSyCuqjWq74Sn-JaujjAbJ6CA8a0Nyvtys7w'
-                },
-                body: JSON.stringify({
-                    to: token,
-                    notification: {
-                        title: message.title,
-                        body: message.body,
-                        icon: message.icon
-                    },
-                    data: message.data
-                })
+        // Envia para cada membro via Supabase Realtime
+        for (const m of members) {
+            // Salva uma notificação no banco
+            await db.from('notifications').insert({
+                user_id: m.user_id,
+                title: title,
+                body: body,
+                group_id: groupId,
+                read: false
             });
         }
         
-        console.log('📩 Notificações enviadas para', tokens.length, 'usuários');
+        // Se o Service Worker estiver ativo, tenta enviar push nativo
+        if ('serviceWorker' in navigator && Notification.permission === 'granted') {
+            const reg = await navigator.serviceWorker.ready;
+            await reg.showNotification(title, {
+                body: body,
+                icon: '/fatfitapp/logo.png',
+                badge: '/fatfitapp/logo.png',
+                vibrate: [200, 100, 200],
+                data: { groupId: groupId }
+            });
+        }
+        
+        console.log('📩 Notificações salvas para', members.length, 'usuários');
     } catch (e) {
-        console.error('Erro ao enviar notificações:', e);
+        console.error('Erro ao notificar:', e);
     }
 }
 
