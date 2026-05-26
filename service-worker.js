@@ -1,9 +1,9 @@
 // FATFIT - Service Worker
-const CACHE_NAME = 'fatfit-v1';
+const CACHE_NAME = 'fatfit-v3';
 
 // Arquivos para cache offline
 const CACHE_FILES = [
-    '/',
+    '/fatfitapp/',
     '/fatfitapp/index.html',
     '/fatfitapp/home.html',
     '/fatfitapp/profile.html',
@@ -17,20 +17,22 @@ const CACHE_FILES = [
     '/fatfitapp/logo.png',
     '/fatfitapp/corpo.png',
     '/fatfitapp/perfil_padrao.png',
+    '/fatfitapp/manifest.json',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js'
 ];
 
-// Instala - faz cache dos arquivos
+// Instala - faz cache dos arquivos e força ativação
 self.addEventListener('install', (event) => {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(CACHE_FILES))
-            .then(() => self.skipWaiting())
+            .catch(err => console.log('Cache parcial:', err))
     );
 });
 
-// Ativa - limpa caches antigos
+// Ativa - limpa caches antigos e assume controle
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then(keys => {
