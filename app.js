@@ -3,6 +3,36 @@
 // ============================================
 
 const db = window.db;
+
+
+
+// DETECÇÃO DE VERSÃO - Força update de cache
+// ============================================
+const APP_VERSION = '1.0.6';
+
+(function checkVersion() {
+    const storedVersion = localStorage.getItem('fatfit_version');
+    
+    if (storedVersion !== APP_VERSION) {
+        console.log('🔄 Nova versão detectada! Limpando cache...');
+        localStorage.setItem('fatfit_version', APP_VERSION);
+        
+        // Limpa todos os caches
+        if ('caches' in window) {
+            caches.keys().then(keys => {
+                keys.forEach(key => caches.delete(key));
+                console.log('✅ Cache limpo:', keys.length, 'entradas');
+            });
+        }
+        
+        // Força reload limpo
+        setTimeout(() => {
+            window.location.reload(true);
+        }, 500);
+    }
+})();
+
+
 let currentGroup = null;
 let currentUserRole = null;
 let chatSubscription = null;
