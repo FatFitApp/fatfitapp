@@ -204,10 +204,20 @@ function setupAuthForms() {
         }
         
         try {
-            // O token está na URL, o Supabase gerencia automaticamente
-            const { data, error } = await db.auth.updateUser({ 
-                password: newPassword 
-            });
+            // Pega o token do hash da URL
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            
+            if (accessToken) {
+                // Cria sessão com o token
+                await db.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: hashParams.get('refresh_token') || ''
+                });
+            }
+            
+            // Agora atualiza a senha
+            const { error } = await db.auth.updateUser({ password: newPassword });
             
             if (error) {
                 if (error.message.includes('expired')) {
@@ -217,7 +227,6 @@ function setupAuthForms() {
                 }
             } else {
                 showToast('✅ Senha redefinida com sucesso! Faça login.', 'success');
-                // Limpa a URL (remove o hash)
                 window.location.hash = '';
                 setTimeout(() => showForm('loginForm'), 2000);
             }
