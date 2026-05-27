@@ -193,17 +193,7 @@ function setupAuthForms() {
         else { showToast('Email de recuperação enviado!', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
     });
 
-    // Verifica se veio do link de recuperação
-    // Verifica se veio do link de recuperação
-    const hash = window.location.hash;
-    if (hash && hash.includes('type=recovery')) {
-        // Força logout e mostra tela de redefinição
-        db.auth.signOut().then(() => {
-            setupAuthForms();
-            showForm('resetForm');
-        });
-        return;
-    }
+    
 
     // Redefinir senha
     document.getElementById('resetForm')?.addEventListener('submit', async (e) => {
