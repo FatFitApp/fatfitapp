@@ -194,12 +194,14 @@ function setupAuthForms() {
     });
 
     // Verifica se veio do link de recuperação
+    // Verifica se veio do link de recuperação
     const hash = window.location.hash;
     if (hash && hash.includes('type=recovery')) {
         // Força logout e mostra tela de redefinição
-        await db.auth.signOut();
-        setupAuthForms();
-        showForm('resetForm');
+        db.auth.signOut().then(() => {
+            setupAuthForms();
+            showForm('resetForm');
+        });
         return;
     }
 
