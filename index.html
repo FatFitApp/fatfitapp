@@ -178,7 +178,12 @@
         <!-- Toast container -->
         <div class="toast-container" id="toastContainer"></div>
     </div>
-
+    <script>
+        function showForm(formId) {
+            document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+            document.getElementById(formId)?.classList.add('active');
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js?v=1.0.6"></script>
 <script src="app.js?v=1.0.6"></script>
