@@ -193,10 +193,14 @@ function setupAuthForms() {
         else { showToast('Email de recuperação enviado!', 'success'); setTimeout(() => showForm('loginForm'), 2000); }
     });
 
-        // Verifica se veio do link de recuperação
+    // Verifica se veio do link de recuperação
     const hash = window.location.hash;
     if (hash && hash.includes('type=recovery')) {
+        // Força logout e mostra tela de redefinição
+        await db.auth.signOut();
+        setupAuthForms();
         showForm('resetForm');
+        return;
     }
 
     // Redefinir senha
@@ -209,13 +213,26 @@ function setupAuthForms() {
             return;
         }
         
-        const { error } = await db.auth.updateUser({ password: newPassword });
-        
-        if (error) {
-            showToast('Erro ao redefinir senha: ' + error.message, 'error');
-        } else {
-            showToast('Senha redefinida com sucesso! Faça login.', 'success');
-            setTimeout(() => showForm('loginForm'), 2000);
+        try {
+            // O token está na URL, o Supabase gerencia automaticamente
+            const { data, error } = await db.auth.updateUser({ 
+                password: newPassword 
+            });
+            
+            if (error) {
+                if (error.message.includes('expired')) {
+                    showToast('Link expirado. Solicite um novo.', 'error');
+                } else {
+                    showToast('Erro: ' + error.message, 'error');
+                }
+            } else {
+                showToast('✅ Senha redefinida com sucesso! Faça login.', 'success');
+                // Limpa a URL (remove o hash)
+                window.location.hash = '';
+                setTimeout(() => showForm('loginForm'), 2000);
+            }
+        } catch (err) {
+            showToast('Erro ao redefinir: ' + err.message, 'error');
         }
     });
 
@@ -258,6 +275,7 @@ async function setupProfile(session) {
                 activitiesByDate[date] = [];
             }
             activitiesByDate[date].push({
+                id: act.activity_id || act.id,  // ID real da atividade
                 photo_url: act.photo_url,
                 comment: act.comment,
                 user_name: act.user_name,
@@ -465,27 +483,31 @@ function renderProfileCalendar(activitiesByDate) {
     const dedupedByDate = {};
     for (const [dateStr, acts] of Object.entries(activitiesByDate)) {
         const sorted = [...acts].sort((a, b) => {
-            const ta = parseInt((a.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
-            const tb = parseInt((b.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+            const ta = parseInt((a.photo_url?.match(/(\d{13})/) || [0])[1]) || 0;
+            const tb = parseInt((b.photo_url?.match(/(\d{13})/) || [0])[1]) || 0;
             return ta - tb;
         });
         
         const merged = [];
         for (const a of sorted) {
-            const ts = parseInt((a.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+            const ts = parseInt((a.photo_url?.match(/(\d{13})/) || [0])[1]) || 0;
             let found = false;
             for (const m of merged) {
-                const mts = parseInt((m.photo_url.match(/(\d{13})/) || [0])[1]) || 0;
+                const mts = parseInt((m.photo_url?.match(/(\d{13})/) || [0])[1]) || 0;
                 if (Math.abs(ts - mts) < 5000) {
-                    if (!m.groups.includes(a.group_name)) m.groups.push(a.group_name);
-                    if (!m.challenges.includes(a.challenge_name)) m.challenges.push(a.challenge_name);
+                    if (!m.groups) m.groups = [];
+                    if (!m.challenges) m.challenges = [];
+                    if (a.group_name && !m.groups.includes(a.group_name)) m.groups.push(a.group_name);
+                    if (a.challenge_name && !m.challenges.includes(a.challenge_name)) m.challenges.push(a.challenge_name);
                     found = true;
                     break;
                 }
             }
             if (!found) {
                 merged.push({
-                    ...a,
+                    id: a.id,  // ← ID preservado
+                    photo_url: a.photo_url,
+                    comment: a.comment,
                     groups: [a.group_name].filter(Boolean),
                     challenges: [a.challenge_name].filter(Boolean)
                 });
@@ -544,6 +566,9 @@ function renderProfileCalendar(activitiesByDate) {
 // Funções de navegação do mês no perfil
 window.profilePrevMonth = function() { console.log('Mês anterior'); };
 window.profileNextMonth = function() { console.log('Próximo mês'); };
+// Funções de navegação do mês no perfil
+window.profilePrevMonth = function() { console.log('Mês anterior'); };
+window.profileNextMonth = function() { console.log('Próximo mês'); };
 // ============================================
 // FUNÇÃO - MOSTRAR ATIVIDADES DO DIA (AGRUPADO POR FOTO)
 // ============================================
@@ -559,12 +584,13 @@ function showDayActivities(dateStr) {
     const acts = activitiesByDate[dateStr] || [];
     if (acts.length === 0) return;
     
-    // Agrupa atividades pela URL da foto (mesma foto em grupos diferentes = mesma atividade)
+    // Agrupa atividades pela URL da foto
     const groupedByPhoto = {};
     acts.forEach(a => {
         const key = a.photo_url;
         if (!groupedByPhoto[key]) {
             groupedByPhoto[key] = {
+                id: a.id,
                 photo_url: a.photo_url,
                 comment: a.comment,
                 groups: [],
@@ -577,7 +603,6 @@ function showDayActivities(dateStr) {
         if (a.challenge_name && !groupedByPhoto[key].challenges.includes(a.challenge_name)) {
             groupedByPhoto[key].challenges.push(a.challenge_name);
         }
-        // Mantém o comentário mais completo
         if (a.comment && a.comment.length > (groupedByPhoto[key].comment || '').length) {
             groupedByPhoto[key].comment = a.comment;
         }
@@ -604,13 +629,20 @@ function showDayActivities(dateStr) {
                     <span>👥 ${a.groups.map(g => escapeHtml(g)).join(', ')}</span>
                 </div>
                 ${a.comment ? '<p class="day-detail-comment">💬 ' + escapeHtml(a.comment) + '</p>' : ''}
+                <div style="margin-top:8px;display:flex;gap:8px;">
+                    <button class="btn btn-outline btn-sm" onclick="window.editActivityComment('${a.id}')">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteActivity('${a.id}')">
+                        <i class="fas fa-trash"></i> Apagar
+                    </button>
+                </div>
             </div>
         </div>
     `).join('');
     
     modal.classList.add('open');
 }
-
 // Torna global
 window.showDayActivities = showDayActivities;
 
@@ -2557,6 +2589,21 @@ function renderPersonCalendar(activitiesByDate) {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const startWeekday = firstDay.getDay();
     
+    // Agrupa atividades por data (garante que o ID esteja presente)
+    const dedupedByDate = {};
+    for (const [dateStr, acts] of Object.entries(activitiesByDate)) {
+        dedupedByDate[dateStr] = acts.map(a => ({
+            id: a.id || a.activity_id,
+            photo_url: a.photo_url,
+            comment: a.comment,
+            user_name: a.user_name,
+            group_name: a.group_name,
+            challenge_name: a.challenge_name,
+            location: a.location,
+            is_extra: a.is_extra
+        }));
+    }
+    
     let html = '<div class="activity-calendar">';
     html += '<div class="calendar-header">';
     html += '<button class="calendar-nav" onclick="window.personPrevMonth()"><i class="fas fa-chevron-left"></i></button>';
@@ -2573,7 +2620,7 @@ function renderPersonCalendar(activitiesByDate) {
     const todayStr = getToday();
     for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-        const acts = activitiesByDate[dateStr] || [];
+        const acts = dedupedByDate[dateStr] || [];
         const hasActivity = acts.length > 0;
         const hasMultiple = acts.length > 1;
         const isToday = dateStr === todayStr;
@@ -2601,9 +2648,8 @@ function renderPersonCalendar(activitiesByDate) {
     
     html += '</div></div>';
     container.innerHTML = html;
-    container.dataset.activities = JSON.stringify(activitiesByDate);
+    container.dataset.activities = JSON.stringify(dedupedByDate);
 }
-
 // Navegação
 window.personPrevMonth = function() { console.log('Mês anterior'); };
 window.personNextMonth = function() { console.log('Próximo mês'); };
@@ -2626,21 +2672,32 @@ window.showPersonDayActivities = function(dateStr) {
     
     const [y, m, d] = dateStr.split('-');
     title.textContent = '📅 ' + d + '/' + m + '/' + y;
+    title.dataset.date = dateStr;
     
     body.innerHTML = acts.map(a => `
         <div class="day-detail-item">
             <img src="${a.photo_url}" class="day-detail-photo" onclick="window.open('${a.photo_url}')" alt="Foto" onerror="this.style.display='none'">
             <div class="day-detail-info">
                 <div class="day-detail-name">🎯 ${escapeHtml(a.challenge_name || 'Desafio')}</div>
-                ${a.comment ? '<p class="day-detail-comment">💬 ' + escapeHtml(a.comment) + '</p>' : ''}
+                <div class="day-detail-meta">
+                    <span>👥 ${escapeHtml(a.group_name || 'Grupo')}</span>
+                </div>
+                ${a.comment ? `<p class="day-detail-comment">💬 ${escapeHtml(a.comment)}</p>` : ''}
                 ${a.location ? '<span class="text-xs text-muted">📍 Localização registrada</span>' : ''}
+                <div style="margin-top:8px;display:flex;gap:8px;">
+                    <button class="btn btn-outline btn-sm" onclick="window.editActivityComment('${a.id}')">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="window.deleteActivity('${a.id}')">
+                        <i class="fas fa-trash"></i> Apagar
+                    </button>
+                </div>
             </div>
         </div>
     `).join('');
     
     modal.classList.add('open');
 };
-
 // ============================================
 // ATIVIDADES RECENTES - TIMELINE MODERNA
 // ============================================
@@ -3504,3 +3561,96 @@ async function notifyGroupActivity(activityId, userId, groupId) {
 }
 
 
+// ============================================
+// EDITAR COMENTÁRIO DA ATIVIDADE
+// ============================================
+async function editActivityComment(activityId) {
+    const currentComment = document.getElementById('comment-' + activityId)?.dataset?.comment || '';
+    const newComment = prompt('Editar comentário:', currentComment);
+    
+    if (newComment === null) return; // Cancelou
+    
+    const { error } = await db.from('daily_activities')
+        .update({ comment: newComment.trim() || null })
+        .eq('id', activityId);
+    
+    if (error) {
+        showToast('Erro ao editar: ' + error.message, 'error');
+    } else {
+        showToast('Comentário atualizado!', 'success');
+        // Atualiza o modal
+        const dateStr = document.getElementById('dayDetailTitle')?.dataset?.date;
+        if (dateStr) showDayActivities(dateStr);
+    }
+}
+
+// ============================================
+// APAGAR ATIVIDADE
+// ============================================
+async function deleteActivity(activityId) {
+        console.log('🗑️ deleteActivity chamado com ID:', activityId);
+    
+    if (!activityId || activityId === 'undefined') {
+        showToast('ID da atividade inválido', 'error');
+        return;
+    }
+    if (!confirm('Tem certeza que deseja apagar esta atividade?\n\nO ponto será removido e a foto/vídeo será deletado(a).')) return;
+    
+    try {
+        // 1. Busca dados da atividade
+        const { data: activity } = await db.from('daily_activities')
+            .select('*, challenges:challenge_id(group_id)')
+            .eq('id', activityId)
+            .single();
+        
+        if (!activity) {
+            showToast('Atividade não encontrada', 'error');
+            return;
+        }
+        
+        // 2. Remove a foto/vídeo do Storage
+        if (activity.photo_url) {
+            const url = activity.photo_url;
+            const pathMatch = url.match(/\/activity-photos\/(.+)/);
+            if (pathMatch) {
+                const filePath = pathMatch[1];
+                await db.storage.from('activity-photos').remove([filePath]);
+            }
+        }
+        
+        // 3. Remove curtidas e comentários
+        await db.from('activity_likes').delete().eq('activity_id', activityId);
+        await db.from('activity_comments').delete().eq('activity_id', activityId);
+        
+        // 4. Subtrai ponto (se era válida e não extra)
+        if (activity.status === 'valid' && !activity.is_extra) {
+            await db.from('challenge_participants')
+                .update({ points: db.raw('GREATEST(points - 1, 0)') })
+                .eq('challenge_id', activity.challenge_id)
+                .eq('user_id', activity.user_id);
+        }
+        
+        // 5. Remove a atividade
+        console.log('🗑️ Tentando deletar atividade:', activityId);
+        
+        const { error: deleteError } = await db.from('daily_activities')
+            .delete()
+            .eq('id', activityId);
+        
+        if (deleteError) {
+            console.error('❌ Erro ao deletar:', deleteError);
+            showToast('Erro ao apagar: ' + deleteError.message, 'error');
+        } else {
+            console.log('✅ Atividade deletada com sucesso');
+            showToast('Atividade apagada!', 'success');
+            document.getElementById('dayDetailModal')?.classList.remove('open');
+            await loadProfileCalendar();
+        }
+    } catch (e) {
+        console.error('Erro ao apagar:', e);
+        showToast('Erro ao apagar atividade', 'error');
+    }
+}
+
+window.editActivityComment = editActivityComment;
+window.deleteActivity = deleteActivity;
