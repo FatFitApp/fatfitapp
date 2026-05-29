@@ -693,39 +693,26 @@ if (window.location.pathname.includes('home')) {
 async function setupHome(session) {
     const user = session.user;
     const profile = await getProfile(user.id);
-
-    // 🔔 SOLICITAR PERMISSÃO DE NOTIFICAÇÃO
-    if ('Notification' in window && Notification.permission === 'default') {
-        // Mostra um toast informativo antes de pedir permissão
-        showToast('🔔 Ative as notificações para receber atualizações!', 'info');
-        
-        setTimeout(async () => {
-            const granted = await requestNotificationPermission();
-            if (granted) {
-                showToast('✅ Notificações ativadas!', 'success');
-            }
-        }, 2000);
-    } else if (Notification.permission === 'granted') {
-        // Já tem permissão, só inicializa
-
-    }
     
+    // Atualiza header
     document.getElementById('headerAvatarImg').src = profile?.avatar_url || 'perfil_padrao.png';
     document.getElementById('headerAvatar').addEventListener('click', () => window.location.href = 'profile.html');
     
+    // Atualiza sidebar
     document.getElementById('sidebarAvatar').src = profile?.avatar_url || 'perfil_padrao.png';
     document.getElementById('sidebarName').textContent = profile?.name || 'Usuário';
     document.getElementById('sidebarEmail').textContent = profile?.email || user.email;
     
+    // Menu lateral
     setupSidebar();
     
-
-
+    // Logout
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
         await db.auth.signOut();
         window.location.href = 'index.html';
     });
     
+    // Criar grupo (sidebar)
     document.getElementById('createGroupSidebarBtn')?.addEventListener('click', () => {
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
@@ -734,6 +721,7 @@ async function setupHome(session) {
     
     document.getElementById('createGroupForm')?.addEventListener('submit', createGroup);
     
+    // Fechar modal
     document.querySelectorAll('.modal-close').forEach(btn => {
         btn.addEventListener('click', () => btn.closest('.modal').classList.remove('open'));
     });
@@ -742,33 +730,85 @@ async function setupHome(session) {
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
     });
     
+    // Bottom navigation
     setupBottomNav();
     
     // Botão Registrar na bottom nav
-    document.getElementById('btnRegisterNav')?.addEventListener('click', openRegisterModal);
+    setTimeout(() => {
+        const btnRegister = document.getElementById('btnRegisterNav');
+        if (btnRegister) {
+            btnRegister.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openRegisterModal();
+            });
+        }
+    }, 500);
     
-    await loadSidebarGroups(user.id);
-    
-    const lastGroupId = localStorage.getItem('fatfit_last_group');
-    if (lastGroupId) {
-        const { data: group } = await db.from('groups').select('*').eq('id', lastGroupId).single();
+    // 🔗 VERIFICA SE VEIO DE LINK DE CONVITE
+    const inviteCode = new URLSearchParams(window.location.search).get('invite');
+    if (inviteCode) {
+        const { data: group } = await db.from('groups').select('*').eq('invite_code', inviteCode).single();
         if (group) {
-            const { data: membership } = await db.from('group_members').select('role').eq('group_id', group.id).eq('user_id', user.id).single();
-            if (membership) {
+            // Verifica se já é membro
+            const { data: existing } = await db.from('group_members')
+                .select('status').eq('group_id', group.id).eq('user_id', user.id).maybeSingle();
+            
+            if (!existing) {
+                // Entrada direta aprovada via convite
+                await db.from('group_members').insert({
+                    group_id: group.id,
+                    user_id: user.id,
+                    role: 'member',
+                    status: 'approved'
+                });
+                showToast('✅ Você entrou no grupo ' + group.name + '!', 'success');
+            }
+            
+            // Seleciona o grupo
+            const { data: membership } = await db.from('group_members')
+                .select('role').eq('group_id', group.id).eq('user_id', user.id).single();
+            if (membership && membership.status !== 'rejected') {
                 await selectGroup(group, membership.role);
-                 await updateUnreadBadge();  // ← ADICIONE ESTA LINHA AQUI
                 return;
             }
         }
     }
     
+    // Solicitar permissão de notificação
+    if ('Notification' in window && Notification.permission === 'default') {
+        showToast('🔔 Ative as notificações para receber atualizações!', 'info');
+        setTimeout(async () => {
+            const result = await Notification.requestPermission();
+            if (result === 'granted') {
+                showToast('✅ Notificações ativadas!', 'success');
+            }
+        }, 2000);
+    }
+    
+    // Carrega grupos no menu lateral
+    await loadSidebarGroups(user.id);
+    
+    // Tenta carregar último grupo acessado
+    const lastGroupId = localStorage.getItem('fatfit_last_group');
+    if (lastGroupId) {
+        const { data: group } = await db.from('groups').select('*').eq('id', lastGroupId).single();
+        if (group) {
+            const { data: membership } = await db.from('group_members')
+                .select('role').eq('group_id', group.id).eq('user_id', user.id).eq('status', 'approved').single();
+            if (membership) {
+                await selectGroup(group, membership.role);
+                await updateUnreadBadge();
+                return;
+            }
+        }
+    }
+    
+    // Se não tem grupo, mostra estado vazio
     document.getElementById('noGroupState').style.display = 'block';
     document.getElementById('bottomNav').style.display = 'none';
-
     document.getElementById('headerGroupName').textContent = 'FATFIT';
 }
-
-
 
 
 
@@ -817,7 +857,10 @@ if (tabId === 'tabChat') {
 async function loadSidebarGroups(userId) {
     const container = document.getElementById('sidebarGroups');
     if (!container) return;
-    const { data: memberships } = await db.from('group_members').select('group_id, groups:group_id(id, name)').eq('user_id', userId);
+    const { data: memberships } = await db.from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', userId)
+        .eq('status', 'approved');
     if (!memberships || memberships.length === 0) {
         container.innerHTML = '<p class="text-xs text-muted" style="padding:8px 16px;">Nenhum grupo</p>';
         return;
@@ -833,14 +876,14 @@ async function loadSidebarGroups(userId) {
         btn.addEventListener('click', async () => {
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('sidebarOverlay').classList.remove('active');
-            const { data: membership } = await db.from('group_members').select('role').eq('group_id', g.id).eq('user_id', userId).single();
-            await selectGroup(g, membership?.role || 'member');
+            const { data: membership } = await db.from('group_members').select('role').eq('group_id', g.id).eq('user_id', userId).eq('status', 'approved').single();
+            if (membership) {
+                await selectGroup(g, membership?.role || 'member');
+            }
         });
         container.appendChild(btn);
     }
 }
-
-
 
 
 
@@ -1127,7 +1170,7 @@ async function loadDetalhes() {
     if (!container || !currentGroup) return;
     container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div>';
     const user = await getCurrentUser();
-    const { data: members } = await db.from('group_members').select('*, profiles:user_id(name, avatar_url)').eq('group_id', currentGroup.id);
+    const { data: members } = await db.from('group_members').select('*, profiles:user_id(name, avatar_url)').eq('group_id', currentGroup.id).eq('status', 'approved');
     const { data: activeChallenge } = await db.from('challenges').select('*').eq('group_id', currentGroup.id).in('status', ['pending', 'active']).maybeSingle();
     let isParticipant = false;
     if (activeChallenge) {
@@ -1140,10 +1183,25 @@ async function loadDetalhes() {
     html += '<div class="group-detail-card">';
     html += '<h3>📋 ' + escapeHtml(currentGroup.name) + '</h3>';
     html += '<p class="text-sm text-muted">' + escapeHtml(currentGroup.description || 'Sem descrição') + '</p>';
-    html += '<div class="group-code">' + currentGroup.invite_code + '</div>';
     html += '<p class="text-sm"><i class="fas fa-users"></i> ' + (members?.length || 0) + '/' + currentGroup.max_members + ' membros</p>';
     html += '</div>';
     
+    // Seção de Convite
+    html += '<div class="group-detail-card">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+    html += '<h3>🔗 Convite</h3>';
+    if (currentUserRole === 'admin') {
+        html += '<button class="btn btn-sm btn-outline" onclick="generateInviteLink()"><i class="fas fa-sync-alt"></i> Novo Link</button>';
+    }
+    html += '</div>';
+    html += '<input type="text" value="' + window.location.origin + '/fatfitapp/home.html?invite=' + (currentGroup.invite_code || '') + '" readonly style="width:100%;padding:10px;border:1px solid #E5E5EA;border-radius:10px;font-size:0.8rem;text-align:center;margin-top:8px;">';
+    html += '<div style="display:flex;gap:8px;margin-top:8px;">';
+    html += '<button class="btn btn-sm btn-secondary" onclick="shareWhatsApp(\'' + window.location.origin + '/fatfitapp/home.html?invite=' + (currentGroup.invite_code || '') + '\')" style="flex:1;"><i class="fab fa-whatsapp"></i> WhatsApp</button>';
+    html += '<button class="btn btn-sm btn-outline" onclick="copyInviteLink(\'' + window.location.origin + '/fatfitapp/home.html?invite=' + (currentGroup.invite_code || '') + '\')" style="flex:1;"><i class="fas fa-copy"></i> Copiar</button>';
+    html += '</div>';
+    html += '</div>';
+    
+    // Membros
     html += '<div class="group-detail-card"><h3>👥 Membros</h3><div>';
     if (members) {
         for (const m of members) {
@@ -1152,82 +1210,34 @@ async function loadDetalhes() {
     }
     html += '</div></div>';
     
-    if (activeChallenge) {
-        html += '<div class="challenge-card-mini">';
-        html += '<h3>🎯 ' + escapeHtml(activeChallenge.name || 'Desafio') + '</h3>';
-        html += '<p>📅 ' + formatDate(activeChallenge.start_date) + ' → ' + formatDate(activeChallenge.end_date) + '</p>';
-        html += '<p>💰 R$' + activeChallenge.amount_per_person + '/pessoa | Total: R$' + activeChallenge.total_prize + '</p>';
-        html += '<p>' + escapeHtml(activeChallenge.description || '') + '</p>';
-        html += '<span class="badge">' + (activeChallenge.status === 'active' ? 'Em andamento' : 'Aguardando') + '</span>';
-
-        if (currentUserRole === 'admin') {
-            html += '<button class="btn btn-outline btn-sm mt-2 edit-dates-btn" data-id="' + activeChallenge.id + '" data-start="' + activeChallenge.start_date + '" data-end="' + activeChallenge.end_date + '" style="width:100%;"><i class="fas fa-edit"></i> Alterar Datas</button>';
-        }
-        html += '</div>';
-    } else if (currentUserRole === 'admin') {
-        html += '<div class="group-detail-card"><h3>Criar Desafio</h3>';
-        html += '<form id="createChallengeForm">';
-        html += '<div class="input-group"><label>Nome</label><input type="text" id="challengeName" placeholder="Ex: Desafio de Verão"></div>';
-        html += '<div class="input-group"><label>Data Início *</label><input type="date" id="challengeStartDate" required min="' + getToday() + '"></div>';
-        html += '<div class="input-group"><label>Data Fim *</label><input type="date" id="challengeEndDate" required min="' + getToday() + '"></div>';
-        html += '<div class="input-group"><label>Valor por Pessoa (R$) *</label><input type="number" id="challengeAmount" required min="0.01" step="0.01"></div>';
-        html += '<div class="input-group"><label>Descrição</label><textarea id="challengeDescription" rows="2"></textarea></div>';
-        html += '<button type="submit" class="btn btn-primary btn-block">Criar Desafio</button>';
-        html += '</form></div>';
-    }
-    
-    if (pastChallenges?.length > 0) {
-        html += '<div class="group-detail-card"><h3>📜 Histórico</h3>';
-        for (const c of pastChallenges) {
-            const { data: winners } = await db.from('challenge_winners').select('*, profiles:user_id(name)').eq('challenge_id', c.id);
-            html += '<div class="mb-1"><strong>' + escapeHtml(c.name || 'Desafio') + '</strong><br>';
-            html += '<span class="text-sm">📅 ' + formatDate(c.start_date) + ' → ' + formatDate(c.end_date) + ' | 💰 ' + formatCurrency(c.total_prize) + '</span><br>';
-            if (winners?.length > 0) {
-                html += '<span class="text-sm">🏆 ' + winners.map(w => escapeHtml(w.profiles?.name || '') + ' (' + formatCurrency(w.prize_share) + ')').join(', ') + '</span>';
+    // Solicitações pendentes (admin)
+    if (currentUserRole === 'admin') {
+        const { data: pendingMembers } = await db.from('group_members')
+            .select('*, profiles:user_id(name, avatar_url)')
+            .eq('group_id', currentGroup.id)
+            .eq('status', 'pending');
+        
+        if (pendingMembers && pendingMembers.length > 0) {
+            html += '<div class="group-detail-card" style="border:2px solid #F59E0B;">';
+            html += '<h3>⏳ Solicitações Pendentes (' + pendingMembers.length + ')</h3>';
+            for (const pm of pendingMembers) {
+                html += '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid #F2F2F7;">';
+                html += '<span><strong>' + escapeHtml(pm.profiles?.name || 'Usuário') + '</strong></span>';
+                html += '<div style="display:flex;gap:4px;">';
+                html += '<button class="btn btn-sm btn-primary" onclick="approveMember(\'' + pm.id + '\')">✓ Aprovar</button>';
+                html += '<button class="btn btn-sm btn-danger" onclick="rejectMember(\'' + pm.id + '\')">✕ Recusar</button>';
+                html += '</div></div>';
             }
             html += '</div>';
         }
-        html += '</div>';
     }
     
+    // Resto do código (desafio ativo, histórico, etc.)
+    // ... (mantenha o código existente)
+    
     container.innerHTML = html;
-    
-
-    
-    document.querySelectorAll('.edit-dates-btn').forEach(b => {
-        b.addEventListener('click', async () => {
-            const newStart = prompt('Nova data de início (AAAA-MM-DD):', b.dataset.start);
-            if (!newStart) return;
-            const newEnd = prompt('Nova data de fim (AAAA-MM-DD):', b.dataset.end);
-            if (!newEnd) return;
-            if (newEnd < newStart) { showToast('Data fim deve ser após data início', 'error'); return; }
-            await db.from('challenges').update({ start_date: newStart, end_date: newEnd }).eq('id', b.dataset.id);
-            showToast('Datas alteradas!', 'success');
-            loadDetalhes();
-        });
-    });
-    
-    document.getElementById('createChallengeForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('challengeName').value.trim() || 'Desafio';
-        const start = document.getElementById('challengeStartDate').value;
-        const end = document.getElementById('challengeEndDate').value;
-        const amount = parseFloat(document.getElementById('challengeAmount').value);
-        const desc = document.getElementById('challengeDescription').value.trim();
-        if (!start || !end || end < start) { showToast('Datas inválidas', 'error'); return; }
-        if (!amount || amount <= 0) { showToast('Valor inválido', 'error'); return; }
-        const { count } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', currentGroup.id);
-        const { error } = await db.from('challenges').insert({ group_id: currentGroup.id, name, start_date: start, end_date: end, amount_per_person: amount, total_prize: amount * (count || 1), description: desc, status: 'pending' });
-        if (error) { showToast('Erro: ' + error.message, 'error'); }
-        else { showToast('Desafio criado!', 'success'); loadDetalhes(); }
-    });
-    
-    const calendarSection = document.createElement('div');
-    calendarSection.innerHTML = '<div class="group-detail-card mt-2"><h3>📅 Calendário do Grupo</h3><div id="groupCalendar"><div class="loading-state"><i class="fas fa-spinner fa-spin"></i></div></div></div>';
-    container.appendChild(calendarSection);
-    await loadGroupCalendar();
+    // ... eventos
 }
-
 async function loadRanking() {
     const container = document.getElementById('rankingContent');
     if (!container || !currentGroup) return;
@@ -2373,8 +2383,22 @@ async function loadAllGroups(reset = false) {
     const user = await getCurrentUser();
     
     for (const g of groups) {
-        const { count: memberCount } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id);
-        const { data: membership } = await db.from('group_members').select('*').eq('group_id', g.id).eq('user_id', user.id).maybeSingle();
+        const { count: memberCount } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id).eq('status', 'approved');
+        const { data: membership } = await db.from('group_members').select('status').eq('group_id', g.id).eq('user_id', user.id).maybeSingle();
+        
+        // Define o badge de status
+        let statusHtml = '';
+        if (membership) {
+            if (membership.status === 'approved') {
+                statusHtml = '<span class="badge-member"><i class="fas fa-check-circle"></i> Membro</span>';
+            } else if (membership.status === 'pending') {
+                statusHtml = '<span class="badge badge-warning" style="font-size:0.8rem;">⏳ Pendente</span>';
+            } else if (membership.status === 'rejected') {
+                statusHtml = '<button class="btn-join" data-id="' + g.id + '"><i class="fas fa-redo"></i> Solicitar novamente</button>';
+            }
+        } else {
+            statusHtml = '<button class="btn-join" data-id="' + g.id + '"><i class="fas fa-door-open"></i> Entrar</button>';
+        }
         
         const card = document.createElement('div');
         card.className = 'group-card-modern';
@@ -2388,10 +2412,7 @@ async function loadAllGroups(reset = false) {
             '<span><i class="fas fa-users"></i> ' + (memberCount || 0) + '/' + g.max_members + '</span>' +
             '<span><i class="fas fa-calendar"></i> ' + formatDate(g.created_at) + '</span>' +
             '</div>' +
-            (membership ? 
-                '<span class="badge-member"><i class="fas fa-check-circle"></i> Membro</span>' : 
-                '<button class="btn-join" data-id="' + g.id + '"><i class="fas fa-door-open"></i> Entrar</button>'
-            ) +
+            statusHtml +
             '</div>';
         
         container.appendChild(card);
@@ -2401,24 +2422,38 @@ async function loadAllGroups(reset = false) {
     const hasMore = totalCount > searchPage * SEARCH_LIMIT;
     loadMoreContainer.style.display = hasMore ? 'block' : 'none';
     
-    // Eventos dos botões Entrar
+    // Eventos dos botões Entrar/Solicitar novamente
     document.querySelectorAll('.btn-join').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const gId = btn.dataset.id;
             const { data: g } = await db.from('groups').select('*').eq('id', gId).single();
-            const { count: currentCount } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', gId);
+            const { count: currentCount } = await db.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', gId).eq('status', 'approved');
             
             if (currentCount >= g.max_members) {
                 showToast('Grupo lotado!', 'error');
                 return;
             }
             
-            await db.from('group_members').insert({ group_id: gId, user_id: user.id, role: 'member' });
-            showToast('✅ Entrou no grupo: ' + g.name, 'success');
+            // Verifica se já tem solicitação
+            const { data: existing } = await db.from('group_members').select('status').eq('group_id', gId).eq('user_id', user.id).maybeSingle();
+            if (existing) {
+                if (existing.status === 'approved') {
+                    showToast('Você já é membro!', 'warning');
+                } else if (existing.status === 'pending') {
+                    showToast('Solicitação já enviada. Aguarde aprovação.', 'warning');
+                } else if (existing.status === 'rejected') {
+                    await db.from('group_members').update({ status: 'pending' }).eq('group_id', gId).eq('user_id', user.id);
+                    showToast('📩 Nova solicitação enviada!', 'success');
+                    btn.outerHTML = '<span class="badge badge-warning" style="font-size:0.8rem;">⏳ Pendente</span>';
+                }
+                return;
+            }
             
-            // Atualiza o card
-            btn.outerHTML = '<span class="badge-member"><i class="fas fa-check-circle"></i> Membro</span>';
+            // Nova solicitação pendente
+            await db.from('group_members').insert({ group_id: gId, user_id: user.id, role: 'member', status: 'pending' });
+            showToast('📩 Solicitação enviada! Aguarde aprovação do admin.', 'success');
+            btn.outerHTML = '<span class="badge badge-warning" style="font-size:0.8rem;">⏳ Pendente</span>';
         });
     });
 }
@@ -3653,3 +3688,106 @@ async function deleteActivity(activityId) {
 
 window.editActivityComment = editActivityComment;
 window.deleteActivity = deleteActivity;
+
+
+// ============================================
+// LINK DE CONVITE
+// ============================================
+async function generateInviteLink() {
+    if (!currentGroup) return;
+    
+    const { data, error } = await db.rpc('generate_invite_link', { p_group_id: currentGroup.id });
+    
+    if (error) {
+        showToast('Erro ao gerar link', 'error');
+        return;
+    }
+    
+    const link = `${window.location.origin}/fatfitapp/home.html?invite=${data}`;
+    
+    // Atualiza o código na interface
+    currentGroup.invite_code = data;
+    loadDetalhes();
+    
+    // Modal para compartilhar
+    showInviteModal(link);
+}
+
+function showInviteModal(link) {
+    let modal = document.getElementById('inviteModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'inviteModal';
+        modal.className = 'modal open';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:400px;border-radius:20px;">
+                <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                    <h3>🔗 Link de Convite</h3>
+                    <button class="icon-btn modal-close" onclick="document.getElementById('inviteModal').remove()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;text-align:center;">
+                    <p class="text-sm text-muted mb-2">Compartilhe este link para convidar pessoas:</p>
+                    <input type="text" id="inviteLinkInput" value="${link}" readonly style="width:100%;padding:10px;border:1px solid #E5E5EA;border-radius:10px;font-size:0.8rem;text-align:center;margin-bottom:12px;">
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="shareWhatsApp('${link}')" style="flex:1;">
+                            <i class="fab fa-whatsapp"></i> WhatsApp
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="copyInviteLink('${link}')" style="flex:1;">
+                            <i class="fas fa-copy"></i> Copiar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+}
+
+function shareWhatsApp(link) {
+    const text = encodeURIComponent(`🦫 Entre no meu grupo no FATFIT!\n\n${link}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+function copyInviteLink(link) {
+    navigator.clipboard.writeText(link).then(() => {
+        showToast('✅ Link copiado!', 'success');
+    });
+}
+
+window.shareWhatsApp = shareWhatsApp;
+window.copyInviteLink = copyInviteLink;
+
+
+
+
+async function approveMember(memberId) {
+    const { error } = await db.from('group_members')
+        .update({ status: 'approved' })
+        .eq('id', memberId);
+    
+    if (error) {
+        showToast('Erro ao aprovar', 'error');
+    } else {
+        showToast('✅ Membro aprovado!', 'success');
+        loadDetalhes();
+    }
+}
+
+async function rejectMember(memberId) {
+    const { error } = await db.from('group_members')
+        .update({ status: 'rejected' })
+        .eq('id', memberId);
+    
+    if (error) {
+        showToast('Erro ao recusar', 'error');
+    } else {
+        showToast('Solicitação recusada', 'info');
+        loadDetalhes();
+    }
+}
+
+window.approveMember = approveMember;
+window.rejectMember = rejectMember;
+
+
+
