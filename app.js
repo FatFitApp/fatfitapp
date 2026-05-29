@@ -889,26 +889,46 @@ async function loadSidebarGroups(userId) {
 
 
 
-
 async function selectGroup(group, role) {
+    // Atualiza variáveis globais primeiro
     currentGroup = group;
     currentUserRole = role;
+    
     localStorage.setItem('fatfit_last_group', group.id);
     document.getElementById('headerGroupName').textContent = group.name;
     document.getElementById('noGroupState').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'flex';
-    toggleFAB();
+    
+    // Força limpeza imediata da timeline
+    const feed = document.getElementById('timelineFeed');
+    if (feed) {
+        feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
+    }
+    
+    // Limpa detalhes e ranking também
+    const detalhesContent = document.getElementById('detalhesContent');
+    if (detalhesContent) detalhesContent.innerHTML = '';
+    const rankingContent = document.getElementById('rankingContent');
+    if (rankingContent) rankingContent.innerHTML = '';
+    
+    // Ativa timeline por padrão
     document.querySelectorAll('.bottom-nav-item').forEach(i => i.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelector('[data-tab="tabTimeline"]')?.classList.add('active');
-    document.getElementById('tabTimeline')?.classList.add('active');
+    const timelineTab = document.querySelector('[data-tab="tabTimeline"]');
+    const timelineContent = document.getElementById('tabTimeline');
+    if (timelineTab) timelineTab.classList.add('active');
+    if (timelineContent) timelineContent.classList.add('active');
+    
+    // Atualiza sidebar
     const user = await getCurrentUser();
     await loadSidebarGroups(user.id);
-    await loadTimeline();
-        // Atualiza badge de mensagens não lidas
-    await updateUnreadBadge();
+    
+    // Pequeno delay para garantir que tudo foi atualizado
+    setTimeout(async () => {
+        await loadTimeline();
+        await updateUnreadBadge();
+    }, 100);
 }
-
 async function loadTimeline() {
     const feed = document.getElementById('timelineFeed');
     if (!feed || !currentGroup) return;
