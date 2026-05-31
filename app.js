@@ -263,8 +263,6 @@ async function setupProfile(session) {
         p_year: new Date().getFullYear()
     });
     
-    console.log('📊 Atividades carregadas:', activities?.length, 'Erro:', actError);
-    
     // Agrupar atividades por data
     const activitiesByDate = {};
     if (activities) {
@@ -274,7 +272,7 @@ async function setupProfile(session) {
                 activitiesByDate[date] = [];
             }
             activitiesByDate[date].push({
-                id: act.activity_id || act.id,  // ID real da atividade
+                id: act.activity_id || act.id,
                 photo_url: act.photo_url,
                 comment: act.comment,
                 user_name: act.user_name,
@@ -285,9 +283,12 @@ async function setupProfile(session) {
         });
     }
     
-    // Criar estrutura HTML moderna com calendário
+    // Criar estrutura HTML moderna com gamificação e calendário
     const container = document.querySelector('.profile-container');
     if (container) {
+        // Renderiza o card de gamificação
+        const gamificationCard = await renderGamificationCard(user.id);
+        
         container.innerHTML = `
             <!-- Header com capa -->
             <div class="profile-header">
@@ -308,24 +309,8 @@ async function setupProfile(session) {
                 <p class="profile-email" id="profileEmail">${escapeHtml(profile?.email || user.email)}</p>
             </div>
             
-            <!-- Cards de estatísticas -->
-            <div class="stats-grid">
-                <div class="stat-card-modern">
-                    <div class="stat-icon challenges"><i class="fas fa-trophy"></i></div>
-                    <div class="stat-value" id="totalChallenges">0</div>
-                    <div class="stat-label">Desafios</div>
-                </div>
-                <div class="stat-card-modern">
-                    <div class="stat-icon wins"><i class="fas fa-medal"></i></div>
-                    <div class="stat-value" id="totalWins">0</div>
-                    <div class="stat-label">Vitórias</div>
-                </div>
-                <div class="stat-card-modern">
-                    <div class="stat-icon earnings"><i class="fas fa-coins"></i></div>
-                    <div class="stat-value" id="totalEarnings">R$ 0</div>
-                    <div class="stat-label">Ganhos</div>
-                </div>
-            </div>
+            <!-- GAMIFICAÇÃO CARD -->
+            ${gamificationCard}
             
             <!-- Calendário de Atividades -->
             <div class="profile-card">
@@ -342,14 +327,19 @@ async function setupProfile(session) {
                 <div class="calendar-legend">
                     <div class="calendar-legend-item">
                         <div class="calendar-legend-dot" style="background: #667eea;"></div>
-                        <span>1 atividade no dia</span>
+                        <span>1 atividade</span>
                     </div>
                     <div class="calendar-legend-item">
                         <div class="calendar-legend-dot" style="background: #10b981;"></div>
-                        <span>Múltiplas atividades</span>
+                        <span>Múltiplas</span>
                     </div>
                 </div>
             </div>
+            
+            <!-- Botão Compartilhar -->
+            <button class="btn-share-progress" onclick="shareProgress()">
+                <i class="fas fa-share-alt"></i> Compartilhar Progresso
+            </button>
             
             <!-- Editar Perfil -->
             <div class="profile-card">
@@ -413,10 +403,10 @@ async function setupProfile(session) {
         `;
     }
     
-    // Renderiza o calendário com miniaturas
+    // Renderiza o calendário
     renderProfileCalendar(activitiesByDate);
     
-    // Resto das estatísticas e eventos...
+    // Carrega estatísticas
     await loadProfileStats(user);
     
     // Evento de upload de avatar
@@ -460,7 +450,6 @@ async function setupProfile(session) {
         document.getElementById('changePasswordForm').reset();
     });
 }
-
 // ============================================
 // FUNÇÃO AUXILIAR - RENDERIZAR CALENDÁRIO COM MINIATURAS
 // ============================================
@@ -750,12 +739,10 @@ async function setupHome(session) {
     if (inviteCode) {
         const { data: group } = await db.from('groups').select('*').eq('invite_code', inviteCode).single();
         if (group) {
-            // Verifica se já é membro
             const { data: existing } = await db.from('group_members')
                 .select('status').eq('group_id', group.id).eq('user_id', user.id).maybeSingle();
             
             if (!existing) {
-                // Entrada direta aprovada via convite
                 await db.from('group_members').insert({
                     group_id: group.id,
                     user_id: user.id,
@@ -765,11 +752,12 @@ async function setupHome(session) {
                 showToast('✅ Você entrou no grupo ' + group.name + '!', 'success');
             }
             
-            // Seleciona o grupo
             const { data: membership } = await db.from('group_members')
                 .select('role').eq('group_id', group.id).eq('user_id', user.id).single();
             if (membership && membership.status !== 'rejected') {
                 await selectGroup(group, membership.role);
+                // Renderiza barra de level
+                setTimeout(() => renderLevelBar(), 300);
                 return;
             }
         }
@@ -789,13 +777,10 @@ async function setupHome(session) {
     // Carrega grupos no menu lateral
     await loadSidebarGroups(user.id);
     
-// Tenta carregar último grupo acessado
+    // Tenta carregar último grupo acessado
     const lastGroupId = localStorage.getItem('fatfit_last_group');
-    console.log('🔍 Último grupo salvo:', lastGroupId);
-    
     if (lastGroupId) {
         const { data: group } = await db.from('groups').select('*').eq('id', lastGroupId).single();
-        console.log('📋 Grupo encontrado:', group?.name);
         
         if (group) {
             const { data: membership } = await db.from('group_members')
@@ -804,26 +789,25 @@ async function setupHome(session) {
                 .eq('user_id', user.id)
                 .maybeSingle();
             
-            console.log('👤 Membership:', membership);
-            
             if (membership && membership.status === 'approved') {
-                console.log('✅ Carregando grupo:', group.name);
                 await selectGroup(group, membership.role);
                 await loadTimeline();
+                await updateUnreadBadge();
+                // Renderiza barra de level
+                setTimeout(() => renderLevelBar(), 300);
                 return;
-            } else {
-                console.log('❌ Não aprovado ou não é membro. Status:', membership?.status);
             }
         }
     }
     
     // Se não tem grupo, mostra estado vazio
-    console.log('📭 Nenhum grupo para carregar');
     document.getElementById('noGroupState').style.display = 'block';
     document.getElementById('bottomNav').style.display = 'none';
     document.getElementById('headerGroupName').textContent = 'FATFIT';
+    
+    // Renderiza barra de level mesmo sem grupo
+    setTimeout(() => renderLevelBar(), 300);
 }
-
 
 
 function setupSidebar() {
@@ -945,10 +929,12 @@ async function loadTimeline() {
     const feed = document.getElementById('timelineFeed');
     if (!feed || !currentGroup) return;
     
-    // Guarda o ID do grupo que estamos carregando
     const loadingGroupId = currentGroup.id;
     
     feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
+    
+    // Renderiza a barra de level
+    renderLevelBar();
     
     const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', loadingGroupId);
     if (!challengeIds || challengeIds.length === 0) {
@@ -956,12 +942,12 @@ async function loadTimeline() {
         return;
     }
     
+    // 🔴 ADICIONE user_level na consulta
     const { data: activities } = await db.from('daily_activities')
-        .select('*, profiles:user_id(name, avatar_url), challenges:challenge_id(name)')
+        .select('*, profiles:user_id(name, avatar_url, user_level), challenges:challenge_id(name)')
         .in('challenge_id', challengeIds.map(c => c.id)).eq('status', 'valid')
         .order('created_at', { ascending: false }).limit(30);
     
-    // Verifica se o grupo ainda é o mesmo (usuário não trocou de grupo durante carregamento)
     if (currentGroup.id !== loadingGroupId) {
         console.log('⚠️ Grupo mudou durante carregamento, ignorando...');
         return;
@@ -978,6 +964,7 @@ async function loadTimeline() {
     for (const a of activities) {
         const isExtra = a.is_extra === true;
         const isVideo = a.photo_url && (a.photo_url.endsWith('.webm') || a.photo_url.includes('video'));
+        const userLevel = a.profiles?.user_level || 0;
         
         const { count: likesCount } = await db.from('activity_likes').select('*', { count: 'exact', head: true }).eq('activity_id', a.id);
         const { data: userLiked } = await db.from('activity_likes').select('id').eq('activity_id', a.id).eq('user_id', user.id).maybeSingle();
@@ -1001,7 +988,12 @@ async function loadTimeline() {
             '<div class="timeline-header">' +
             '<img src="' + (a.profiles?.avatar_url || 'perfil_padrao.png') + '" class="timeline-avatar">' +
             '<div class="timeline-user">' +
-            '<div class="timeline-name">' + escapeHtml(a.profiles?.name || 'Usuário') + (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') + '</div>' +
+            '<div class="timeline-name">' + 
+            escapeHtml(a.profiles?.name || 'Usuário') + 
+            ' <span class="badge badge-info" style="font-size:0.6rem;">Nv.' + userLevel + '</span>' +  // 🔴 NÍVEL AQUI
+            (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') +
+            (a.workout_type ? ' <span class="badge badge-secondary" style="font-size:0.6rem;">' + escapeHtml(a.workout_type) + '</span>' : '') +
+            '</div>' +
             '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + escapeHtml(a.challenges?.name || 'Desafio') + (isVideo ? ' 🎥' : '') + '</div>' +
             '</div>' +
             (isExtra ? '<span class="badge badge-secondary" style="font-size:0.7rem;">+0</span>' : '<span class="badge badge-success" style="font-size:0.7rem;">+1 pt</span>') +
@@ -2248,10 +2240,17 @@ async function submitActivity(e) {
     const originalText = btn.innerHTML;
     btn.disabled = true;
     const comment = document.getElementById('activityComment')?.value?.trim() || null;
+    
+    // Pega o tipo de treino
+    const workoutTypeSelect = document.getElementById('workoutType');
+    let workoutType = workoutTypeSelect?.value || null;
+    if (workoutType === 'Outro') {
+        workoutType = document.getElementById('workoutTypeCustom')?.value?.trim() || 'Outro';
+    }
+    
     const today = getToday();
     let successCount = 0, pointsEarned = 0, extraCount = 0;
     
-    // Determina extensão do arquivo
     const isVideo = activityPhotoFile.type.startsWith('video/');
     const fileExt = isVideo ? 'webm' : 'jpg';
     const mimeType = isVideo ? 'video/webm' : 'image/jpeg';
@@ -2266,7 +2265,17 @@ async function submitActivity(e) {
             const { error: upErr } = await db.storage.from('activity-photos').upload(fileName, activityPhotoFile, { contentType: mimeType, upsert: false });
             if (upErr) continue;
             const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
-            const { error: actErr } = await db.from('daily_activities').insert({ user_id: user.id, challenge_id: cs.challenge.id, activity_date: today, photo_url: urlData.publicUrl, location: activityLocationData, comment, status: 'valid', is_extra: isExtra });
+            const { error: actErr } = await db.from('daily_activities').insert({ 
+                user_id: user.id, 
+                challenge_id: cs.challenge.id, 
+                activity_date: today, 
+                photo_url: urlData.publicUrl, 
+                location: activityLocationData, 
+                comment, 
+                status: 'valid', 
+                is_extra: isExtra,
+                workout_type: workoutType
+            });
             if (actErr) continue;
             successCount++;
             if (!isExtra) pointsEarned++; else extraCount++;
@@ -2280,16 +2289,15 @@ async function submitActivity(e) {
         if (pointsEarned > 0) msg += ' 🎉 +' + pointsEarned + ' pontos';
         if (extraCount > 0) msg += ' (' + extraCount + ' extra)';
         showToast(msg, 'success');
-
-                // 🔔 NOTIFICAÇÕES: Envia para cada grupo
+        
+        // Notificações
         for (const cs of challengesWithStatus) {
             notifyGroupActivity(null, user.id, cs.challenge.group_id);
         }
+        
         stopCamera();
         setTimeout(() => { window.location.href = 'home.html'; }, 2000);
-    } 
-    
-    else {
+    } else {
         showToast('Erro ao registrar', 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -3849,3 +3857,409 @@ window.rejectMember = rejectMember;
 
 
 
+// ============================================
+// GAMIFICAÇÃO - BARRA DE LEVEL NA TIMELINE
+// ============================================
+
+function renderLevelBar() {
+    const mainContent = document.querySelector('.main-content');
+    if (!mainContent) return;
+    
+    // Remove barra antiga se existir
+    const existingBar = document.getElementById('levelBar');
+    if (existingBar) existingBar.remove();
+    
+    // Busca dados do usuário
+    getCurrentUser().then(async (user) => {
+        if (!user) return;
+        
+        const { data: profile } = await db.from('profiles')
+            .select('user_level, user_xp, fatcoins')
+            .eq('id', user.id)
+            .single();
+        
+        if (!profile) return;
+        
+        const level = profile.user_level || 0;
+        const xp = profile.user_xp || 0;
+        const nextXp = level + 2; // Fórmula: precisa de level+2 para subir
+        const progress = Math.min((xp / nextXp) * 100, 100);
+        const circumference = 2 * Math.PI * 16; // Raio = 16
+        const offset = circumference - (progress / 100) * circumference;
+        
+        const barDiv = document.createElement('div');
+        barDiv.id = 'levelBar';
+        barDiv.className = 'level-bar';
+        barDiv.onclick = () => window.location.href = 'profile.html';
+        barDiv.innerHTML = `
+            <div class="level-circle">
+                <svg viewBox="0 0 40 40">
+                    <circle class="level-circle-bg" cx="20" cy="20" r="16"/>
+                    <circle class="level-circle-fill" cx="20" cy="20" r="16"
+                            stroke-dasharray="${circumference}"
+                            stroke-dashoffset="${offset}"/>
+                </svg>
+                <div class="level-number">${level}</div>
+            </div>
+            <div class="level-label">Nível</div>
+            <div class="fatcoins-display">
+                <i class="fas fa-coins"></i> ${profile.fatcoins || 0}
+            </div>
+        `;
+        
+        // Insere antes da timeline
+        const tabTimeline = document.getElementById('tabTimeline');
+        if (tabTimeline) {
+            tabTimeline.parentNode.insertBefore(barDiv, tabTimeline);
+        }
+    });
+}
+
+// ============================================
+// GAMIFICAÇÃO - CARD DO PERFIL
+// ============================================
+
+async function renderGamificationCard(userId) {
+    const { data: profile } = await db.from('profiles')
+        .select('user_level, user_xp, fatcoins')
+        .eq('id', userId)
+        .single();
+    
+    if (!profile) return '';
+    
+    const level = profile.user_level || 0;
+    const xp = profile.user_xp || 0;
+    const nextXp = level + 2;
+    const progress = Math.min((xp / nextXp) * 100, 100);
+    const circumference = 2 * Math.PI * 30;
+    const offset = circumference - (progress / 100) * circumference;
+    
+    // Busca skills
+    const skills = ['Academia', 'Corrida', 'Ciclismo', 'Natação'];
+    const skillIcons = { 'Academia': '🏋️', 'Corrida': '🏃', 'Ciclismo': '🚴', 'Natação': '🏊' };
+    
+    const { data: userSkills } = await db.from('user_skills')
+        .select('*')
+        .eq('user_id', userId);
+    
+    let skillsHtml = '';
+    for (const skill of skills) {
+        const skillData = userSkills?.find(s => s.skill_name === skill);
+        const skillLevel = skillData?.level || 1;
+        const skillXp = skillData?.xp || 0;
+        const skillProgress = Math.min((skillXp % 3) / 3 * 100, 100);
+        
+        skillsHtml += `
+            <div class="skill-item">
+                <span class="skill-icon">${skillIcons[skill]}</span>
+                <span class="skill-name">${skill}</span>
+                <span class="skill-level">Nv.${skillLevel}</span>
+                <div class="skill-bar">
+                    <div class="skill-bar-fill" style="width:${skillProgress}%"></div>
+                </div>
+            </div>
+        `;
+    }
+    
+    return `
+        <div class="gamification-card">
+            <div class="gamification-header">
+                <div class="gamification-level-circle">
+                    <svg viewBox="0 0 72 72">
+                        <circle class="level-circle-bg" cx="36" cy="36" r="30"/>
+                        <circle class="level-circle-fill" cx="36" cy="36" r="30"
+                                stroke-dasharray="${circumference}"
+                                stroke-dashoffset="${offset}"/>
+                    </svg>
+                    <div class="gamification-level-number">${level}</div>
+                </div>
+                <div class="gamification-info">
+                    <div class="gamification-level-title">Nível ${level}</div>
+                    <div class="gamification-xp-text">${xp}/${nextXp} XP para o próximo nível</div>
+                    <div class="gamification-coins">
+                        <i class="fas fa-coins"></i> ${profile.fatcoins || 0} FATCoins
+                    </div>
+                </div>
+            </div>
+            <div class="skills-list">
+                ${skillsHtml}
+            </div>
+        </div>
+    `;
+}
+
+
+// ============================================
+// COMPARTILHAR PROGRESSO (INSTAGRAM STYLE)
+// ============================================
+async function shareProgress() {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    showToast('📤 Gerando imagem...', 'info');
+    
+    try {
+        const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
+        const { data: skills } = await db.from('user_skills').select('*').eq('user_id', user.id);
+        
+        const today = new Date();
+        const { data: activities } = await db.rpc('get_calendar_data', {
+            p_user_id: user.id,
+            p_group_id: null,
+            p_month: today.getMonth() + 1,
+            p_year: today.getFullYear()
+        });
+        
+        const activitiesByDay = {};
+        if (activities) {
+            activities.forEach(act => {
+                const day = parseInt(act.activity_date.split('-')[2]);
+                if (!activitiesByDay[day]) activitiesByDay[day] = [];
+                activitiesByDay[day].push(act);
+            });
+        }
+        
+        // Calcula número de linhas do calendário
+        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).getDay();
+        const totalCells = firstDay + daysInMonth;
+        const totalRows = Math.ceil(totalCells / 7);
+        
+        const calMargin = 25;
+        const availableW = 500 - calMargin * 2;
+        const cellSize = Math.floor(availableW / 7);
+        const calHeight = 50 + totalRows * cellSize + 20;
+        
+        // Altura total do canvas
+        const height = 270 + calHeight;
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const width = 500;
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Fundo gradiente
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, '#833AB4');
+        gradient.addColorStop(0.5, '#C13584');
+        gradient.addColorStop(1, '#F77737');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+        
+        // ========== CABEÇALHO ==========
+        const headerY = 15;
+        const headerW = width - 30;
+        const headerH = 95;
+        
+        const headerGradient = ctx.createLinearGradient(headerY, 0, headerY + headerW, 0);
+        headerGradient.addColorStop(0, '#667eea');
+        headerGradient.addColorStop(1, '#764ba2');
+        ctx.fillStyle = headerGradient;
+        roundRect(ctx, 15, headerY, headerW, headerH, 20);
+        ctx.fill();
+        
+        const avatarSize = 66;
+        const avatarCX = width / 2;
+        const avatarCY = headerY + headerH / 2 + 5;
+        
+        ctx.beginPath();
+        ctx.arc(avatarCX, avatarCY, avatarSize/2 + 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
+        
+        if (profile?.avatar_url) {
+            const avatarImg = new Image();
+            avatarImg.crossOrigin = 'anonymous';
+            await new Promise((resolve) => {
+                avatarImg.onload = resolve;
+                avatarImg.src = profile.avatar_url;
+            });
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(avatarCX, avatarCY, avatarSize/2, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(avatarImg, avatarCX - avatarSize/2, avatarCY - avatarSize/2, avatarSize, avatarSize);
+            ctx.restore();
+        }
+        
+        const nameY = headerY + headerH + 22;
+        ctx.font = 'bold 20px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(profile?.name || 'Usuário', width / 2, nameY);
+        
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText('Venha competir no FATFIT você também!', width / 2, nameY + 22);
+        
+        // ========== CARD: Level + Skills ==========
+        const cardY = nameY + 45;
+        const cardH = 130;
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        roundRect(ctx, 15, cardY, width - 30, cardH, 16);
+        ctx.fill();
+        
+        const levelCY = cardY + 30;
+        ctx.beginPath();
+        ctx.arc(width / 2, levelCY, 22, 0, Math.PI * 2);
+        ctx.fillStyle = '#4F46E5';
+        ctx.fill();
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(profile?.user_level || 0, width / 2, levelCY + 6);
+        
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#1C1C1E';
+        ctx.fillText('Nível ' + (profile?.user_level || 0), width / 2, levelCY + 35);
+        
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#8E8E93';
+        ctx.fillText('🪙 ' + (profile?.fatcoins || 0) + ' FATCoins', width / 2, levelCY + 50);
+        
+        const skillsY = cardY + 78;
+        const skillList = ['Academia', 'Corrida', 'Ciclismo', 'Natação'];
+        const skillIcons = { 'Academia': '🏋️', 'Corrida': '🏃', 'Ciclismo': '🚴', 'Natação': '🏊' };
+        const skillColW = (width - 30) / 4;
+        
+        skillList.forEach((skill, idx) => {
+            const sx = 15 + idx * skillColW;
+            const skillData = skills?.find(s => s.skill_name === skill);
+            const lvl = skillData?.level || 1;
+            const xp = skillData?.xp || 0;
+            const progress = Math.min(((xp % 3) / 3) * 100, 100);
+            
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#1C1C1E';
+            ctx.font = 'bold 10px -apple-system, sans-serif';
+            ctx.fillText(skillIcons[skill], sx + skillColW/2, skillsY + 10);
+            ctx.font = '8px -apple-system, sans-serif';
+            ctx.fillText(skill + ' Nv.' + lvl, sx + skillColW/2, skillsY + 28);
+            
+            const barW = skillColW - 16;
+            ctx.fillStyle = '#E5E5EA';
+            roundRect(ctx, sx + 8, skillsY + 34, barW, 3, 2);
+            ctx.fill();
+            ctx.fillStyle = '#4F46E5';
+            roundRect(ctx, sx + 8, skillsY + 34, barW * progress / 100, 3, 2);
+            ctx.fill();
+        });
+        
+        // ========== CALENDÁRIO ==========
+        const calY = cardY + cardH + 12;
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        roundRect(ctx, 15, calY, width - 30, calHeight, 16);
+        ctx.fill();
+        
+        let calInnerY = calY + 15;
+        
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1C1C1E';
+        const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        ctx.fillText('📅 ' + monthNames[today.getMonth()] + ' ' + today.getFullYear(), width / 2, calInnerY + 8);
+        calInnerY += 18;
+        
+        const calStartX = calMargin + (availableW - cellSize * 7) / 2;
+        
+        const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = '#8E8E93';
+        for (let i = 0; i < 7; i++) {
+            ctx.fillText(weekDays[i], calStartX + i * cellSize + cellSize / 2, calInnerY + 10);
+        }
+        calInnerY += 14;
+        
+        let dayCount = 1;
+        for (let row = 0; row < totalRows; row++) {
+            for (let col = 0; col < 7; col++) {
+                const cx = calStartX + col * cellSize + cellSize / 2;
+                const cy = calInnerY + cellSize / 2;
+                
+                if (row === 0 && col < firstDay) continue;
+                if (dayCount > daysInMonth) break;
+                
+                const hasActivity = activitiesByDay[dayCount];
+                
+                if (hasActivity) {
+                    const mediaUrl = hasActivity[0]?.photo_url;
+                    if (mediaUrl) {
+                        try {
+                            const img = new Image();
+                            img.crossOrigin = 'anonymous';
+                            await new Promise((resolve, reject) => {
+                                img.onload = resolve;
+                                img.onerror = reject;
+                                img.src = mediaUrl;
+                                setTimeout(() => reject('timeout'), 2000);
+                            });
+                            ctx.save();
+                            ctx.beginPath();
+                            const imgSize = cellSize - 4;
+                            roundRect(ctx, cx - imgSize/2, cy - imgSize/2, imgSize, imgSize, 4);
+                            ctx.clip();
+                            ctx.drawImage(img, cx - imgSize/2, cy - imgSize/2, imgSize, imgSize);
+                            ctx.restore();
+                        } catch(e) {
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, (cellSize - 4) / 2, 0, Math.PI * 2);
+                            ctx.fillStyle = '#4F46E5';
+                            ctx.fill();
+                        }
+                    }
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = '#E5E5EA';
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = hasActivity ? '#FFFFFF' : '#1C1C1E';
+                ctx.font = '8px -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(dayCount, cx, cy + cellSize / 2 - 3);
+                
+                dayCount++;
+            }
+            calInnerY += cellSize;
+        }
+        
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        if (navigator.share) {
+            const blob = await (await fetch(dataUrl)).blob();
+            const file = new File([blob], 'fatfit-progresso.png', { type: 'image/png' });
+            await navigator.share({
+                title: 'Veja o meu progresso no FATFIT',
+                text: 'Acompanhe meus treinos e me desafie! Acesse: https://fatfitapp.github.io/fatfitapp',
+                files: [file]
+            });
+        } else {
+            window.open(dataUrl);
+        }
+        
+    } catch (e) {
+        console.error('Erro ao compartilhar:', e);
+        showToast('Erro ao gerar imagem', 'error');
+    }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+window.shareProgress = shareProgress;

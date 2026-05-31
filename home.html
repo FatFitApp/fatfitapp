@@ -2,15 +2,12 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#F2F2F7">
     <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT</title>
-  <link rel="stylesheet" href="style.css?v=1.0.6">
+    <link rel="stylesheet" href="style.css?v=1.0.7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- PWA -->
@@ -215,24 +212,22 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
-    <script src="supabase-config.js?v=1.0.6"></script>
-<script src="app.js?v=1.0.6"></script>
+    <script src="supabase-config.js?v=1.0.7"></script>
+    <script src="app.js?v=1.0.7"></script>
 
-    <!-- Registrar Service Worker -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            // Detecta se está em localhost ou produção
-            const swPath = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
-                ? '/service-worker.js'
-                : '/fatfitapp/service-worker.js';
-            
-            navigator.serviceWorker.register(swPath)
-                .then(reg => console.log('✅ Service Worker registrado em:', swPath))
-                .catch(err => console.log('❌ Service Worker falhou:', err.message));
-        });
-    }
-</script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swPath = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+                    ? '/service-worker.js'
+                    : '/fatfitapp/service-worker.js';
+                
+                navigator.serviceWorker.register(swPath)
+                    .then(reg => console.log('✅ Service Worker registrado em:', swPath))
+                    .catch(err => console.log('❌ Service Worker falhou:', err.message));
+            });
+        }
+    </script>
 
     <script>
         window.addEventListener('load', function() {

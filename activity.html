@@ -89,6 +89,24 @@
                 <p class="text-xs text-muted" id="registerInfo"></p>
             </div>
 
+            <!-- Tipo de Treino -->
+            <div class="body-card">
+                <div class="body-card-subtitle">🏋️ Tipo de Treino</div>
+                <select id="workoutType" class="workout-type-select">
+                    <option value="">Selecione o tipo (opcional)</option>
+                    <option value="Academia">🏋️ Academia</option>
+                    <option value="Corrida">🏃 Corrida</option>
+                    <option value="Ciclismo">🚴 Ciclismo</option>
+                    <option value="Natação">🏊 Natação</option>
+                    <option value="Outro">✏️ Outro</option>
+                </select>
+                <input type="text" id="workoutTypeCustom" class="body-input-group input" 
+                       placeholder="Descreva o treino..." 
+                       style="display:none;margin-top:8px;">
+            </div>
+
+
+
             <!-- Localização -->
             <div class="body-card">
                 <div class="body-card-subtitle">📍 Localização</div>
@@ -127,6 +145,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js?v=1.0.6"></script>
 <script src="app.js?v=1.0.6"></script>
+
+<script>
+    // Mostra/esconde campo de treino customizado
+    document.getElementById('workoutType')?.addEventListener('change', function() {
+        const customInput = document.getElementById('workoutTypeCustom');
+        if (this.value === 'Outro') {
+            customInput.style.display = 'block';
+            customInput.focus();
+        } else {
+            customInput.style.display = 'none';
+        }
+    });
+</script>
 
 </body>
 </html>

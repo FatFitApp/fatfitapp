@@ -2,26 +2,21 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#4F46E5">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-            <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+    <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT - Meu Perfil</title>
-    <link rel="stylesheet" href="style.css?v=1.0.6">
+    <link rel="stylesheet" href="style.css?v=1.0.7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- PWA -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#4F46E5">
-    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="manifest" href="manifest.json">
+    
     <!-- Apple PWA -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body class="app-page">
     <header class="app-header">
@@ -46,25 +41,25 @@
 
     <!-- Modal de Detalhes do Dia -->
     <div class="modal" id="dayDetailModal">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" style="border-radius:20px;">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
                 <h3 id="dayDetailTitle">Detalhes do Dia</h3>
                 <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body" id="dayDetailBody">
-                <!-- Preenchido dinamicamente -->
-            </div>
+            <div class="modal-body" id="dayDetailBody" style="background:#FFFFFF;border-radius:0 0 20px 20px;"></div>
         </div>
     </div>
 
-    <!-- Modal de Edição de Perfil (Fallback) -->
+
+    
+    <!-- Modal de Edição de Perfil -->
     <div class="modal" id="editProfileModal">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" style="border-radius:20px;">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
                 <h3>Editar Perfil</h3>
                 <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;">
                 <form id="editProfileFormModal">
                     <div class="input-group">
                         <label>Nome completo</label>
@@ -82,14 +77,14 @@
         </div>
     </div>
 
-    <!-- Modal de Troca de Senha (Fallback) -->
+    <!-- Modal de Troca de Senha -->
     <div class="modal" id="changePasswordModal">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content" style="border-radius:20px;">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
                 <h3>Alterar Senha</h3>
                 <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;">
                 <form id="changePasswordFormModal">
                     <div class="input-group">
                         <label>Senha atual</label>
@@ -111,19 +106,28 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
-    <script src="supabase-config.js?v=1.0.6"></script>
-<script src="app.js?v=1.0.6"></script>
+    <script src="supabase-config.js?v=1.0.7"></script>
+    <script src="app.js?v=1.0.7"></script>
 
-
-    <!-- Script adicional para compatibilidade -->
     <script>
-        // Script para gerenciar os modais de fallback e integração com o setupProfile
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swPath = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+                    ? '/service-worker.js'
+                    : '/fatfitapp/service-worker.js';
+                
+                navigator.serviceWorker.register(swPath)
+                    .then(reg => console.log('✅ Service Worker registrado em:', swPath))
+                    .catch(err => console.log('❌ Service Worker falhou:', err.message));
+            });
+        }
+    </script>
+
+    <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Botão de editar perfil (canto superior direito)
             const editProfileBtn = document.getElementById('editProfileBtn');
             if (editProfileBtn) {
                 editProfileBtn.addEventListener('click', function() {
-                    // Preencher o modal com os dados atuais
                     const nameEl = document.getElementById('profileName');
                     const pixKeyEl = document.getElementById('editPixKey');
                     
@@ -141,7 +145,6 @@
                 });
             }
             
-            // Formulário de edição de perfil do modal
             const editProfileFormModal = document.getElementById('editProfileFormModal');
             if (editProfileFormModal) {
                 editProfileFormModal.addEventListener('submit', async function(e) {
@@ -164,7 +167,6 @@
                         if (error) {
                             showToast('Erro ao salvar: ' + error.message, 'error');
                         } else {
-                            // Atualizar a interface
                             const profileNameEl = document.getElementById('profileName');
                             if (profileNameEl) profileNameEl.textContent = name;
                             
@@ -173,15 +175,12 @@
                             
                             showToast('Perfil atualizado!', 'success');
                             document.getElementById('editProfileModal').classList.remove('open');
-                            
-                            // Recarregar a página para atualizar tudo
                             setTimeout(() => location.reload(), 1000);
                         }
                     }
                 });
             }
             
-            // Botão de trocar senha (se existir na nova interface ou via fallback)
             const openChangePwBtn = document.getElementById('openChangePasswordBtn');
             if (openChangePwBtn) {
                 openChangePwBtn.addEventListener('click', function() {
@@ -189,7 +188,6 @@
                 });
             }
             
-            // Formulário de troca de senha
             const changePwFormModal = document.getElementById('changePasswordFormModal');
             if (changePwFormModal) {
                 changePwFormModal.addEventListener('submit', async function(e) {
@@ -226,7 +224,6 @@
                 });
             }
             
-            // Fechar modais
             document.querySelectorAll('.modal-close').forEach(btn => {
                 btn.addEventListener('click', function() {
                     this.closest('.modal').classList.remove('open');
@@ -242,28 +239,17 @@
             });
         });
         
-        // Função auxiliar para mostrar toast (caso não exista)
         if (typeof window.showToast !== 'function') {
             window.showToast = function(message, type) {
                 const container = document.getElementById('toastContainer');
                 if (!container) return;
                 const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
-                toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${message}`;
+                toast.className = 'toast toast-' + type;
+                toast.innerHTML = '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle') + '"></i> ' + message;
                 container.appendChild(toast);
                 setTimeout(() => toast.remove(), 3000);
             };
         }
     </script>
-    <!-- Registrar Service Worker -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(reg => console.log('✅ Service Worker registrado'))
-                .catch(err => console.log('❌ Service Worker falhou:', err));
-        });
-    }
-</script>
 </body>
 </html>
