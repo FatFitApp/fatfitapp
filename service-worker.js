@@ -1,23 +1,29 @@
 // FATFIT - Service Worker
 const CACHE_NAME = 'fatfit-v3';
 
+// Detecta o base path (localhost ou GitHub Pages)
+const BASE_PATH = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost'
+    ? '/'
+    : '/fatfitapp/';
+
 // Arquivos para cache offline
 const CACHE_FILES = [
-    '/fatfitapp/',
-    '/fatfitapp/index.html',
-    '/fatfitapp/home.html',
-    '/fatfitapp/profile.html',
-    '/fatfitapp/person.html',
-    '/fatfitapp/body.html',
-    '/fatfitapp/search.html',
-    '/fatfitapp/activity.html',
-    '/fatfitapp/style.css',
-    '/fatfitapp/app.js',
-    '/fatfitapp/supabase-config.js',
-    '/fatfitapp/logo.png',
-    '/fatfitapp/corpo.png',
-    '/fatfitapp/perfil_padrao.png',
-    '/fatfitapp/manifest.json',
+    BASE_PATH,
+    BASE_PATH + 'index.html',
+    BASE_PATH + 'home.html',
+    BASE_PATH + 'profile.html',
+    BASE_PATH + 'person.html',
+    BASE_PATH + 'body.html',
+    BASE_PATH + 'search.html',
+    BASE_PATH + 'activity.html',
+    BASE_PATH + 'style.css',
+    BASE_PATH + 'app.js',
+    BASE_PATH + 'supabase-config.js',
+    BASE_PATH + 'logo.png',
+    BASE_PATH + 'corpo.png',
+    BASE_PATH + 'perfil_padrao.png',
+    BASE_PATH + 'icon-192.png',
+    BASE_PATH + 'manifest.json',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js'
 ];
@@ -46,15 +52,15 @@ self.addEventListener('activate', (event) => {
 
 // Fetch - serve do cache, depois atualiza
 self.addEventListener('fetch', (event) => {
-    // Não faz cache de requisições do Supabase (API)
-    if (event.request.url.includes('supabase.co')) {
+    // Ignora requisições chrome-extension e supabase
+    if (event.request.url.includes('supabase.co') || 
+        event.request.url.startsWith('chrome-extension://')) {
         return;
     }
     
     event.respondWith(
         caches.match(event.request)
             .then(cached => {
-                // Atualiza cache em background
                 const fetchPromise = fetch(event.request)
                     .then(response => {
                         if (response.ok) {

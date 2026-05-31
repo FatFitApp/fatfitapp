@@ -789,22 +789,36 @@ async function setupHome(session) {
     // Carrega grupos no menu lateral
     await loadSidebarGroups(user.id);
     
-    // Tenta carregar último grupo acessado
+// Tenta carregar último grupo acessado
     const lastGroupId = localStorage.getItem('fatfit_last_group');
+    console.log('🔍 Último grupo salvo:', lastGroupId);
+    
     if (lastGroupId) {
         const { data: group } = await db.from('groups').select('*').eq('id', lastGroupId).single();
+        console.log('📋 Grupo encontrado:', group?.name);
+        
         if (group) {
             const { data: membership } = await db.from('group_members')
-                .select('role').eq('group_id', group.id).eq('user_id', user.id).eq('status', 'approved').single();
-            if (membership) {
+                .select('role, status')
+                .eq('group_id', group.id)
+                .eq('user_id', user.id)
+                .maybeSingle();
+            
+            console.log('👤 Membership:', membership);
+            
+            if (membership && membership.status === 'approved') {
+                console.log('✅ Carregando grupo:', group.name);
                 await selectGroup(group, membership.role);
-                await updateUnreadBadge();
+                await loadTimeline();
                 return;
+            } else {
+                console.log('❌ Não aprovado ou não é membro. Status:', membership?.status);
             }
         }
     }
     
     // Se não tem grupo, mostra estado vazio
+    console.log('📭 Nenhum grupo para carregar');
     document.getElementById('noGroupState').style.display = 'block';
     document.getElementById('bottomNav').style.display = 'none';
     document.getElementById('headerGroupName').textContent = 'FATFIT';
@@ -853,7 +867,6 @@ if (tabId === 'tabChat') {
 }
 
 
-
 async function loadSidebarGroups(userId) {
     const container = document.getElementById('sidebarGroups');
     if (!container) return;
@@ -874,12 +887,29 @@ async function loadSidebarGroups(userId) {
         if (currentGroup?.id === g.id) btn.classList.add('active');
         btn.innerHTML = '<i class="fas fa-circle" style="font-size:0.4rem;"></i> ' + escapeHtml(g.name);
         btn.addEventListener('click', async () => {
+            console.log('🔄 Trocando para grupo:', g.name, g.id);
+            
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('sidebarOverlay').classList.remove('active');
-            const { data: membership } = await db.from('group_members').select('role').eq('group_id', g.id).eq('user_id', userId).eq('status', 'approved').single();
-            if (membership) {
-                await selectGroup(g, membership?.role || 'member');
+            
+            // Força limpeza IMEDIATA da timeline
+            const feed = document.getElementById('timelineFeed');
+            if (feed) {
+                feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando ' + g.name + '...</p></div>';
             }
+            
+            const { data: membership } = await db.from('group_members')
+                .select('role')
+                .eq('group_id', g.id)
+                .eq('user_id', userId)
+                .eq('status', 'approved')
+                .single();
+            
+            await selectGroup(g, membership?.role || 'member');
+            
+            // Força carregar a timeline DEPOIS que o grupo foi selecionado
+            console.log('🔄 Carregando timeline do grupo:', g.name);
+            await loadTimeline();
         });
         container.appendChild(btn);
     }
@@ -887,10 +917,7 @@ async function loadSidebarGroups(userId) {
 
 
 
-
-
 async function selectGroup(group, role) {
-    // Atualiza variáveis globais primeiro
     currentGroup = group;
     currentUserRole = role;
     
@@ -898,18 +925,6 @@ async function selectGroup(group, role) {
     document.getElementById('headerGroupName').textContent = group.name;
     document.getElementById('noGroupState').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'flex';
-    
-    // Força limpeza imediata da timeline
-    const feed = document.getElementById('timelineFeed');
-    if (feed) {
-        feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
-    }
-    
-    // Limpa detalhes e ranking também
-    const detalhesContent = document.getElementById('detalhesContent');
-    if (detalhesContent) detalhesContent.innerHTML = '';
-    const rankingContent = document.getElementById('rankingContent');
-    if (rankingContent) rankingContent.innerHTML = '';
     
     // Ativa timeline por padrão
     document.querySelectorAll('.bottom-nav-item').forEach(i => i.classList.remove('active'));
@@ -923,18 +938,19 @@ async function selectGroup(group, role) {
     const user = await getCurrentUser();
     await loadSidebarGroups(user.id);
     
-    // Pequeno delay para garantir que tudo foi atualizado
-    setTimeout(async () => {
-        await loadTimeline();
-        await updateUnreadBadge();
-    }, 100);
+    // Atualiza badge de mensagens não lidas
+    await updateUnreadBadge();
 }
 async function loadTimeline() {
     const feed = document.getElementById('timelineFeed');
     if (!feed || !currentGroup) return;
+    
+    // Guarda o ID do grupo que estamos carregando
+    const loadingGroupId = currentGroup.id;
+    
     feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
     
-    const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', currentGroup.id);
+    const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', loadingGroupId);
     if (!challengeIds || challengeIds.length === 0) {
         feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhum desafio no grupo</p></div>';
         return;
@@ -944,6 +960,12 @@ async function loadTimeline() {
         .select('*, profiles:user_id(name, avatar_url), challenges:challenge_id(name)')
         .in('challenge_id', challengeIds.map(c => c.id)).eq('status', 'valid')
         .order('created_at', { ascending: false }).limit(30);
+    
+    // Verifica se o grupo ainda é o mesmo (usuário não trocou de grupo durante carregamento)
+    if (currentGroup.id !== loadingGroupId) {
+        console.log('⚠️ Grupo mudou durante carregamento, ignorando...');
+        return;
+    }
     
     if (!activities || activities.length === 0) {
         feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhuma atividade ainda</p></div>';
@@ -966,7 +988,6 @@ async function loadTimeline() {
             locationHtml = '<div class="timeline-location-full" id="loc-' + a.id + '"><i class="fas fa-map-pin"></i><span>Carregando endereço...</span></div>';
         }
         
-        // Mídia: vídeo ou foto
         let mediaHtml = '';
         if (isVideo) {
             mediaHtml = '<video src="' + a.photo_url + '" class="timeline-video" autoplay muted loop playsinline onerror="this.style.display=\'none\'"></video>';
@@ -3781,30 +3802,47 @@ window.copyInviteLink = copyInviteLink;
 
 
 async function approveMember(memberId) {
+    console.log('✅ Aprovando membro:', memberId);
+    
     const { error } = await db.from('group_members')
         .update({ status: 'approved' })
         .eq('id', memberId);
     
     if (error) {
-        showToast('Erro ao aprovar', 'error');
+        console.error('❌ Erro ao aprovar:', error);
+        showToast('Erro ao aprovar: ' + error.message, 'error');
     } else {
+        console.log('✅ Membro aprovado com sucesso');
         showToast('✅ Membro aprovado!', 'success');
-        loadDetalhes();
+        
+        // Recarrega os detalhes para atualizar a lista
+        await loadDetalhes();
     }
 }
 
+window.approveMember = approveMember;
 async function rejectMember(memberId) {
+    console.log('❌ Recusando membro:', memberId);
+    
+    if (!confirm('Tem certeza que deseja recusar esta solicitação?')) return;
+    
     const { error } = await db.from('group_members')
         .update({ status: 'rejected' })
         .eq('id', memberId);
     
     if (error) {
-        showToast('Erro ao recusar', 'error');
+        console.error('❌ Erro ao recusar:', error);
+        showToast('Erro ao recusar: ' + error.message, 'error');
     } else {
+        console.log('✅ Solicitação recusada');
         showToast('Solicitação recusada', 'info');
-        loadDetalhes();
+        
+        // Recarrega os detalhes para atualizar a lista
+        await loadDetalhes();
     }
 }
+
+window.rejectMember = rejectMember;
 
 window.approveMember = approveMember;
 window.rejectMember = rejectMember;
