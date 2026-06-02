@@ -1637,6 +1637,24 @@ async function startCameraFullscreen() {
     
     stopCamera();
     
+    // Verifica se é premium para habilitar vídeo
+    const user = await getCurrentUser();
+    const { data: profile } = await db.from('profiles').select('is_premium').eq('id', user.id).single();
+    const isPremium = profile?.is_premium || false;
+    
+    const videoBtn = document.getElementById('videoModeBtn');
+    if (videoBtn) {
+        if (isPremium) {
+            videoBtn.disabled = false;
+            videoBtn.innerHTML = '🎥 Vídeo';
+            videoBtn.title = '';
+        } else {
+            videoBtn.disabled = true;
+            videoBtn.innerHTML = '🎥 Vídeo 🔒';
+            videoBtn.title = 'Vídeos exclusivos para conta premium';
+        }
+    }
+    
     try {
         console.log('🎥 Iniciando câmera (' + currentFacingMode + ')');
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -1645,10 +1663,10 @@ async function startCameraFullscreen() {
                 width: { ideal: 1920 },
                 height: { ideal: 1080 }
             },
-            audio: isVideoMode // Habilita áudio só no modo vídeo
+            audio: isVideoMode && isPremium
         });
         video.srcObject = stream;
-        video.muted = true; // Evita eco
+        video.muted = true;
         await video.play();
         console.log('✅ Câmera iniciada');
     } catch (e) { 
@@ -1656,7 +1674,6 @@ async function startCameraFullscreen() {
         showToast('Erro ao acessar câmera', 'error'); 
     }
     
-    // Configura modo
     setupCameraMode();
     document.getElementById('flipCameraBtn')?.addEventListener('click', flipCamera);
 }
@@ -1679,10 +1696,15 @@ function setupCameraMode() {
         isLongPress = false;
         
         if (isVideoMode && !isVideoRecording) {
-            // Modo vídeo: toggle gravação
-            startVideoRecording();
+            getCurrentUser().then(async (user) => {
+                const { data: profile } = await db.from('profiles').select('is_premium').eq('id', user.id).single();
+                if (profile?.is_premium) {
+                    startVideoRecording();
+                } else {
+                    showToast('🔒 Vídeos exclusivos para conta premium', 'warning');
+                }
+            });
         } else if (isVideoMode && isVideoRecording) {
-            // Modo vídeo: para gravação
             stopVideoRecording();
         }
     });
@@ -1705,7 +1727,14 @@ function setupCameraMode() {
         isLongPress = false;
         
         if (isVideoMode && !isVideoRecording) {
-            startVideoRecording();
+            getCurrentUser().then(async (user) => {
+                const { data: profile } = await db.from('profiles').select('is_premium').eq('id', user.id).single();
+                if (profile?.is_premium) {
+                    startVideoRecording();
+                } else {
+                    showToast('🔒 Vídeos exclusivos para conta premium', 'warning');
+                }
+            });
         } else if (isVideoMode && isVideoRecording) {
             stopVideoRecording();
         }
@@ -1716,25 +1745,28 @@ function setupCameraMode() {
         handleRelease();
     });
 }
-
 function handleRelease() {
     const pressDuration = Date.now() - pressStartTime;
     
     if (isVideoMode) {
-        // Modo vídeo: já tratado no mousedown/touchstart
         return;
     }
     
-    // Modo foto
+    // Modo foto - verifica premium antes de gravar vídeo
     if (isVideoRecording) {
-        // Estava gravando vídeo (segurou) - para
         stopVideoRecording();
     } else if (pressDuration < 300) {
-        // Clique rápido = foto
         capturePhoto();
     } else {
-        // Segurou > 300ms = começa vídeo
-        startVideoRecording();
+        // Verifica se é premium para permitir vídeo por long press
+        getCurrentUser().then(async (user) => {
+            const { data: profile } = await db.from('profiles').select('is_premium').eq('id', user.id).single();
+            if (profile?.is_premium) {
+                startVideoRecording();
+            } else {
+                showToast('🔒 Vídeos exclusivos para conta premium', 'warning');
+            }
+        });
     }
 }
 
@@ -1754,7 +1786,10 @@ function startVideoRecording() {
             mimeType = 'video/webm';
         }
         
-        mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+        mediaRecorder = new MediaRecorder(stream, { 
+            mimeType: mimeType,
+            videoBitsPerSecond: 500000 // 500kbps - reduz tamanho do vídeo
+        });
         
         mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) recordedChunks.push(e.data);
@@ -2008,7 +2043,15 @@ document.getElementById('photoModeBtn')?.addEventListener('click', () => {
     startCameraFullscreen();
 });
 
-document.getElementById('videoModeBtn')?.addEventListener('click', () => {
+document.getElementById('videoModeBtn')?.addEventListener('click', async () => {
+    const user = await getCurrentUser();
+    const { data: profile } = await db.from('profiles').select('is_premium').eq('id', user.id).single();
+    
+    if (!profile?.is_premium) {
+        showToast('🔒 Vídeos exclusivos para conta premium', 'warning');
+        return;
+    }
+    
     isVideoMode = true;
     document.getElementById('videoModeBtn').classList.add('active');
     document.getElementById('photoModeBtn').classList.remove('active');
