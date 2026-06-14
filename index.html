@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <link rel="icon" type="image/png" href="logo.png">
@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#4F46E5">
     <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT - Login</title>
-    <link rel="stylesheet" href="style.css?v=1.0.6">
+    <link rel="stylesheet" href="style.css?v=1.0.7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- PWA -->
@@ -42,6 +42,32 @@
             <h1>FATFIT</h1>
             <p class="logo-subtitle">Transforme seu esforço em conquista</p>
         </div>
+
+        <!-- Aviso de Migração Flutuante -->
+        <div id="migrationBanner" style="
+            background: #FFF3CD;
+            border: 1px solid #FFC107;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            text-align: center;
+            animation: floatBanner 3s ease-in-out infinite;
+            box-shadow: 0 4px 12px rgba(255,193,7,0.3);
+        ">
+            <p style="margin:0;font-size:0.85rem;color:#856404;font-weight:500;">
+                🦫 <strong>FATFIT está evoluindo!</strong>
+            </p>
+            <p style="margin:4px 0 0;font-size:0.78rem;color:#856404;">
+                Para continuar, será necessário criar uma nova conta. É rápido! ✨
+            </p>
+        </div>
+
+        <style>
+            @keyframes floatBanner {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-4px); }
+            }
+        </style>
 
         <!-- Container dos formulários -->
         <div class="auth-card" id="authCard">
@@ -178,16 +204,18 @@
         <!-- Toast container -->
         <div class="toast-container" id="toastContainer"></div>
     </div>
+
+    <!-- Função showForm inline (carrega antes do app.js) -->
     <script>
         function showForm(formId) {
             document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
             document.getElementById(formId)?.classList.add('active');
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
-    <script src="supabase-config.js?v=1.0.6"></script>
-<script src="app.js?v=1.0.6"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js?v=1.0.7"></script>
+    <script src="app.js?v=1.0.7"></script>
     
     <!-- Esconde loading screen após carregar -->
     <script>

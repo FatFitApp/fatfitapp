@@ -3714,12 +3714,13 @@ async function editActivityComment(activityId) {
 // APAGAR ATIVIDADE
 // ============================================
 async function deleteActivity(activityId) {
-        console.log('🗑️ deleteActivity chamado com ID:', activityId);
+    console.log('🗑️ deleteActivity chamado com ID:', activityId);
     
     if (!activityId || activityId === 'undefined') {
         showToast('ID da atividade inválido', 'error');
         return;
     }
+    
     if (!confirm('Tem certeza que deseja apagar esta atividade?\n\nO ponto será removido e a foto/vídeo será deletado(a).')) return;
     
     try {
@@ -3750,10 +3751,19 @@ async function deleteActivity(activityId) {
         
         // 4. Subtrai ponto (se era válida e não extra)
         if (activity.status === 'valid' && !activity.is_extra) {
-            await db.from('challenge_participants')
-                .update({ points: db.raw('GREATEST(points - 1, 0)') })
+            // Busca pontos atuais
+            const { data: participant } = await db.from('challenge_participants')
+                .select('points')
                 .eq('challenge_id', activity.challenge_id)
-                .eq('user_id', activity.user_id);
+                .eq('user_id', activity.user_id)
+                .maybeSingle();
+            
+            if (participant && participant.points > 0) {
+                await db.from('challenge_participants')
+                    .update({ points: participant.points - 1 })
+                    .eq('challenge_id', activity.challenge_id)
+                    .eq('user_id', activity.user_id);
+            }
         }
         
         // 5. Remove a atividade
@@ -3770,13 +3780,23 @@ async function deleteActivity(activityId) {
             console.log('✅ Atividade deletada com sucesso');
             showToast('Atividade apagada!', 'success');
             document.getElementById('dayDetailModal')?.classList.remove('open');
-            await loadProfileCalendar();
+            
+            // Força limpar e recarregar
+            const container = document.getElementById('profileCalendarContainer');
+            if (container) {
+                container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Atualizando...</p></div>';
+            }
+            setTimeout(async () => {
+                await loadProfileCalendar();
+            }, 500);
         }
     } catch (e) {
         console.error('Erro ao apagar:', e);
         showToast('Erro ao apagar atividade', 'error');
     }
 }
+
+window.deleteActivity = deleteActivity;
 
 window.editActivityComment = editActivityComment;
 window.deleteActivity = deleteActivity;
