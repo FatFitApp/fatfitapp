@@ -2421,3 +2421,602 @@ body.chat-open .fab {
 .btn-share-progress:active {
     transform: scale(0.97);
 }
+
+/* ============================================
+   STORIES - BARRA E VISUALIZAÇÃO
+   ============================================ */
+
+/* Barra de stories */
+.stories-bar {
+    display: flex;
+    gap: 14px;
+    padding: 12px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid #E5E5EA;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.stories-bar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Círculo do story */
+.story-circle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+}
+
+.story-avatar-ring {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, #833AB4, #FD1D1D, #F77737);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.story-avatar-ring.viewed {
+    background: #C7C7CC;
+}
+
+.story-avatar-ring.empty {
+    background: #E5E5EA;
+}
+
+.story-avatar-ring.add-story {
+    background: #E5E5EA;
+    position: relative;
+}
+
+.story-avatar-ring.add-story::after {
+    content: '+';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 22px;
+    height: 22px;
+    background: #4F46E5;
+    color: #FFFFFF;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    border: 2px solid #FFFFFF;
+}
+
+.story-avatar-img {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #FFFFFF;
+}
+
+.story-username {
+    font-size: 0.65rem;
+    color: #8E8E93;
+    max-width: 64px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Badge de múltiplos stories */
+.story-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #4F46E5;
+    color: #FFFFFF;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 0.6rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #FFFFFF;
+}
+
+/* Tela de visualização de story */
+.story-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: #000;
+    display: none;
+    flex-direction: column;
+}
+
+.story-viewer.open {
+    display: flex;
+}
+
+.story-viewer-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+}
+
+.story-viewer-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.story-viewer-name {
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.story-viewer-time {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.7rem;
+}
+
+.story-viewer-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #FFFFFF;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.story-viewer-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.story-viewer-media {
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+}
+
+.story-viewer-video {
+    max-width: 100%;
+    max-height: 80vh;
+}
+
+/* Barras de progresso */
+.story-progress-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.3);
+    z-index: 10;
+}
+
+.story-progress-fill {
+    height: 100%;
+    background: #FFFFFF;
+    transition: width 0.1s linear;
+}
+
+/* Botão deletar story */
+.story-delete-btn {
+    background: none;
+    border: none;
+    color: #FFFFFF;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 8px;
+    opacity: 0.7;
+}
+
+.story-delete-btn:hover {
+    opacity: 1;
+}
+
+/* Áreas de toque */
+.story-touch-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    z-index: 5;
+}
+
+.story-touch-right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 60%;
+    z-index: 5;
+}
+
+/* Upload de story */
+.story-upload-modal .modal-content {
+    max-width: 400px;
+    border-radius: 20px;
+}
+
+.story-upload-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid #F2F2F7;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.story-upload-option:hover {
+    background: #F9FAFB;
+}
+
+.story-upload-option i {
+    width: 24px;
+    text-align: center;
+    color: #4F46E5;
+    font-size: 1.2rem;
+}
+
+/* ============================================
+   BOLÃO DA COPA - FATBET
+   ============================================ */
+
+/* Card de jogo */
+.bet-game-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #E8E8ED;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bet-game-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.bet-game-card.closed {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.bet-game-card.finished {
+    border-left: 4px solid #10B981;
+}
+
+.bet-game-teams {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.bet-team {
+    text-align: center;
+    flex: 1;
+}
+
+.bet-team-flag {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.bet-team-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1C1C1E;
+}
+
+.bet-vs {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #8E8E93;
+}
+
+.bet-game-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    font-size: 0.8rem;
+    color: #8E8E93;
+    margin-bottom: 8px;
+}
+
+.bet-game-pot {
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #F59E0B;
+    margin-bottom: 4px;
+}
+
+.bet-game-bets {
+    text-align: center;
+    font-size: 0.7rem;
+    color: #8E8E93;
+}
+
+/* Status badges */
+.bet-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.bet-status-open {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.bet-status-closed {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.bet-status-finished {
+    background: #DBEAFE;
+    color: #1E40AF;
+}
+
+.bet-status-live {
+    background: #FEF3C7;
+    color: #92400E;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Tela de aposta */
+.bet-form-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.bet-form-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1C1C1E;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.bet-type-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.bet-type-btn {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #E5E5EA;
+    border-radius: 10px;
+    background: #FFFFFF;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.bet-type-btn.active {
+    border-color: #4F46E5;
+    background: rgba(79,70,229,0.05);
+    color: #4F46E5;
+}
+
+.bet-prediction-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.bet-prediction-btn {
+    flex: 1;
+    padding: 14px 8px;
+    border: 2px solid #E5E5EA;
+    border-radius: 10px;
+    background: #FFFFFF;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.bet-prediction-btn.active {
+    border-color: #10B981;
+    background: rgba(16,185,129,0.05);
+    color: #10B981;
+}
+
+.bet-prediction-btn .flag {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.bet-score-inputs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.bet-score-input {
+    width: 60px;
+    padding: 12px;
+    border: 2px solid #E5E5EA;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.bet-score-input:focus {
+    border-color: #4F46E5;
+    outline: none;
+}
+
+.bet-amount-input {
+    margin-bottom: 16px;
+}
+
+.bet-amount-input label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #8E8E93;
+    margin-bottom: 6px;
+}
+
+.bet-amount-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bet-amount-field input {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #E5E5EA;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.bet-amount-field span {
+    font-weight: 700;
+    color: #F59E0B;
+    white-space: nowrap;
+}
+
+.bet-estimated-return {
+    text-align: center;
+    padding: 12px;
+    background: #F9FAFB;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+}
+
+.bet-estimated-value {
+    font-weight: 700;
+    color: #10B981;
+}
+
+.bet-balance {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #8E8E93;
+    margin-bottom: 16px;
+}
+
+.bet-balance strong {
+    color: #F59E0B;
+}
+
+/* Sidebar destaque */
+.sidebar-item.bet-highlight {
+    background: linear-gradient(135deg, #F59E0B, #EF4444);
+    color: #FFFFFF !important;
+    font-weight: 700;
+    margin: 4px 8px;
+    border-radius: 10px;
+    animation: betGlow 2s ease-in-out infinite;
+}
+
+.sidebar-item.bet-highlight:hover {
+    background: linear-gradient(135deg, #EF4444, #F59E0B);
+    color: #FFFFFF !important;
+}
+
+.sidebar-item.bet-highlight i {
+    color: #FFFFFF !important;
+}
+
+@keyframes betGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(245,158,11,0.3); }
+    50% { box-shadow: 0 0 20px rgba(239,68,68,0.5); }
+}
+
+/* Minhas apostas */
+.my-bet-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border-left: 4px solid #4F46E5;
+}
+
+.my-bet-teams {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+}
+
+.my-bet-info {
+    font-size: 0.75rem;
+    color: #8E8E93;
+    display: flex;
+    justify-content: space-between;
+}
+
+.my-bet-won {
+    border-left-color: #10B981;
+    background: #F0FDF4;
+}
+
+.my-bet-lost {
+    border-left-color: #EF4444;
+    background: #FEF2F2;
+}
+
+.my-bet-pending {
+    border-left-color: #F59E0B;
+    background: #FFFBEB;
+}

@@ -44,6 +44,13 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let recordingStartTime = null;
 let recordingTimer = null;
+let currentStoryGroup = null;
+let currentStoryUser = null;
+let currentStoryIndex = 0;
+let currentStories = [];
+let storyProgressTimer = null;
+
+
 const MAX_VIDEO_DURATION = 6000; // 6 segundos
 
 
@@ -854,51 +861,51 @@ if (tabId === 'tabChat') {
 async function loadSidebarGroups(userId) {
     const container = document.getElementById('sidebarGroups');
     if (!container) return;
-    const { data: memberships } = await db.from('group_members')
-        .select('group_id, groups:group_id(id, name)')
+    
+    // PRIMEIRO: busca os group_ids do usuário
+    const { data: memberships, error } = await db.from('group_members')
+        .select('group_id, role')
         .eq('user_id', userId)
         .eq('status', 'approved');
-    if (!memberships || memberships.length === 0) {
+    
+    if (error || !memberships || memberships.length === 0) {
         container.innerHTML = '<p class="text-xs text-muted" style="padding:8px 16px;">Nenhum grupo</p>';
         return;
     }
+    
     container.innerHTML = '';
+    
+    // SEGUNDO: para cada grupo, busca o nome separadamente
     for (const m of memberships) {
-        const g = m.groups;
-        if (!g) continue;
+        const { data: group } = await db.from('groups')
+            .select('id, name')
+            .eq('id', m.group_id)
+            .single();
+        
+        if (!group) continue;
+        
         const btn = document.createElement('button');
         btn.className = 'sidebar-group-item';
-        if (currentGroup?.id === g.id) btn.classList.add('active');
-        btn.innerHTML = '<i class="fas fa-circle" style="font-size:0.4rem;"></i> ' + escapeHtml(g.name);
+        if (currentGroup?.id === group.id) btn.classList.add('active');
+        btn.innerHTML = '<i class="fas fa-circle" style="font-size:0.4rem;"></i> ' + escapeHtml(group.name);
         btn.addEventListener('click', async () => {
-            console.log('🔄 Trocando para grupo:', g.name, g.id);
-            
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('sidebarOverlay').classList.remove('active');
-            
-            // Força limpeza IMEDIATA da timeline
-            const feed = document.getElementById('timelineFeed');
-            if (feed) {
-                feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando ' + g.name + '...</p></div>';
-            }
-            
             const { data: membership } = await db.from('group_members')
                 .select('role')
-                .eq('group_id', g.id)
+                .eq('group_id', group.id)
                 .eq('user_id', userId)
                 .eq('status', 'approved')
                 .single();
             
-            await selectGroup(g, membership?.role || 'member');
-            
-            // Força carregar a timeline DEPOIS que o grupo foi selecionado
-            console.log('🔄 Carregando timeline do grupo:', g.name);
-            await loadTimeline();
+            if (membership) {
+                await selectGroup(group, membership.role);
+                await loadTimeline();
+            }
         });
         container.appendChild(btn);
     }
 }
-
 
 
 async function selectGroup(group, role) {
@@ -924,6 +931,10 @@ async function selectGroup(group, role) {
     
     // Atualiza badge de mensagens não lidas
     await updateUnreadBadge();
+
+        // Renderiza barra de stories
+    setTimeout(() => renderStoriesBar(), 500);
+
 }
 async function loadTimeline() {
     const feed = document.getElementById('timelineFeed');
@@ -942,7 +953,6 @@ async function loadTimeline() {
         return;
     }
     
-    // 🔴 ADICIONE user_level na consulta
     const { data: activities } = await db.from('daily_activities')
         .select('*, profiles:user_id(name, avatar_url, user_level), challenges:challenge_id(name)')
         .in('challenge_id', challengeIds.map(c => c.id)).eq('status', 'valid')
@@ -990,7 +1000,7 @@ async function loadTimeline() {
             '<div class="timeline-user">' +
             '<div class="timeline-name">' + 
             escapeHtml(a.profiles?.name || 'Usuário') + 
-            ' <span class="badge badge-info" style="font-size:0.6rem;">Nv.' + userLevel + '</span>' +  // 🔴 NÍVEL AQUI
+            ' <span class="badge badge-info" style="font-size:0.6rem;">Nv.' + userLevel + '</span>' +
             (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') +
             (a.workout_type ? ' <span class="badge badge-secondary" style="font-size:0.6rem;">' + escapeHtml(a.workout_type) + '</span>' : '') +
             '</div>' +
@@ -4326,3 +4336,756 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 window.shareProgress = shareProgress;
+
+
+
+// ============================================
+// STORIES - BARRA E POSTAGEM
+// ============================================
+
+async function renderStoriesBar() {
+    if (!currentGroup) return;
+    
+    // Remove barra antiga se existir
+    const existingBar = document.getElementById('storiesBar');
+    if (existingBar) existingBar.remove();
+    
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    // Busca stories ativos do grupo
+    const { data: stories } = await db.from('stories')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('group_id', currentGroup.id)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: true });
+    
+    // Cria o elemento da barra
+    const barDiv = document.createElement('div');
+    barDiv.id = 'storiesBar';
+    barDiv.className = 'stories-bar';
+    
+    // Perfil do usuário
+    const profile = await getProfile(user.id);
+    const yourStories = stories?.filter(s => s.user_id === user.id) || [];
+    
+    // PRIMEIRO CÍRCULO: Sempre "+" para postar (com sua foto)
+    const addCircle = document.createElement('div');
+    addCircle.className = 'story-circle';
+    addCircle.onclick = () => openStoryUpload();
+    addCircle.innerHTML = `
+        <div class="story-avatar-ring add-story" style="position:relative;">
+            <img src="${profile?.avatar_url || 'perfil_padrao.png'}" class="story-avatar-img">
+        </div>
+        <span class="story-username">Novo</span>
+    `;
+    barDiv.appendChild(addCircle);
+    
+    // SEGUNDO CÍRCULO: Seus stories (se tiver)
+    if (yourStories.length > 0) {
+        const yourCircle = document.createElement('div');
+        yourCircle.className = 'story-circle';
+        yourCircle.onclick = () => openStoryViewer(user.id);
+        yourCircle.innerHTML = `
+            <div class="story-avatar-ring" style="position:relative;">
+                <img src="${profile?.avatar_url || 'perfil_padrao.png'}" class="story-avatar-img">
+                ${yourStories.length > 1 ? `<span class="story-badge">${yourStories.length}</span>` : ''}
+            </div>
+            <span class="story-username">Você</span>
+        `;
+        barDiv.appendChild(yourCircle);
+    }
+    
+    // Círculos dos outros usuários
+    if (stories && stories.length > 0) {
+        const usersMap = {};
+        for (const s of stories) {
+            if (s.user_id === user.id) continue;
+            if (!usersMap[s.user_id]) {
+                usersMap[s.user_id] = {
+                    user: s.profiles,
+                    count: 0,
+                    hasUnseen: false
+                };
+            }
+            usersMap[s.user_id].count++;
+            
+            const { data: viewed } = await db.from('story_views')
+                .select('id').eq('story_id', s.id).eq('user_id', user.id).maybeSingle();
+            
+            if (!viewed) usersMap[s.user_id].hasUnseen = true;
+        }
+        
+        for (const [userId, data] of Object.entries(usersMap)) {
+            const ringClass = data.hasUnseen ? '' : 'viewed';
+            const badgeHtml = data.count > 1 ? `<span class="story-badge">${data.count}</span>` : '';
+            
+            const circle = document.createElement('div');
+            circle.className = 'story-circle';
+            circle.onclick = () => openStoryViewer(userId);
+            circle.innerHTML = `
+                <div class="story-avatar-ring ${ringClass}" style="position:relative;">
+                    <img src="${data.user?.avatar_url || 'perfil_padrao.png'}" class="story-avatar-img">
+                    ${badgeHtml}
+                </div>
+                <span class="story-username">${escapeHtml(data.user?.name?.split(' ')[0] || 'Usuário')}</span>
+            `;
+            barDiv.appendChild(circle);
+        }
+    }
+    
+    // Insere DENTRO da div tabTimeline, antes do feed
+    const timeline = document.getElementById('tabTimeline');
+    const feed = document.getElementById('timelineFeed');
+    if (timeline && feed) {
+        timeline.insertBefore(barDiv, feed);
+        console.log('✅ Barra de stories inserida');
+    }
+}
+// Helper para criar elemento a partir de HTML
+function createElementFromHTML(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html.trim();
+    return div.firstChild;
+}
+
+// Abre modal de upload de story
+function openStoryUpload() {
+    let modal = document.getElementById('storyUploadModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'storyUploadModal';
+        modal.className = 'modal open';
+        modal.innerHTML = `
+            <div class="modal-content story-upload-modal">
+                <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                    <h3>📸 Postar Story</h3>
+                    <button class="icon-btn modal-close" onclick="document.getElementById('storyUploadModal').remove()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;padding:0;">
+                    <div class="story-upload-option" onclick="uploadStoryFromCamera()">
+                        <i class="fas fa-camera"></i> Tirar foto / Gravar vídeo
+                    </div>
+                    <div class="story-upload-option" onclick="uploadStoryFromGallery()">
+                        <i class="fas fa-image"></i> Escolher da galeria
+                    </div>
+                    <div class="story-upload-option" onclick="document.getElementById('storyUploadModal').remove()" style="color:#8E8E93;">
+                        Cancelar
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+}
+
+// Upload da galeria
+function uploadStoryFromGallery() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Arquivo muito grande. Máximo 5MB.', 'error');
+            return;
+        }
+        
+        document.getElementById('storyUploadModal')?.remove();
+        await postStory(file);
+    };
+    input.click();
+}
+
+function uploadStoryFromCamera() {
+    document.getElementById('storyUploadModal')?.remove();
+    
+    // No mobile, abre câmera. No desktop, abre galeria.
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    if (isMobile) input.capture = 'environment';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Arquivo muito grande. Máximo 5MB.', 'error');
+            return;
+        }
+        await postStory(file);
+    };
+    
+    setTimeout(() => input.click(), 300);
+}
+// Postar story
+async function postStory(file) {
+    const user = await getCurrentUser();
+    if (!user || !currentGroup) {
+        showToast('Selecione um grupo primeiro', 'error');
+        return;
+    }
+    
+    showToast('📤 Enviando story...', 'info');
+    
+    try {
+        const isVideo = file.type.startsWith('video/');
+        const ext = isVideo ? 'webm' : 'jpg';
+        const fileName = `stories/${user.id}/${Date.now()}.${ext}`;
+        
+        const { error: upErr } = await db.storage.from('activity-photos')
+            .upload(fileName, file, { contentType: file.type });
+        
+        if (upErr) {
+            console.error('Erro upload:', upErr);
+            showToast('Erro ao enviar arquivo', 'error');
+            return;
+        }
+        
+        const { data: urlData } = db.storage.from('activity-photos').getPublicUrl(fileName);
+        
+        const { error } = await db.from('stories').insert({
+            user_id: user.id,
+            group_id: currentGroup.id,
+            photo_url: urlData.publicUrl,
+            is_video: isVideo
+        });
+        
+        if (error) {
+            console.error('Erro ao salvar story:', error);
+            showToast('Erro ao postar story', 'error');
+            return;
+        }
+        
+        showToast('✅ Story postado!', 'success');
+        
+        // Força recarregar a barra após o upload
+        setTimeout(() => {
+            renderStoriesBar();
+        }, 500);
+        
+    } catch (e) {
+        console.error('Erro ao postar story:', e);
+        showToast('Erro ao postar story', 'error');
+    }
+}
+
+// Abrir visualizador de stories
+async function openStoryViewer(userId) {
+    if (!currentGroup) return;
+    
+    const user = await getCurrentUser();
+    
+    // Busca stories não expirados do usuário no grupo
+    const { data: stories } = await db.from('stories')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('group_id', currentGroup.id)
+        .eq('user_id', userId)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: true });
+    
+    if (!stories || stories.length === 0) {
+        showToast('Nenhum story disponível', 'info');
+        return;
+    }
+    
+    currentStories = stories;
+    currentStoryUser = stories[0].profiles;
+    currentStoryIndex = 0;
+    
+    // Cria o visualizador
+    let viewer = document.getElementById('storyViewer');
+    if (!viewer) {
+        viewer = document.createElement('div');
+        viewer.id = 'storyViewer';
+        viewer.className = 'story-viewer';
+        viewer.innerHTML = `
+            <div class="story-viewer-header">
+                <img id="storyViewerAvatar" class="story-viewer-avatar" src="">
+                <div>
+                    <div class="story-viewer-name" id="storyViewerName"></div>
+                    <div class="story-viewer-time" id="storyViewerTime"></div>
+                </div>
+                <button class="story-delete-btn" id="storyDeleteBtn" style="display:none;" onclick="deleteCurrentStory()">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button class="story-viewer-close" onclick="closeStoryViewer()">✕</button>
+            </div>
+            <div class="story-viewer-content" id="storyViewerContent">
+                <div class="story-touch-left" onclick="prevStory()"></div>
+                <div class="story-touch-right" onclick="nextStory()"></div>
+            </div>
+        `;
+        document.body.appendChild(viewer);
+    }
+    
+    viewer.classList.add('open');
+    showCurrentStory();
+}
+
+// Mostra o story atual
+function showCurrentStory() {
+    if (currentStoryIndex >= currentStories.length) {
+        closeStoryViewer();
+        return;
+    }
+    
+    const story = currentStories[currentStoryIndex];
+    const user = currentStoryUser;
+    
+    document.getElementById('storyViewerAvatar').src = user?.avatar_url || 'perfil_padrao.png';
+    document.getElementById('storyViewerName').textContent = user?.name || 'Usuário';
+    document.getElementById('storyViewerTime').textContent = formatTime(story.created_at);
+    
+    // Mostra botão deletar apenas para o dono
+    getCurrentUser().then(u => {
+        document.getElementById('storyDeleteBtn').style.display = 
+            (u.id === story.user_id) ? 'block' : 'none';
+    });
+    
+    const content = document.getElementById('storyViewerContent');
+    // Remove mídia anterior
+    content.querySelector('img')?.remove();
+    content.querySelector('video')?.remove();
+    
+    if (story.is_video) {
+        const video = document.createElement('video');
+        video.src = story.photo_url;
+        video.className = 'story-viewer-video';
+        video.autoplay = true;
+        video.controls = false;
+        video.onended = nextStory;
+        content.insertBefore(video, content.firstChild);
+    } else {
+        const img = document.createElement('img');
+        img.src = story.photo_url;
+        img.className = 'story-viewer-media';
+        content.insertBefore(img, content.firstChild);
+        
+        // Auto-avança após 5 segundos
+        clearTimeout(storyProgressTimer);
+        storyProgressTimer = setTimeout(nextStory, 5000);
+    }
+    
+    // Marca como visto (se não for o dono)
+    getCurrentUser().then(async (u) => {
+        if (u.id !== story.user_id) {
+            await db.from('story_views').insert({
+                story_id: story.id,
+                user_id: u.id
+            }).select(); // Ignora erro de duplicata
+        }
+    });
+}
+
+// Próximo story
+function nextStory() {
+    clearTimeout(storyProgressTimer);
+    currentStoryIndex++;
+    
+    if (currentStoryIndex >= currentStories.length) {
+        closeStoryViewer();
+    } else {
+        showCurrentStory();
+    }
+}
+
+// Story anterior
+function prevStory() {
+    clearTimeout(storyProgressTimer);
+    if (currentStoryIndex > 0) {
+        currentStoryIndex--;
+        showCurrentStory();
+    }
+}
+
+// Fechar visualizador
+function closeStoryViewer() {
+    clearTimeout(storyProgressTimer);
+    const viewer = document.getElementById('storyViewer');
+    if (viewer) viewer.classList.remove('open');
+    currentStories = [];
+    currentStoryIndex = 0;
+    renderStoriesBar(); // Atualiza barra (círculos ficam cinza)
+}
+
+// Deletar story atual
+async function deleteCurrentStory() {
+    if (currentStoryIndex >= currentStories.length) return;
+    
+    const story = currentStories[currentStoryIndex];
+    if (!confirm('Deletar este story?')) return;
+    
+    await db.from('stories').delete().eq('id', story.id);
+    
+    currentStories.splice(currentStoryIndex, 1);
+    if (currentStories.length === 0) {
+        closeStoryViewer();
+    } else if (currentStoryIndex >= currentStories.length) {
+        currentStoryIndex = currentStories.length - 1;
+        showCurrentStory();
+    } else {
+        showCurrentStory();
+    }
+}
+
+// Funções globais
+window.openStoryUpload = openStoryUpload;
+window.uploadStoryFromCamera = uploadStoryFromCamera;
+window.uploadStoryFromGallery = uploadStoryFromGallery;
+window.openStoryViewer = openStoryViewer;
+window.nextStory = nextStory;
+window.prevStory = prevStory;
+window.closeStoryViewer = closeStoryViewer;
+window.deleteCurrentStory = deleteCurrentStory;
+
+async function openStoryCamera() {
+    // Cria input de câmera temporário
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    input.capture = 'environment'; // Câmera traseira
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Arquivo muito grande. Máximo 5MB.', 'error');
+            return;
+        }
+        
+        await postStory(file);
+    };
+    input.click();
+}
+
+// ============================================
+// BOLÃO DA COPA - FATBET
+// ============================================
+
+// ============================================
+// PÁGINA: bet.html
+// ============================================
+if (window.location.pathname.includes('bet')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        await updateBetBalance();
+        await loadBetGames();
+    });
+}
+
+let currentBetGame = null;
+
+async function setupBetPage(session) {
+    const container = document.getElementById('betContainer');
+    if (!container) return;
+    
+    await loadBetGames();
+}
+
+async function loadBetGames() {
+    const container = document.getElementById('betContainer');
+    if (!container) return;
+    
+    // Atualiza saldo primeiro
+    await updateBetBalance();
+    
+    container.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando jogos...</p></div>';
+    
+    const user = await getCurrentUser();
+    const { data: games } = await db.from('bet_games')
+        .select('*')
+        .order('game_date', { ascending: true });
+    
+    if (!games || games.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-futbol"></i><p>Nenhum jogo disponível</p></div>';
+        return;
+    }
+    
+    // Busca apostas do usuário
+    const { data: myBets } = await db.from('bet_entries')
+        .select('*')
+        .eq('user_id', user.id);
+    
+    const myBetsMap = {};
+    if (myBets) myBets.forEach(b => myBetsMap[b.game_id] = b);
+    
+    let html = '<h2 style="font-size:1.1rem;font-weight:700;color:#1C1C1E;margin-bottom:12px;">⚽ Jogos Disponíveis</h2>';
+    
+    for (const game of games) {
+        const isOpen = game.status === 'open' && new Date(game.game_date) > new Date();
+        const myBet = myBetsMap[game.id];
+        
+        let statusBadge = '';
+        if (game.status === 'finished') {
+            statusBadge = `<span class="bet-status bet-status-finished">Finalizado</span>`;
+        } else if (!isOpen) {
+            statusBadge = `<span class="bet-status bet-status-closed">Encerrado</span>`;
+        } else {
+            statusBadge = `<span class="bet-status bet-status-open">Aberto</span>`;
+        }
+        
+        html += `
+            <div class="bet-game-card ${!isOpen ? 'closed' : ''} ${game.status === 'finished' ? 'finished' : ''}" 
+                 ${isOpen && !myBet ? `onclick="openBetForm('${game.id}')"` : ''}>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    ${statusBadge}
+                    ${game.status === 'finished' ? `<span style="font-weight:700;font-size:1rem;">${game.score_a || 0} x ${game.score_b || 0}</span>` : ''}
+                </div>
+                <div class="bet-game-teams">
+                    <div class="bet-team">
+                        <span class="bet-team-flag">${game.team_a_flag || '⚽'}</span>
+                        <span class="bet-team-name">${escapeHtml(game.team_a)}</span>
+                    </div>
+                    <div class="bet-vs">VS</div>
+                    <div class="bet-team">
+                        <span class="bet-team-flag">${game.team_b_flag || '⚽'}</span>
+                        <span class="bet-team-name">${escapeHtml(game.team_b)}</span>
+                    </div>
+                </div>
+                <div class="bet-game-info">
+                    <span>📅 ${formatDate(game.game_date)}</span>
+                    <span>⏰ ${formatTime(game.game_date)}</span>
+                </div>
+                <div class="bet-game-pot">💰 Pote: ${game.pot_total || 0} FATCoins</div>
+                <div class="bet-game-bets">👥 ${game.total_bets || 0} apostas</div>
+                ${myBet ? `
+                    <div class="my-bet-card ${myBet.won ? 'my-bet-won' : game.status === 'finished' ? 'my-bet-lost' : 'my-bet-pending'}" style="margin-top:10px;">
+                        <div class="my-bet-teams">Sua aposta: ${myBet.amount} FATCoins</div>
+                        <div class="my-bet-info">
+                            <span>${myBet.bet_type === 'winner' ? 'Vencedor: ' + myBet.prediction : 'Placar: ' + (myBet.score_a||'-') + 'x' + (myBet.score_b||'-')}</span>
+                            ${myBet.won ? `<span style="color:#10B981;">+${myBet.amount_won} FATCoins</span>` : game.status === 'finished' ? '<span style="color:#EF4444;">Não foi dessa vez</span>' : '<span style="color:#F59E0B;">Aguardando</span>'}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Abre formulário de aposta
+function openBetForm(gameId) {
+    const game = currentBetGame;
+    // Busca o jogo
+    db.from('bet_games').select('*').eq('id', gameId).single().then(async ({ data: game }) => {
+        if (!game) return;
+        
+        const user = await getCurrentUser();
+        const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
+        
+        let modal = document.getElementById('betFormModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'betFormModal';
+            modal.className = 'modal open';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width:450px;border-radius:20px;">
+                    <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                        <h3>📝 Apostar</h3>
+                        <button class="icon-btn modal-close" onclick="document.getElementById('betFormModal').remove()"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;" id="betFormBody">
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } else {
+            modal.classList.add('open');
+        }
+        
+        const body = document.getElementById('betFormBody');
+        body.innerHTML = `
+            <div class="bet-form-card">
+                <div class="bet-form-title">
+                    ${game.team_a_flag || '⚽'} ${escapeHtml(game.team_a)} x ${escapeHtml(game.team_b)} ${game.team_b_flag || '⚽'}
+                </div>
+                <div class="bet-game-info">
+                    <span>📅 ${formatDate(game.game_date)}</span>
+                    <span>⏰ ${formatTime(game.game_date)}</span>
+                </div>
+                <div class="bet-balance" style="margin-top:12px;">
+                    Seu saldo: <strong>🪙 ${profile?.fatcoins || 0} FATCoins</strong>
+                </div>
+                
+                <div class="bet-type-selector">
+                    <button class="bet-type-btn active" onclick="selectBetType('winner', '${game.id}')">🏆 Vencedor</button>
+                    <button class="bet-type-btn" onclick="selectBetType('exact_score', '${game.id}')">🎯 Placar Exato</button>
+                </div>
+                
+                <div id="winnerPrediction" style="margin-bottom:12px;">
+                    <div class="bet-prediction-btns">
+                        <button class="bet-prediction-btn" onclick="selectWinner('a', '${game.id}')">
+                            <span class="flag">${game.team_a_flag || '⚽'}</span>
+                            ${escapeHtml(game.team_a)}
+                        </button>
+                        <button class="bet-prediction-btn" onclick="selectWinner('draw', '${game.id}')">
+                            <span class="flag">🤝</span>
+                            Empate
+                        </button>
+                        <button class="bet-prediction-btn" onclick="selectWinner('b', '${game.id}')">
+                            <span class="flag">${game.team_b_flag || '⚽'}</span>
+                            ${escapeHtml(game.team_b)}
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="scorePrediction" style="display:none;margin-bottom:12px;">
+                    <div class="bet-score-inputs">
+                        <input type="number" class="bet-score-input" id="scoreA" min="0" max="20" value="0" placeholder="0">
+                        <span style="font-weight:700;">x</span>
+                        <input type="number" class="bet-score-input" id="scoreB" min="0" max="20" value="0" placeholder="0">
+                    </div>
+                </div>
+                
+                <div class="bet-amount-input">
+                    <label>Valor da aposta (mín. 10 FATCoins)</label>
+                    <div class="bet-amount-field">
+                        <input type="number" id="betAmount" min="10" max="${profile?.fatcoins || 0}" value="10" step="10">
+                        <span>🪙 FATCoins</span>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary btn-block" onclick="placeBet('${game.id}')" style="border-radius:10px;padding:14px;">
+                    ✅ Confirmar Aposta
+                </button>
+            </div>
+        `;
+        
+        // Salva dados do jogo para uso nas funções
+        window._betGame = game;
+        window._betType = 'winner';
+        window._betWinner = '';
+        window._betScoreA = 0;
+        window._betScoreB = 0;
+    });
+}
+
+// Seleciona tipo de aposta
+function selectBetType(type, gameId) {
+    window._betType = type;
+    document.querySelectorAll('.bet-type-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    document.getElementById('winnerPrediction').style.display = type === 'winner' ? 'block' : 'none';
+    document.getElementById('scorePrediction').style.display = type === 'exact_score' ? 'flex' : 'none';
+}
+
+// Seleciona vencedor
+function selectWinner(prediction, gameId) {
+    window._betWinner = prediction;
+    document.querySelectorAll('.bet-prediction-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+// Faz a aposta
+async function placeBet(gameId) {
+    const user = await getCurrentUser();
+    const amount = parseInt(document.getElementById('betAmount').value);
+    const betType = window._betType;
+    
+    if (amount < 10) {
+        showToast('Aposta mínima: 10 FATCoins', 'error');
+        return;
+    }
+    
+    const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
+    if (amount > (profile?.fatcoins || 0)) {
+        showToast('Saldo insuficiente!', 'error');
+        return;
+    }
+    
+    let prediction = '';
+    let scoreA = null;
+    let scoreB = null;
+    
+    if (betType === 'winner') {
+        if (!window._betWinner) {
+            showToast('Selecione um vencedor', 'error');
+            return;
+        }
+        prediction = window._betWinner;
+    } else {
+        scoreA = parseInt(document.getElementById('scoreA').value) || 0;
+        scoreB = parseInt(document.getElementById('scoreB').value) || 0;
+        prediction = scoreA + 'x' + scoreB;
+    }
+    
+    if (!confirm(`Confirmar aposta de ${amount} FATCoins?`)) return;
+    
+    const { error } = await db.from('bet_entries').insert({
+        game_id: gameId,
+        user_id: user.id,
+        amount: amount,
+        bet_type: betType,
+        prediction: prediction,
+        score_a: scoreA,
+        score_b: scoreB
+    });
+    
+    if (error) {
+        if (error.message.includes('duplicate')) {
+            showToast('Você já apostou neste jogo!', 'warning');
+        } else {
+            showToast('Erro: ' + error.message, 'error');
+        }
+    } else {
+        showToast('✅ Aposta registrada! Boa sorte! 🍀', 'success');
+        document.getElementById('betFormModal')?.remove();
+        
+        // Força recarregar tudo
+        setTimeout(async () => {
+            await updateBetBalance();
+            await loadBetGames();
+        }, 500);
+    }
+}
+
+// Funções globais
+window.selectBetType = selectBetType;
+window.selectWinner = selectWinner;
+window.placeBet = placeBet;
+window.openBetForm = openBetForm;
+
+async function updateBetBalance() {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
+    const balanceEl = document.getElementById('betBalanceAmount');
+    if (balanceEl) {
+        balanceEl.textContent = '🪙 ' + (profile?.fatcoins || 0);
+    }
+    
+    // Carrega minhas apostas
+    const { data: myBets } = await db.from('bet_entries')
+        .select('*, bet_games:game_id(team_a, team_b, team_a_flag, team_b_flag, game_date, status, score_a, score_b)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+    
+    const myBetsContainer = document.getElementById('myBetsContainer');
+    if (myBetsContainer && myBets && myBets.length > 0) {
+        myBetsContainer.innerHTML = myBets.map(b => {
+            const game = b.bet_games;
+            return `
+                <div class="my-bet-card ${b.won ? 'my-bet-won' : game?.status === 'finished' ? 'my-bet-lost' : 'my-bet-pending'}">
+                    <div class="my-bet-teams">
+                        ${game?.team_a_flag || ''} ${escapeHtml(game?.team_a || '')} x ${escapeHtml(game?.team_b || '')} ${game?.team_b_flag || ''}
+                    </div>
+                    <div class="my-bet-info">
+                        <span>${b.amount} FATCoins • ${b.bet_type === 'winner' ? 'Vencedor' : 'Placar'}</span>
+                        ${b.won ? `<span style="color:#10B981;">+${b.amount_won}</span>` : game?.status === 'finished' ? '<span style="color:#EF4444;">Perdeu</span>' : '<span style="color:#F59E0B;">Aguardando</span>'}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else if (myBetsContainer) {
+        myBetsContainer.innerHTML = '<p class="text-sm text-muted">Nenhuma aposta ainda</p>';
+    }
+}
