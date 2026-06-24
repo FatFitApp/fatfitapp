@@ -4813,7 +4813,6 @@ async function loadBetGames() {
     const container = document.getElementById('betContainer');
     if (!container) return;
     
-    // Atualiza saldo primeiro
     await updateBetBalance();
     
     container.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando jogos...</p></div>';
@@ -4828,7 +4827,6 @@ async function loadBetGames() {
         return;
     }
     
-    // Busca apostas do usuário
     const { data: myBets } = await db.from('bet_entries')
         .select('*')
         .eq('user_id', user.id);
@@ -4836,54 +4834,95 @@ async function loadBetGames() {
     const myBetsMap = {};
     if (myBets) myBets.forEach(b => myBetsMap[b.game_id] = b);
     
-    let html = '<h2 style="font-size:1.1rem;font-weight:700;color:#1C1C1E;margin-bottom:12px;">⚽ Jogos Disponíveis</h2>';
-    
+    // Agrupa jogos por data
+    const gamesByDate = {};
     for (const game of games) {
-        const isOpen = game.status === 'open' && new Date(game.game_date) > new Date();
-        const myBet = myBetsMap[game.id];
+        const dateKey = game.game_date.split('T')[0];
+        if (!gamesByDate[dateKey]) {
+            gamesByDate[dateKey] = {
+                date: dateKey,
+                games: []
+            };
+        }
+        gamesByDate[dateKey].games.push(game);
+    }
+    
+    const today = getToday();
+    let html = '<h2 style="font-size:1.1rem;font-weight:700;color:#1C1C1E;margin-bottom:12px;">⚽ Jogos da Copa</h2>';
+    
+    for (const [dateKey, group] of Object.entries(gamesByDate)) {
+        const isToday = dateKey === today;
+        const sectionId = 'betDay-' + dateKey.replace(/-/g, '');
         
-        let statusBadge = '';
-        if (game.status === 'finished') {
-            statusBadge = `<span class="bet-status bet-status-finished">Finalizado</span>`;
-        } else if (!isOpen) {
-            statusBadge = `<span class="bet-status bet-status-closed">Encerrado</span>`;
-        } else {
-            statusBadge = `<span class="bet-status bet-status-open">Aberto</span>`;
+        html += `
+            <div class="bet-day-section">
+                <div class="bet-day-header" onclick="toggleBetDay('${sectionId}')">
+                    <div>
+                        <span style="font-weight:700;font-size:0.95rem;">${formatDate(dateKey)}</span>
+                        ${isToday ? '<span class="bet-status bet-status-live" style="margin-left:8px;">HOJE</span>' : ''}
+                        <span style="font-size:0.75rem;color:#8E8E93;margin-left:8px;">${group.games.length} jogo(s)</span>
+                    </div>
+                    <i class="fas fa-chevron-down bet-day-arrow" id="${sectionId}Arrow"></i>
+                </div>
+                <div class="bet-day-games ${isToday ? 'expanded' : ''}" id="${sectionId}">
+        `;
+        
+        for (const game of group.games) {
+            const isOpen = game.status === 'open' && new Date(game.game_date) > new Date();
+            const myBet = myBetsMap[game.id];
+            
+            let statusBadge = '';
+            if (game.status === 'finished') {
+                statusBadge = `<span class="bet-status bet-status-finished">Finalizado</span>`;
+            } else if (!isOpen) {
+                statusBadge = `<span class="bet-status bet-status-closed">Encerrado</span>`;
+            } else {
+                statusBadge = `<span class="bet-status bet-status-open">Aberto</span>`;
+            }
+            
+            let onClickAction = '';
+            if (myBet) {
+                onClickAction = `onclick="openGameDetail('${game.id}')"`;
+            } else if (isOpen) {
+                onClickAction = `onclick="openBetForm('${game.id}')"`;
+            }
+            
+            html += `
+                <div class="bet-game-card ${!isOpen ? 'closed' : ''} ${game.status === 'finished' ? 'finished' : ''}" ${onClickAction}>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        ${statusBadge}
+                        ${game.status === 'finished' ? `<span style="font-weight:700;font-size:1rem;">${game.score_a || 0} x ${game.score_b || 0}</span>` : ''}
+                    </div>
+                    <div class="bet-game-teams">
+                        <div class="bet-team">
+                            <span class="bet-team-flag">${game.team_a_flag || '⚽'}</span>
+                            <span class="bet-team-name">${escapeHtml(game.team_a)}</span>
+                        </div>
+                        <div class="bet-vs">VS</div>
+                        <div class="bet-team">
+                            <span class="bet-team-flag">${game.team_b_flag || '⚽'}</span>
+                            <span class="bet-team-name">${escapeHtml(game.team_b)}</span>
+                        </div>
+                    </div>
+                    <div class="bet-game-info">
+                        <span>⏰ ${formatTime(game.game_date)}</span>
+                    </div>
+                    <div class="bet-game-pot">💰 Pote: ${game.pot_total || 0} FATCoins</div>
+                    <div class="bet-game-bets">👥 ${game.total_bets || 0} palpites</div>
+                    ${myBet ? `
+                        <div class="my-bet-card ${myBet.won ? 'my-bet-won' : game.status === 'finished' ? 'my-bet-lost' : 'my-bet-pending'}" style="margin-top:10px;">
+                            <div class="my-bet-teams">Seu palpite: ${myBet.score_a || 0} x ${myBet.score_b || 0} • ${myBet.amount} 🪙</div>
+                            <div class="my-bet-info">
+                                ${myBet.won ? `<span style="color:#10B981;">+${myBet.amount_won} FATCoins</span>` : game.status === 'finished' ? '<span style="color:#EF4444;">Não foi dessa vez</span>' : '<span style="color:#F59E0B;">Aguardando resultado</span>'}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
         }
         
         html += `
-            <div class="bet-game-card ${!isOpen ? 'closed' : ''} ${game.status === 'finished' ? 'finished' : ''}" 
-                 ${isOpen && !myBet ? `onclick="openBetForm('${game.id}')"` : ''}>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    ${statusBadge}
-                    ${game.status === 'finished' ? `<span style="font-weight:700;font-size:1rem;">${game.score_a || 0} x ${game.score_b || 0}</span>` : ''}
                 </div>
-                <div class="bet-game-teams">
-                    <div class="bet-team">
-                        <span class="bet-team-flag">${game.team_a_flag || '⚽'}</span>
-                        <span class="bet-team-name">${escapeHtml(game.team_a)}</span>
-                    </div>
-                    <div class="bet-vs">VS</div>
-                    <div class="bet-team">
-                        <span class="bet-team-flag">${game.team_b_flag || '⚽'}</span>
-                        <span class="bet-team-name">${escapeHtml(game.team_b)}</span>
-                    </div>
-                </div>
-                <div class="bet-game-info">
-                    <span>📅 ${formatDate(game.game_date)}</span>
-                    <span>⏰ ${formatTime(game.game_date)}</span>
-                </div>
-                <div class="bet-game-pot">💰 Pote: ${game.pot_total || 0} FATCoins</div>
-                <div class="bet-game-bets">👥 ${game.total_bets || 0} apostas</div>
-                ${myBet ? `
-                    <div class="my-bet-card ${myBet.won ? 'my-bet-won' : game.status === 'finished' ? 'my-bet-lost' : 'my-bet-pending'}" style="margin-top:10px;">
-                        <div class="my-bet-teams">Sua aposta: ${myBet.amount} FATCoins</div>
-                        <div class="my-bet-info">
-                            <span>${myBet.bet_type === 'winner' ? 'Vencedor: ' + myBet.prediction : 'Placar: ' + (myBet.score_a||'-') + 'x' + (myBet.score_b||'-')}</span>
-                            ${myBet.won ? `<span style="color:#10B981;">+${myBet.amount_won} FATCoins</span>` : game.status === 'finished' ? '<span style="color:#EF4444;">Não foi dessa vez</span>' : '<span style="color:#F59E0B;">Aguardando</span>'}
-                        </div>
-                    </div>
-                ` : ''}
             </div>
         `;
     }
@@ -4891,10 +4930,21 @@ async function loadBetGames() {
     container.innerHTML = html;
 }
 
+// Função para expandir/recolher dias
+function toggleBetDay(sectionId) {
+    const section = document.getElementById(sectionId);
+    const arrow = document.getElementById(sectionId + 'Arrow');
+    
+    if (section && arrow) {
+        section.classList.toggle('expanded');
+        arrow.classList.toggle('rotated');
+    }
+}
+
+window.toggleBetDay = toggleBetDay;
+
 // Abre formulário de aposta
 function openBetForm(gameId) {
-    const game = currentBetGame;
-    // Busca o jogo
     db.from('bet_games').select('*').eq('id', gameId).single().then(async ({ data: game }) => {
         if (!game) return;
         
@@ -4907,13 +4957,12 @@ function openBetForm(gameId) {
             modal.id = 'betFormModal';
             modal.className = 'modal open';
             modal.innerHTML = `
-                <div class="modal-content" style="max-width:450px;border-radius:20px;">
+                <div class="modal-content" style="max-width:420px;border-radius:20px;">
                     <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
-                        <h3>📝 Apostar</h3>
+                        <h3>📝 Palpite Exato</h3>
                         <button class="icon-btn modal-close" onclick="document.getElementById('betFormModal').remove()"><i class="fas fa-times"></i></button>
                     </div>
-                    <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;" id="betFormBody">
-                    </div>
+                    <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;" id="betFormBody"></div>
                 </div>
             `;
             document.body.appendChild(modal);
@@ -4923,7 +4972,7 @@ function openBetForm(gameId) {
         
         const body = document.getElementById('betFormBody');
         body.innerHTML = `
-            <div class="bet-form-card">
+            <div class="bet-form-card bet-form-simple">
                 <div class="bet-form-title">
                     ${game.team_a_flag || '⚽'} ${escapeHtml(game.team_a)} x ${escapeHtml(game.team_b)} ${game.team_b_flag || '⚽'}
                 </div>
@@ -4935,59 +4984,27 @@ function openBetForm(gameId) {
                     Seu saldo: <strong>🪙 ${profile?.fatcoins || 0} FATCoins</strong>
                 </div>
                 
-                <div class="bet-type-selector">
-                    <button class="bet-type-btn active" onclick="selectBetType('winner', '${game.id}')">🏆 Vencedor</button>
-                    <button class="bet-type-btn" onclick="selectBetType('exact_score', '${game.id}')">🎯 Placar Exato</button>
-                </div>
-                
-                <div id="winnerPrediction" style="margin-bottom:12px;">
-                    <div class="bet-prediction-btns">
-                        <button class="bet-prediction-btn" onclick="selectWinner('a', '${game.id}')">
-                            <span class="flag">${game.team_a_flag || '⚽'}</span>
-                            ${escapeHtml(game.team_a)}
-                        </button>
-                        <button class="bet-prediction-btn" onclick="selectWinner('draw', '${game.id}')">
-                            <span class="flag">🤝</span>
-                            Empate
-                        </button>
-                        <button class="bet-prediction-btn" onclick="selectWinner('b', '${game.id}')">
-                            <span class="flag">${game.team_b_flag || '⚽'}</span>
-                            ${escapeHtml(game.team_b)}
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="scorePrediction" style="display:none;margin-bottom:12px;">
-                    <div class="bet-score-inputs">
-                        <input type="number" class="bet-score-input" id="scoreA" min="0" max="20" value="0" placeholder="0">
-                        <span style="font-weight:700;">x</span>
-                        <input type="number" class="bet-score-input" id="scoreB" min="0" max="20" value="0" placeholder="0">
-                    </div>
+                <div class="bet-score-simple">
+                    <input type="number" id="betScoreA" min="0" max="20" value="0" placeholder="0">
+                    <span>x</span>
+                    <input type="number" id="betScoreB" min="0" max="20" value="0" placeholder="0">
                 </div>
                 
                 <div class="bet-amount-input">
                     <label>Valor da aposta (mín. 10 FATCoins)</label>
                     <div class="bet-amount-field">
-                        <input type="number" id="betAmount" min="10" max="${profile?.fatcoins || 0}" value="10" step="10">
+                        <input type="number" id="betAmountSimple" min="10" max="${profile?.fatcoins || 0}" value="10" step="10">
                         <span>🪙 FATCoins</span>
                     </div>
                 </div>
                 
-                <button class="btn btn-primary btn-block" onclick="placeBet('${game.id}')" style="border-radius:10px;padding:14px;">
-                    ✅ Confirmar Aposta
+                <button class="btn btn-primary btn-block" onclick="placeBetSimple('${game.id}')" style="border-radius:10px;padding:14px;">
+                    ✅ Confirmar Palpite
                 </button>
             </div>
         `;
-        
-        // Salva dados do jogo para uso nas funções
-        window._betGame = game;
-        window._betType = 'winner';
-        window._betWinner = '';
-        window._betScoreA = 0;
-        window._betScoreB = 0;
     });
 }
-
 // Seleciona tipo de aposta
 function selectBetType(type, gameId) {
     window._betType = type;
@@ -5354,3 +5371,192 @@ window.closePhotoDetail = closePhotoDetail;
 window.toggleLikeFromDetail = toggleLikeFromDetail;
 window.addDetailComment = addDetailComment;
 window.focusDetailComment = focusDetailComment;
+
+
+
+async function placeBetSimple(gameId) {
+    const user = await getCurrentUser();
+    
+    const scoreAInput = document.getElementById('betScoreA');
+    const scoreBInput = document.getElementById('betScoreB');
+    const amountInput = document.getElementById('betAmountSimple');
+    
+    if (!scoreAInput || !scoreBInput || !amountInput) {
+        showToast('Erro no formulário. Tente novamente.', 'error');
+        return;
+    }
+    
+    const scoreA = parseInt(scoreAInput.value) || 0;
+    const scoreB = parseInt(scoreBInput.value) || 0;
+    const amount = parseInt(amountInput.value);
+    
+    console.log('📊 Palpite:', scoreA, 'x', scoreB, '| Valor:', amount);
+    
+    if (amount < 10) {
+        showToast('Aposta mínima: 10 FATCoins', 'error');
+        return;
+    }
+    
+    const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
+    if (amount > (profile?.fatcoins || 0)) {
+        showToast('Saldo insuficiente!', 'error');
+        return;
+    }
+    
+    if (!confirm(`Confirmar palpite ${scoreA}x${scoreB} com ${amount} FATCoins?`)) return;
+    
+    const { error } = await db.from('bet_entries').insert({
+        game_id: gameId,
+        user_id: user.id,
+        amount: amount,
+        bet_type: 'exact_score',
+        prediction: scoreA + 'x' + scoreB,
+        score_a: scoreA,
+        score_b: scoreB
+    });
+    
+    if (error) {
+        if (error.message.includes('duplicate')) {
+            showToast('Você já apostou neste jogo!', 'warning');
+        } else {
+            showToast('Erro: ' + error.message, 'error');
+        }
+    } else {
+        showToast('✅ Palpite registrado! Boa sorte! 🍀', 'success');
+        document.getElementById('betFormModal')?.remove();
+        
+        // Abre a tela de detalhes do jogo com os palpites
+        setTimeout(() => {
+            openGameDetail(gameId);
+        }, 500);
+    }
+}
+
+window.placeBetSimple = placeBetSimple;
+
+async function openGameDetail(gameId) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    // Verifica se o usuário apostou
+    const { data: myBet } = await db.from('bet_entries')
+        .select('*').eq('game_id', gameId).eq('user_id', user.id).maybeSingle();
+    
+    if (!myBet) {
+        showToast('Faça uma aposta para ver os palpites!', 'info');
+        openBetForm(gameId);
+        return;
+    }
+    
+    // Busca dados do jogo
+    const { data: game } = await db.from('bet_games').select('*').eq('id', gameId).single();
+    if (!game) return;
+    
+    // Busca todas as apostas
+    const { data: entries } = await db.from('bet_entries')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('game_id', gameId)
+        .order('created_at', { ascending: true });
+    
+    // Busca comentários
+    const { data: comments } = await db.from('bet_comments')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('game_id', gameId)
+        .order('created_at', { ascending: true });
+    
+    // Remove tela anterior se existir
+    const existing = document.getElementById('gameDetailScreen');
+    if (existing) existing.remove();
+    
+    const screen = document.createElement('div');
+    screen.id = 'gameDetailScreen';
+    screen.className = 'game-detail-screen';
+    screen.innerHTML = `
+        <div class="game-detail-header">
+            <button class="body-back-btn" onclick="document.getElementById('gameDetailScreen').remove()">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <h3 style="font-size:1rem;font-weight:700;">Palpites</h3>
+            <div style="width:36px;"></div>
+        </div>
+        <div class="game-detail-body">
+            <div class="game-result-card">
+                <div class="game-result-teams">
+                    <span class="game-result-flag">${game.team_a_flag || '⚽'}</span>
+                    ${game.status === 'finished' ? 
+                        `<span class="game-result-score">${game.score_a || 0} x ${game.score_b || 0}</span>` :
+                        '<span style="font-size:1.5rem;">VS</span>'}
+                    <span class="game-result-flag">${game.team_b_flag || '⚽'}</span>
+                </div>
+                <div style="font-size:0.85rem;">${escapeHtml(game.team_a)} vs ${escapeHtml(game.team_b)}</div>
+                <div class="game-result-info">
+                    📅 ${formatDate(game.game_date)} ⏰ ${formatTime(game.game_date)}
+                    ${game.status === 'finished' ? ' • Finalizado' : game.status === 'open' ? ' • Aberto' : ' • Encerrado'}
+                </div>
+                <div class="game-result-pot">💰 Pote: ${game.pot_total || 0} FATCoins • 👥 ${game.total_bets || 0} palpites</div>
+            </div>
+            
+            <div class="bets-list-card">
+                <div class="bets-list-title">📝 Palpites (${entries?.length || 0})</div>
+                ${entries?.map(e => `
+                    <div class="bet-entry-row ${e.user_id === user.id ? 'mine' : ''}">
+                        <img src="${e.profiles?.avatar_url || 'perfil_padrao.png'}" class="bet-entry-avatar">
+                        <span class="bet-entry-name">${escapeHtml(e.profiles?.name || 'Usuário')} ${e.user_id === user.id ? '(você)' : ''}</span>
+                        <span class="bet-entry-score">${e.score_a || 0} x ${e.score_b || 0}</span>
+                        <span class="bet-entry-amount">${e.amount}🪙</span>
+                        ${game.status === 'finished' ? 
+                            (e.won ? '<span class="bet-entry-result bet-entry-won">+'+e.amount_won+'</span>' : 
+                                     '<span class="bet-entry-result bet-entry-lost">Errou</span>') :
+                            '<span class="bet-entry-result bet-entry-pending">Aguardando</span>'}
+                    </div>
+                `).join('') || '<p style="text-align:center;color:#8E8E93;">Nenhum palpite ainda</p>'}
+            </div>
+            
+            ${myBet ? `
+                <div class="game-comments-card">
+                    <div class="game-comments-title">💬 Comentários (${comments?.length || 0})</div>
+                    ${comments?.map(c => `
+                        <div class="game-comment-item">
+                            <img src="${c.profiles?.avatar_url || 'perfil_padrao.png'}" class="game-comment-avatar">
+                            <div>
+                                <span class="game-comment-name">${escapeHtml(c.profiles?.name || 'Usuário')}</span>
+                                <span class="game-comment-text">${escapeHtml(c.comment)}</span>
+                                <div class="game-comment-time">${formatTime(c.created_at)}</div>
+                            </div>
+                        </div>
+                    `).join('') || '<p style="color:#8E8E93;text-align:center;padding:12px;">Nenhum comentário ainda</p>'}
+                    
+                    <div class="game-comment-input">
+                        <input type="text" id="gameCommentInput" placeholder="Comente sobre o jogo..." autocomplete="off">
+                        <button onclick="addGameComment('${gameId}')">Enviar</button>
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    document.body.appendChild(screen);
+}
+
+// Comentar no jogo
+async function addGameComment(gameId) {
+    const user = await getCurrentUser();
+    const input = document.getElementById('gameCommentInput');
+    if (!input) return;
+    
+    const comment = input.value.trim();
+    if (!comment) return;
+    
+    await db.from('bet_comments').insert({
+        game_id: gameId,
+        user_id: user.id,
+        comment: comment
+    });
+    
+    input.value = '';
+    openGameDetail(gameId); // Recarrega
+}
+
+window.openGameDetail = openGameDetail;
+window.addGameComment = addGameComment;
+window.placeBetSimple = placeBetSimple;

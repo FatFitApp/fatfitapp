@@ -3482,3 +3482,328 @@ body.chat-open .fab {
 .timeline-location-full {
     display: none !important;
 }
+
+/* ============================================
+   BOLÃO - TELA DE APOSTAS DO JOGO
+   ============================================ */
+
+/* Tela de detalhes do jogo */
+.game-detail-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: #F2F2F7;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.game-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: #FFFFFF;
+    border-bottom: 1px solid #E5E5EA;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.game-detail-body {
+    flex: 1;
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Card do resultado */
+.game-result-card {
+    background: linear-gradient(135deg, #4F46E5, #7C3AED);
+    border-radius: 20px;
+    padding: 24px;
+    text-align: center;
+    color: #FFFFFF;
+    margin-bottom: 16px;
+}
+
+.game-result-teams {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 8px;
+}
+
+.game-result-flag {
+    font-size: 3rem;
+}
+
+.game-result-score {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: 4px;
+}
+
+.game-result-info {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    margin-top: 8px;
+}
+
+.game-result-pot {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-top: 4px;
+    color: #FCD34D;
+}
+
+/* Lista de palpites */
+.bets-list-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.bets-list-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1C1C1E;
+    margin-bottom: 12px;
+}
+
+.bet-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #F2F2F7;
+}
+
+.bet-entry-row:last-child {
+    border-bottom: none;
+}
+
+.bet-entry-row.mine {
+    background: #F0F0FF;
+    margin: 0 -16px;
+    padding: 10px 16px;
+    border-radius: 8px;
+}
+
+.bet-entry-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.bet-entry-name {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1C1C1E;
+}
+
+.bet-entry-score {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #4F46E5;
+    margin: 0 8px;
+}
+
+.bet-entry-amount {
+    font-size: 0.75rem;
+    color: #F59E0B;
+    font-weight: 600;
+}
+
+.bet-entry-result {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 8px;
+    margin-left: 8px;
+}
+
+.bet-entry-won {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.bet-entry-lost {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.bet-entry-pending {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+/* Placar simples (sem seletor de tipo) */
+.bet-form-simple {
+    text-align: center;
+}
+
+.bet-score-simple {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.bet-score-simple input {
+    width: 70px;
+    height: 70px;
+    border: 2px solid #E5E5EA;
+    border-radius: 16px;
+    font-size: 2rem;
+    font-weight: 700;
+    text-align: center;
+    color: #1C1C1E;
+}
+
+.bet-score-simple input:focus {
+    border-color: #4F46E5;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+
+.bet-score-simple span {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #8E8E93;
+}
+
+/* Comentários do jogo */
+.game-comments-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.game-comments-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1C1C1E;
+    margin-bottom: 12px;
+}
+
+.game-comment-item {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #F2F2F7;
+}
+
+.game-comment-item:last-child {
+    border-bottom: none;
+}
+
+.game-comment-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.game-comment-name {
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: #1C1C1E;
+    margin-right: 4px;
+}
+
+.game-comment-text {
+    font-size: 0.8rem;
+    color: #3A3A3C;
+}
+
+.game-comment-time {
+    font-size: 0.65rem;
+    color: #C7C7CC;
+    margin-top: 2px;
+}
+
+.game-comment-input {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #F2F2F7;
+}
+
+.game-comment-input input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #E5E5EA;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    background: #F9FAFB;
+    outline: none;
+}
+
+.game-comment-input input:focus {
+    border-color: #4F46E5;
+    background: #FFFFFF;
+}
+
+.game-comment-input button {
+    background: #4F46E5;
+    color: #FFFFFF;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Agrupamento por dia */
+.bet-day-section {
+    margin-bottom: 20px;
+}
+
+.bet-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #FFFFFF;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: all 0.2s;
+}
+
+.bet-day-header:hover {
+    background: #F9FAFB;
+}
+
+.bet-day-arrow {
+    color: #8E8E93;
+    transition: transform 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.bet-day-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+.bet-day-games {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+}
+
+.bet-day-games.expanded {
+    max-height: 2000px;
+}
