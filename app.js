@@ -690,10 +690,6 @@ async function setupHome(session) {
     const user = session.user;
     const profile = await getProfile(user.id);
     
-    // Atualiza header
-    document.getElementById('headerAvatarImg').src = profile?.avatar_url || 'perfil_padrao.png';
-    document.getElementById('headerAvatar').addEventListener('click', () => window.location.href = 'profile.html');
-    
     // Atualiza sidebar
     document.getElementById('sidebarAvatar').src = profile?.avatar_url || 'perfil_padrao.png';
     document.getElementById('sidebarName').textContent = profile?.name || 'Usuário';
@@ -741,6 +737,9 @@ async function setupHome(session) {
         }
     }, 500);
     
+    // Renderiza level no header
+    await renderLevelBar();
+    
     // 🔗 VERIFICA SE VEIO DE LINK DE CONVITE
     const inviteCode = new URLSearchParams(window.location.search).get('invite');
     if (inviteCode) {
@@ -763,8 +762,6 @@ async function setupHome(session) {
                 .select('role').eq('group_id', group.id).eq('user_id', user.id).single();
             if (membership && membership.status !== 'rejected') {
                 await selectGroup(group, membership.role);
-                // Renderiza barra de level
-                setTimeout(() => renderLevelBar(), 300);
                 return;
             }
         }
@@ -800,8 +797,7 @@ async function setupHome(session) {
                 await selectGroup(group, membership.role);
                 await loadTimeline();
                 await updateUnreadBadge();
-                // Renderiza barra de level
-                setTimeout(() => renderLevelBar(), 300);
+                await renderLevelBar();
                 return;
             }
         }
@@ -811,11 +807,8 @@ async function setupHome(session) {
     document.getElementById('noGroupState').style.display = 'block';
     document.getElementById('bottomNav').style.display = 'none';
     document.getElementById('headerGroupName').textContent = 'FATFIT';
-    
-    // Renderiza barra de level mesmo sem grupo
-    setTimeout(() => renderLevelBar(), 300);
+    await renderLevelBar();
 }
-
 
 function setupSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -917,6 +910,22 @@ async function selectGroup(group, role) {
     document.getElementById('noGroupState').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'flex';
     
+    renderStoriesBar();
+    // Atualiza level no header
+    await renderLevelBar();
+    
+    // Força limpeza imediata da timeline
+    const feed = document.getElementById('timelineFeed');
+    if (feed) {
+        feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
+    }
+    
+    // Limpa detalhes e ranking também
+    const detalhesContent = document.getElementById('detalhesContent');
+    if (detalhesContent) detalhesContent.innerHTML = '';
+    const rankingContent = document.getElementById('rankingContent');
+    if (rankingContent) rankingContent.innerHTML = '';
+    
     // Ativa timeline por padrão
     document.querySelectorAll('.bottom-nav-item').forEach(i => i.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -929,12 +938,13 @@ async function selectGroup(group, role) {
     const user = await getCurrentUser();
     await loadSidebarGroups(user.id);
     
-    // Atualiza badge de mensagens não lidas
-    await updateUnreadBadge();
-
-        // Renderiza barra de stories
-    setTimeout(() => renderStoriesBar(), 500);
-
+    // Carrega timeline e stories
+    setTimeout(async () => {
+        await loadTimeline();
+        await renderStoriesBar();
+        await updateUnreadBadge();
+        await renderLevelBar();
+    }, 100);
 }
 async function loadTimeline() {
     const feed = document.getElementById('timelineFeed');
@@ -944,8 +954,8 @@ async function loadTimeline() {
     
     feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
     
-    // Renderiza a barra de level
-    renderLevelBar();
+    // Renderiza a barra de level e stories primeiro
+    await renderLevelBar();
     
     const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', loadingGroupId);
     if (!challengeIds || challengeIds.length === 0) {
@@ -978,18 +988,13 @@ async function loadTimeline() {
         
         const { count: likesCount } = await db.from('activity_likes').select('*', { count: 'exact', head: true }).eq('activity_id', a.id);
         const { data: userLiked } = await db.from('activity_likes').select('id').eq('activity_id', a.id).eq('user_id', user.id).maybeSingle();
-        const { data: comments } = await db.from('activity_comments').select('*, profiles:user_id(name, avatar_url)').eq('activity_id', a.id).order('created_at', { ascending: true }).limit(10);
-        
-        let locationHtml = '';
-        if (a.location && a.location.lat && a.location.lng) {
-            locationHtml = '<div class="timeline-location-full" id="loc-' + a.id + '"><i class="fas fa-map-pin"></i><span>Carregando endereço...</span></div>';
-        }
+        const { data: comments } = await db.from('activity_comments').select('*, profiles:user_id(name, avatar_url)').eq('activity_id', a.id).order('created_at', { ascending: true }).limit(3);
         
         let mediaHtml = '';
         if (isVideo) {
-            mediaHtml = '<video src="' + a.photo_url + '" class="timeline-video" autoplay muted loop playsinline onerror="this.style.display=\'none\'"></video>';
+            mediaHtml = '<video src="' + a.photo_url + '" class="timeline-video" autoplay muted loop playsinline onerror="this.style.display=\'none\'" onclick="event.stopPropagation(); openPhotoDetail(\'' + a.id + '\')"></video>';
         } else {
-            mediaHtml = '<img src="' + a.photo_url + '" class="timeline-photo" onclick="window.open(\'' + a.photo_url + '\')" loading="lazy" onerror="this.style.display=\'none\'">';
+            mediaHtml = '<img src="' + a.photo_url + '" class="timeline-photo" loading="lazy" onerror="this.style.display=\'none\'" onclick="openPhotoDetail(\'' + a.id + '\')">';
         }
         
         const item = document.createElement('div');
@@ -1009,13 +1014,12 @@ async function loadTimeline() {
             (isExtra ? '<span class="badge badge-secondary" style="font-size:0.7rem;">+0</span>' : '<span class="badge badge-success" style="font-size:0.7rem;">+1 pt</span>') +
             '</div>' +
             mediaHtml +
-            locationHtml +
             (a.comment ? '<div class="timeline-body">💬 ' + escapeHtml(a.comment) + '</div>' : '') +
             '<div class="timeline-actions-bar">' +
-            '<button class="timeline-action-btn ' + (userLiked ? 'liked' : '') + '" onclick="toggleLike(\'' + a.id + '\', this)" data-activity="' + a.id + '">' +
+            '<button class="timeline-action-btn ' + (userLiked ? 'liked' : '') + '" onclick="event.stopPropagation(); toggleLike(\'' + a.id + '\', this)" data-activity="' + a.id + '">' +
             '<i class="' + (userLiked ? 'fas' : 'far') + ' fa-heart"></i> ' + (likesCount || 0) +
             '</button>' +
-            '<button class="timeline-action-btn" onclick="focusComment(\'' + a.id + '\')">' +
+            '<button class="timeline-action-btn" onclick="event.stopPropagation(); focusComment(\'' + a.id + '\')">' +
             '<i class="far fa-comment"></i> ' + (comments?.length || 0) +
             '</button>' +
             '</div>';
@@ -1036,15 +1040,11 @@ async function loadTimeline() {
         }
         
         item.innerHTML += '<div class="timeline-comment-input">' +
-            '<input type="text" id="commentInput-' + a.id + '" placeholder="Adicione um comentário..." autocomplete="off">' +
-            '<button onclick="addComment(\'' + a.id + '\')">Enviar</button>' +
+            '<input type="text" id="commentInput-' + a.id + '" placeholder="Adicione um comentário..." autocomplete="off" aria-label="Comentário">' +
+            '<button onclick="event.stopPropagation(); addComment(\'' + a.id + '\')">Enviar</button>' +
             '</div>';
         
         feed.appendChild(item);
-        
-        if (a.location && a.location.lat && a.location.lng) {
-            loadLocationAddress(a.id, a.location.lat, a.location.lng);
-        }
     }
 }
 // ============================================
@@ -3934,60 +3934,31 @@ window.rejectMember = rejectMember;
 // GAMIFICAÇÃO - BARRA DE LEVEL NA TIMELINE
 // ============================================
 
-function renderLevelBar() {
-    const mainContent = document.querySelector('.main-content');
-    if (!mainContent) return;
+async function renderLevelBar() {
+    const user = await getCurrentUser();
+    if (!user) return;
     
-    // Remove barra antiga se existir
-    const existingBar = document.getElementById('levelBar');
-    if (existingBar) existingBar.remove();
+    const { data: profile } = await db.from('profiles')
+        .select('user_level, user_xp, fatcoins')
+        .eq('id', user.id)
+        .single();
     
-    // Busca dados do usuário
-    getCurrentUser().then(async (user) => {
-        if (!user) return;
-        
-        const { data: profile } = await db.from('profiles')
-            .select('user_level, user_xp, fatcoins')
-            .eq('id', user.id)
-            .single();
-        
-        if (!profile) return;
-        
-        const level = profile.user_level || 0;
-        const xp = profile.user_xp || 0;
-        const nextXp = level + 2; // Fórmula: precisa de level+2 para subir
-        const progress = Math.min((xp / nextXp) * 100, 100);
-        const circumference = 2 * Math.PI * 16; // Raio = 16
-        const offset = circumference - (progress / 100) * circumference;
-        
-        const barDiv = document.createElement('div');
-        barDiv.id = 'levelBar';
-        barDiv.className = 'level-bar';
-        barDiv.onclick = () => window.location.href = 'profile.html';
-        barDiv.innerHTML = `
-            <div class="level-circle">
-                <svg viewBox="0 0 40 40">
-                    <circle class="level-circle-bg" cx="20" cy="20" r="16"/>
-                    <circle class="level-circle-fill" cx="20" cy="20" r="16"
-                            stroke-dasharray="${circumference}"
-                            stroke-dashoffset="${offset}"/>
-                </svg>
-                <div class="level-number">${level}</div>
-            </div>
-            <div class="level-label">Nível</div>
-            <div class="fatcoins-display">
-                <i class="fas fa-coins"></i> ${profile.fatcoins || 0}
-            </div>
+    if (!profile) return;
+    
+    const level = profile.user_level || 0;
+    const coins = profile.fatcoins || 0;
+    
+    // Atualiza o header
+    const headerLevel = document.getElementById('headerLevel');
+    if (headerLevel) {
+        headerLevel.innerHTML = `
+            <span class="header-level-badge">Nv.${level}</span>
+            <span class="header-coins">🪙${coins}</span>
         `;
-        
-        // Insere antes da timeline
-        const tabTimeline = document.getElementById('tabTimeline');
-        if (tabTimeline) {
-            tabTimeline.parentNode.insertBefore(barDiv, tabTimeline);
-        }
-    });
+    }
+    
+    console.log('✅ Level bar atualizada: Nv.' + level + ' 🪙' + coins);
 }
-
 // ============================================
 // GAMIFICAÇÃO - CARD DO PERFIL
 // ============================================
@@ -4574,7 +4545,6 @@ async function postStory(file) {
     }
 }
 
-// Abrir visualizador de stories
 async function openStoryViewer(userId) {
     if (!currentGroup) return;
     
@@ -4593,37 +4563,59 @@ async function openStoryViewer(userId) {
         return;
     }
     
+    // Verifica se JÁ VIU todos (bloqueia reabertura)
+    if (userId !== user.id) {
+        let allViewed = true;
+        for (const s of stories) {
+            const { data: viewed } = await db.from('story_views')
+                .select('id').eq('story_id', s.id).eq('user_id', user.id).maybeSingle();
+            if (!viewed) {
+                allViewed = false;
+                break;
+            }
+        }
+        if (allViewed) {
+            showToast('Você já viu todos os stories desta pessoa', 'info');
+            return;
+        }
+    }
+    
     currentStories = stories;
     currentStoryUser = stories[0].profiles;
     currentStoryIndex = 0;
     
-    // Cria o visualizador
-    let viewer = document.getElementById('storyViewer');
-    if (!viewer) {
-        viewer = document.createElement('div');
-        viewer.id = 'storyViewer';
-        viewer.className = 'story-viewer';
-        viewer.innerHTML = `
-            <div class="story-viewer-header">
-                <img id="storyViewerAvatar" class="story-viewer-avatar" src="">
-                <div>
-                    <div class="story-viewer-name" id="storyViewerName"></div>
-                    <div class="story-viewer-time" id="storyViewerTime"></div>
-                </div>
-                <button class="story-delete-btn" id="storyDeleteBtn" style="display:none;" onclick="deleteCurrentStory()">
-                    <i class="fas fa-trash"></i>
-                </button>
-                <button class="story-viewer-close" onclick="closeStoryViewer()">✕</button>
-            </div>
-            <div class="story-viewer-content" id="storyViewerContent">
-                <div class="story-touch-left" onclick="prevStory()"></div>
-                <div class="story-touch-right" onclick="nextStory()"></div>
-            </div>
-        `;
-        document.body.appendChild(viewer);
-    }
+    // Remove viewer antigo
+    const existing = document.getElementById('storyViewer');
+    if (existing) existing.remove();
     
-    viewer.classList.add('open');
+    // Cria o visualizador estilo Instagram
+    const viewer = document.createElement('div');
+    viewer.id = 'storyViewer';
+    viewer.className = 'story-viewer open';
+    viewer.innerHTML = `
+        <div class="story-viewer-bg" id="storyViewerBg"></div>
+        <div class="story-progress-container" id="storyProgressContainer"></div>
+        <div class="story-viewer-header">
+            <img id="storyViewerAvatar" class="story-viewer-avatar" src="">
+            <div>
+                <div class="story-viewer-name" id="storyViewerName"></div>
+                <div class="story-viewer-time" id="storyViewerTime"></div>
+            </div>
+            <button class="story-delete-btn" id="storyDeleteBtn" style="display:none;" onclick="deleteCurrentStory()">
+                <i class="fas fa-trash"></i>
+            </button>
+            <button class="story-viewer-close" onclick="closeStoryViewer()">✕</button>
+        </div>
+        <div class="story-viewer-content" id="storyViewerContent"></div>
+        <div class="story-nav-arrow story-nav-left" onclick="prevStory()">
+            <i class="fas fa-chevron-left"></i>
+        </div>
+        <div class="story-nav-arrow story-nav-right" onclick="nextStory()">
+            <i class="fas fa-chevron-right"></i>
+        </div>
+    `;
+    document.body.appendChild(viewer);
+    
     showCurrentStory();
 }
 
@@ -4637,6 +4629,8 @@ function showCurrentStory() {
     const story = currentStories[currentStoryIndex];
     const user = currentStoryUser;
     
+    // Fundo com blur da foto atual
+    document.getElementById('storyViewerBg').style.backgroundImage = `url(${story.photo_url})`;
     document.getElementById('storyViewerAvatar').src = user?.avatar_url || 'perfil_padrao.png';
     document.getElementById('storyViewerName').textContent = user?.name || 'Usuário';
     document.getElementById('storyViewerTime').textContent = formatTime(story.created_at);
@@ -4647,8 +4641,16 @@ function showCurrentStory() {
             (u.id === story.user_id) ? 'block' : 'none';
     });
     
+    // Barras de progresso
+    const progressContainer = document.getElementById('storyProgressContainer');
+    progressContainer.innerHTML = currentStories.map((s, i) => `
+        <div class="story-progress-bar">
+            <div class="story-progress-fill" id="progressFill${i}" style="width:${i < currentStoryIndex ? '100%' : '0%'}"></div>
+        </div>
+    `).join('');
+    
+    // Conteúdo
     const content = document.getElementById('storyViewerContent');
-    // Remove mídia anterior
     content.querySelector('img')?.remove();
     content.querySelector('video')?.remove();
     
@@ -4659,16 +4661,35 @@ function showCurrentStory() {
         video.autoplay = true;
         video.controls = false;
         video.onended = nextStory;
-        content.insertBefore(video, content.firstChild);
+        content.appendChild(video);
+        
+        // Progresso baseado no tempo do vídeo
+        video.addEventListener('timeupdate', () => {
+            const progress = (video.currentTime / video.duration) * 100;
+            const fill = document.getElementById('progressFill' + currentStoryIndex);
+            if (fill) fill.style.width = progress + '%';
+        });
     } else {
         const img = document.createElement('img');
         img.src = story.photo_url;
         img.className = 'story-viewer-media';
-        content.insertBefore(img, content.firstChild);
+        content.appendChild(img);
         
-        // Auto-avança após 5 segundos
-        clearTimeout(storyProgressTimer);
-        storyProgressTimer = setTimeout(nextStory, 5000);
+        // Anima barra de progresso por 5 segundos
+        const fill = document.getElementById('progressFill' + currentStoryIndex);
+        if (fill) {
+            let width = 0;
+            clearTimeout(storyProgressTimer);
+            const interval = setInterval(() => {
+                width += 2;
+                fill.style.width = width + '%';
+                if (width >= 100) {
+                    clearInterval(interval);
+                    nextStory();
+                }
+            }, 100);
+            storyProgressTimer = interval;
+        }
     }
     
     // Marca como visto (se não for o dono)
@@ -4677,7 +4698,7 @@ function showCurrentStory() {
             await db.from('story_views').insert({
                 story_id: story.id,
                 user_id: u.id
-            }).select(); // Ignora erro de duplicata
+            }).select();
         }
     });
 }
@@ -5089,3 +5110,247 @@ async function updateBetBalance() {
         myBetsContainer.innerHTML = '<p class="text-sm text-muted">Nenhuma aposta ainda</p>';
     }
 }
+
+
+// ============================================
+// VISUALIZAÇÃO DETALHADA DA FOTO
+// ============================================
+
+async function openPhotoDetail(activityId) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    // Busca dados completos da atividade
+    const { data: activity } = await db.from('daily_activities')
+        .select('*, profiles:user_id(name, avatar_url, user_level), challenges:challenge_id(name)')
+        .eq('id', activityId)
+        .single();
+    
+    if (!activity) return;
+    
+    // Busca curtidas com nomes
+    const { data: likes } = await db.from('activity_likes')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('activity_id', activityId)
+        .order('created_at', { ascending: false });
+    
+    // Busca comentários
+    const { data: comments } = await db.from('activity_comments')
+        .select('*, profiles:user_id(name, avatar_url)')
+        .eq('activity_id', activityId)
+        .order('created_at', { ascending: true });
+    
+    // Verifica se o usuário curtiu
+    const { data: userLiked } = await db.from('activity_likes')
+        .select('id').eq('activity_id', activityId).eq('user_id', user.id).maybeSingle();
+    
+    const isExtra = activity.is_extra === true;
+    const isVideo = activity.photo_url && (activity.photo_url.endsWith('.webm') || activity.photo_url.includes('video'));
+    
+    // Cria o modal
+    const existing = document.getElementById('photoDetailModal');
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'photoDetailModal';
+    modal.className = 'photo-detail-modal open';
+    modal.innerHTML = `
+        <div class="photo-detail-bg" style="background-image: url('${activity.photo_url}')"></div>
+        <div class="photo-detail-content">
+            <div class="photo-detail-header">
+                <button class="photo-detail-close" onclick="closePhotoDetail()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <span style="color:#fff;font-weight:600;">Detalhes</span>
+                <div></div>
+            </div>
+            
+            <div class="photo-detail-media-container">
+                ${isVideo ? 
+                    `<video src="${activity.photo_url}" controls autoplay class="photo-detail-video"></video>` :
+                    `<img src="${activity.photo_url}" class="photo-detail-img" alt="Foto">`
+                }
+            </div>
+            
+            <div class="photo-detail-info-card">
+                <div class="photo-detail-user-row">
+                    <img src="${activity.profiles?.avatar_url || 'perfil_padrao.png'}" class="photo-detail-avatar">
+                    <div>
+                        <div style="font-weight:600;color:#1C1C1E;">
+                            ${escapeHtml(activity.profiles?.name || 'Usuário')}
+                            <span class="badge badge-info" style="font-size:0.6rem;">Nv.${activity.profiles?.user_level || 0}</span>
+                            ${isExtra ? '<span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : ''}
+                        </div>
+                        <div style="font-size:0.7rem;color:#8E8E93;">
+                            📅 ${formatDate(activity.activity_date)} • 🎯 ${escapeHtml(activity.challenges?.name || 'Desafio')}
+                        </div>
+                    </div>
+                    <span class="badge ${isExtra ? 'badge-secondary' : 'badge-success'}" style="font-size:0.7rem;">
+                        ${isExtra ? '+0' : '+1 pt'}
+                    </span>
+                </div>
+                
+                ${activity.comment ? `
+                    <div class="photo-detail-comment-author">
+                        💬 ${escapeHtml(activity.comment)}
+                    </div>
+                ` : ''}
+                
+                ${activity.location?.lat ? `
+                    <div class="photo-detail-location" id="detailLocation">
+                        <i class="fas fa-map-pin"></i> Carregando endereço...
+                    </div>
+                ` : ''}
+                
+                <div class="photo-detail-actions">
+                    <button class="photo-detail-action-btn ${userLiked ? 'liked' : ''}" onclick="toggleLikeFromDetail('${activityId}', this)">
+                        <i class="${userLiked ? 'fas' : 'far'} fa-heart"></i>
+                        <span>${likes?.length || 0}</span>
+                    </button>
+                    <button class="photo-detail-action-btn" onclick="focusDetailComment('${activityId}')">
+                        <i class="far fa-comment"></i>
+                        <span>${comments?.length || 0}</span>
+                    </button>
+                </div>
+                
+                ${likes?.length > 0 ? `
+                    <div class="photo-detail-likes" onclick="showLikesList('${activityId}')">
+                        Curtido por <strong>${escapeHtml(likes[0]?.profiles?.name || 'Alguém')}</strong>
+                        ${likes.length > 1 ? ` e mais <strong>${likes.length - 1}</strong>` : ''}
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="photo-detail-comments-section">
+                <div class="photo-detail-comments-list" id="detailCommentsList">
+                    ${comments?.map(c => `
+                        <div class="photo-detail-comment-item">
+                            <img src="${c.profiles?.avatar_url || 'perfil_padrao.png'}" class="photo-detail-comment-avatar">
+                            <div>
+                                <span class="photo-detail-comment-name">${escapeHtml(c.profiles?.name || 'Usuário')}</span>
+                                <span class="photo-detail-comment-text">${escapeHtml(c.comment)}</span>
+                            </div>
+                        </div>
+                    `).join('') || '<p style="color:#8E8E93;text-align:center;padding:12px;">Nenhum comentário ainda</p>'}
+                </div>
+                
+                <div class="photo-detail-comment-input">
+                    <input type="text" id="detailCommentInput" placeholder="Adicione um comentário..." autocomplete="off">
+                    <button onclick="addDetailComment('${activityId}')">Enviar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    // Carrega localização
+    if (activity.location?.lat) {
+        loadDetailLocation(activityId, activity.location.lat, activity.location.lng);
+    }
+}
+
+// Fecha o modal
+function closePhotoDetail() {
+    const modal = document.getElementById('photoDetailModal');
+    if (modal) modal.remove();
+    document.body.style.overflow = '';
+}
+
+// Curtir do modal
+async function toggleLikeFromDetail(activityId, btn) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data: existing } = await db.from('activity_likes')
+        .select('id').eq('activity_id', activityId).eq('user_id', user.id).maybeSingle();
+    
+    if (existing) {
+        await db.from('activity_likes').delete().eq('id', existing.id);
+    } else {
+        await db.from('activity_likes').insert({ activity_id: activityId, user_id: user.id });
+    }
+    
+    // Recarrega o modal
+    openPhotoDetail(activityId);
+}
+
+// Comentar do modal
+async function addDetailComment(activityId) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const input = document.getElementById('detailCommentInput');
+    if (!input) return;
+    
+    const comment = input.value.trim();
+    if (!comment) return;
+    
+    await db.from('activity_comments').insert({
+        activity_id: activityId,
+        user_id: user.id,
+        comment: comment
+    });
+    
+    // Recarrega o modal
+    openPhotoDetail(activityId);
+}
+
+// Focar input de comentário
+function focusDetailComment(activityId) {
+    const input = document.getElementById('detailCommentInput');
+    if (input) input.focus();
+}
+
+// Carregar localização no modal
+async function loadDetailLocation(activityId, lat, lng) {
+    const locEl = document.getElementById('detailLocation');
+    if (!locEl) return;
+    
+    locEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando endereço...';
+    
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=pt-BR`);
+        const data = await res.json();
+        
+        if (data?.address) {
+            const addr = data.address;
+            const parts = [];
+            
+            // Nome do local (ponto de interesse)
+            if (data.name && !data.name.match(/^\d/)) {
+                parts.push('<strong>' + data.name + '</strong>');
+            }
+            
+            // Endereço formatado
+            const street = addr.road || addr.street || addr.pedestrian || '';
+            const number = addr.house_number || '';
+            const suburb = addr.suburb || addr.neighbourhood || addr.residential || '';
+            const city = addr.city || addr.town || addr.municipality || addr.county || '';
+            const state = addr.state || '';
+            const country = addr.country || '';
+            
+            if (street) parts.push(street + (number ? ', ' + number : ''));
+            if (suburb) parts.push(suburb);
+            if (city || state) parts.push((city || '') + (city && state ? ', ' : '') + (state || ''));
+            
+            if (parts.length === 0) {
+                parts.push(data.display_name || 'Localização registrada');
+            }
+            
+            locEl.innerHTML = '<i class="fas fa-map-pin"></i> ' + parts.join(' • ');
+        } else {
+            locEl.innerHTML = '<i class="fas fa-map-pin"></i> 📍 Localização registrada';
+        }
+    } catch (e) {
+        locEl.innerHTML = '<i class="fas fa-map-pin"></i> 📍 Localização registrada';
+    }
+}
+
+// Funções globais
+window.openPhotoDetail = openPhotoDetail;
+window.closePhotoDetail = closePhotoDetail;
+window.toggleLikeFromDetail = toggleLikeFromDetail;
+window.addDetailComment = addDetailComment;
+window.focusDetailComment = focusDetailComment;

@@ -1,5 +1,5 @@
-// FATFIT - Service Worker
-const CACHE_NAME = 'fatfit-v3';
+// FATFIT - Service Worker v4
+const CACHE_NAME = 'fatfit-v5';
 
 // Detecta o base path (localhost ou GitHub Pages)
 const BASE_PATH = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost'
@@ -16,6 +16,7 @@ const CACHE_FILES = [
     BASE_PATH + 'body.html',
     BASE_PATH + 'search.html',
     BASE_PATH + 'activity.html',
+    BASE_PATH + 'bet.html',
     BASE_PATH + 'style.css',
     BASE_PATH + 'app.js',
     BASE_PATH + 'supabase-config.js',
@@ -52,9 +53,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch - serve do cache, depois atualiza
 self.addEventListener('fetch', (event) => {
-    // Ignora requisições chrome-extension e supabase
+    // Ignora requisições chrome-extension, supabase e vídeos
     if (event.request.url.includes('supabase.co') || 
-        event.request.url.startsWith('chrome-extension://')) {
+        event.request.url.startsWith('chrome-extension://') ||
+        (event.request.url.includes('activity-photos') && 
+         (event.request.url.endsWith('.webm') || event.request.url.endsWith('.mp4')))) {
         return;
     }
     
