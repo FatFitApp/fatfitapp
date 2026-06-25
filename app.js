@@ -795,9 +795,6 @@ async function setupHome(session) {
             
             if (membership && membership.status === 'approved') {
                 await selectGroup(group, membership.role);
-                await loadTimeline();
-                await updateUnreadBadge();
-                await renderLevelBar();
                 return;
             }
         }
@@ -834,15 +831,11 @@ function setupBottomNav() {
             
             if (tabId === 'tabDetalhes') loadDetalhes();
             if (tabId === 'tabRanking') loadRanking();
-if (tabId === 'tabChat') {
+            if (tabId === 'tabChat') {
                 loadChat();
-                // Força marcar como lido com delay para garantir
-                setTimeout(() => {
-                    markMessagesAsRead();
-                }, 500);
+                setTimeout(() => markMessagesAsRead(), 500);
             }
-            toggleFAB();  
-            // Atualiza badge ao trocar de aba
+            
             if (tabId !== 'tabChat') {
                 updateUnreadBadge();
             }
@@ -855,7 +848,6 @@ async function loadSidebarGroups(userId) {
     const container = document.getElementById('sidebarGroups');
     if (!container) return;
     
-    // PRIMEIRO: busca os group_ids do usuário
     const { data: memberships, error } = await db.from('group_members')
         .select('group_id, role')
         .eq('user_id', userId)
@@ -868,7 +860,6 @@ async function loadSidebarGroups(userId) {
     
     container.innerHTML = '';
     
-    // SEGUNDO: para cada grupo, busca o nome separadamente
     for (const m of memberships) {
         const { data: group } = await db.from('groups')
             .select('id, name')
@@ -893,7 +884,6 @@ async function loadSidebarGroups(userId) {
             
             if (membership) {
                 await selectGroup(group, membership.role);
-                await loadTimeline();
             }
         });
         container.appendChild(btn);
@@ -910,8 +900,8 @@ async function selectGroup(group, role) {
     document.getElementById('noGroupState').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'flex';
     
+    // Carrega stories imediatamente
     renderStoriesBar();
-    // Atualiza level no header
     await renderLevelBar();
     
     // Força limpeza imediata da timeline
@@ -938,12 +928,10 @@ async function selectGroup(group, role) {
     const user = await getCurrentUser();
     await loadSidebarGroups(user.id);
     
-    // Carrega timeline e stories
+    // Carrega timeline apenas UMA VEZ
     setTimeout(async () => {
         await loadTimeline();
-        await renderStoriesBar();
         await updateUnreadBadge();
-        await renderLevelBar();
     }, 100);
 }
 async function loadTimeline() {
