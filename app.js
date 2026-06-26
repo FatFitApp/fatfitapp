@@ -4857,22 +4857,29 @@ async function loadBetGames() {
         
         for (const game of group.games) {
             const isOpen = game.status === 'open' && new Date(game.game_date) > new Date();
+            const gameStarted = new Date(game.game_date) < new Date();
             const myBet = myBetsMap[game.id];
             
             let statusBadge = '';
             if (game.status === 'finished') {
                 statusBadge = `<span class="bet-status bet-status-finished">Finalizado</span>`;
             } else if (!isOpen) {
-                statusBadge = `<span class="bet-status bet-status-closed">Encerrado</span>`;
+                statusBadge = `<span class="bet-status bet-status-closed">Em andamento</span>`;
             } else {
                 statusBadge = `<span class="bet-status bet-status-open">Aberto</span>`;
             }
             
+            // Define ação do clique:
+            // - Tem aposta → sempre pode ver
+            // - Não tem aposta + jogo aberto → faz aposta
+            // - Não tem aposta + jogo começou → pode ver palpites
             let onClickAction = '';
             if (myBet) {
                 onClickAction = `onclick="openGameDetail('${game.id}')"`;
             } else if (isOpen) {
                 onClickAction = `onclick="openBetForm('${game.id}')"`;
+            } else if (gameStarted) {
+                onClickAction = `onclick="openGameDetail('${game.id}')"`;
             }
             
             html += `
@@ -4917,7 +4924,6 @@ async function loadBetGames() {
     
     container.innerHTML = html;
 }
-
 // Função para expandir/recolher dias
 function toggleBetDay(sectionId) {
     const section = document.getElementById(sectionId);
@@ -5426,19 +5432,23 @@ async function openGameDetail(gameId) {
     const user = await getCurrentUser();
     if (!user) return;
     
+    // Busca dados do jogo
+    const { data: game } = await db.from('bet_games').select('*').eq('id', gameId).single();
+    if (!game) return;
+    
+    // Verifica se o jogo já começou
+    const gameStarted = new Date(game.game_date) < new Date();
+    
     // Verifica se o usuário apostou
     const { data: myBet } = await db.from('bet_entries')
         .select('*').eq('game_id', gameId).eq('user_id', user.id).maybeSingle();
     
-    if (!myBet) {
+    // Só bloqueia se jogo NÃO começou E não apostou
+    if (!gameStarted && !myBet) {
         showToast('Faça uma aposta para ver os palpites!', 'info');
         openBetForm(gameId);
         return;
     }
-    
-    // Busca dados do jogo
-    const { data: game } = await db.from('bet_games').select('*').eq('id', gameId).single();
-    if (!game) return;
     
     // Busca todas as apostas
     const { data: entries } = await db.from('bet_entries')
@@ -5479,7 +5489,7 @@ async function openGameDetail(gameId) {
                 <div style="font-size:0.85rem;">${escapeHtml(game.team_a)} vs ${escapeHtml(game.team_b)}</div>
                 <div class="game-result-info">
                     📅 ${formatDate(game.game_date)} ⏰ ${formatTime(game.game_date)}
-                    ${game.status === 'finished' ? ' • Finalizado' : game.status === 'open' ? ' • Aberto' : ' • Encerrado'}
+                    ${game.status === 'finished' ? ' • Finalizado' : game.status === 'open' ? (gameStarted ? ' • Em andamento' : ' • Aberto') : ' • Encerrado'}
                 </div>
                 <div class="game-result-pot">💰 Pote: ${game.pot_total || 0} FATCoins • 👥 ${game.total_bets || 0} palpites</div>
             </div>

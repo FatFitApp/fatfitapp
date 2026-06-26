@@ -2689,7 +2689,6 @@ body.chat-open .fab {
 
 .bet-game-card.closed {
     opacity: 0.6;
-    pointer-events: none;
 }
 
 .bet-game-card.finished {
