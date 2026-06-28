@@ -5596,35 +5596,61 @@ async function openGameDetail(gameId) {
     const { data: game } = await db.from('bet_games').select('*').eq('id', gameId).single();
     if (!game) return;
     
-    // Verifica se o jogo já começou
     const gameStarted = new Date(game.game_date) < new Date();
     
-    // Verifica se o usuário apostou
     const { data: myBet } = await db.from('bet_entries')
         .select('*').eq('game_id', gameId).eq('user_id', user.id).maybeSingle();
     
-    // Só bloqueia se jogo NÃO começou E não apostou
     if (!gameStarted && !myBet) {
         showToast('Faça uma aposta para ver os palpites!', 'info');
         openBetForm(gameId);
         return;
     }
     
-    // Busca todas as apostas
     const { data: entries } = await db.from('bet_entries')
         .select('*, profiles:user_id(name, avatar_url)')
         .eq('game_id', gameId)
         .order('created_at', { ascending: true });
     
-    // Busca comentários
     const { data: comments } = await db.from('bet_comments')
         .select('*, profiles:user_id(name, avatar_url)')
         .eq('game_id', gameId)
         .order('created_at', { ascending: true });
     
-    // Remove tela anterior se existir
     const existing = document.getElementById('gameDetailScreen');
     if (existing) existing.remove();
+    
+    const currency = game.currency || 'fatcoins';
+    const isFitcoinGame = currency === 'fitcoins';
+    const isBothGame = currency === 'both';
+    
+    // Informação de moeda/pote
+    let currencyHeader = '';
+    if (isFitcoinGame) {
+        currencyHeader = `
+            <div style="font-size:0.85rem;margin-top:4px;color:#00BCD4;">
+                💎 Aposta com FitCoins • Odds: 1.5x a 8x
+            </div>
+        `;
+    } else if (isBothGame) {
+        currencyHeader = `
+            <div style="font-size:0.85rem;margin-top:4px;color:#8E8E93;">
+                🪙 FATCoins ou 💎 FitCoins
+            </div>
+        `;
+    } else {
+        currencyHeader = `
+            <div class="game-result-pot">💰 Pote: ${game.pot_total || 0} 🪙 FATCoins • 👥 ${game.total_bets || 0} palpites</div>
+        `;
+    }
+    
+    // Contagem de palpites para FitCoins
+    const betsCount = entries?.length || 0;
+    if (isFitcoinGame || isBothGame) {
+        currencyHeader += `
+            <div style="font-size:0.8rem;color:#8E8E93;margin-top:2px;">👥 ${betsCount} palpites</div>
+        `;
+    }
     
     const screen = document.createElement('div');
     screen.id = 'gameDetailScreen';
@@ -5651,23 +5677,36 @@ async function openGameDetail(gameId) {
                     📅 ${formatDate(game.game_date)} ⏰ ${formatTime(game.game_date)}
                     ${game.status === 'finished' ? ' • Finalizado' : game.status === 'open' ? (gameStarted ? ' • Em andamento' : ' • Aberto') : ' • Encerrado'}
                 </div>
-                <div class="game-result-pot">💰 Pote: ${game.pot_total || 0} FATCoins • 👥 ${game.total_bets || 0} palpites</div>
+                ${currencyHeader}
             </div>
             
             <div class="bets-list-card">
-                <div class="bets-list-title">📝 Palpites (${entries?.length || 0})</div>
-                ${entries?.map(e => `
-                    <div class="bet-entry-row ${e.user_id === user.id ? 'mine' : ''}">
-                        <img src="${e.profiles?.avatar_url || 'perfil_padrao.png'}" class="bet-entry-avatar">
-                        <span class="bet-entry-name">${escapeHtml(e.profiles?.name || 'Usuário')} ${e.user_id === user.id ? '(você)' : ''}</span>
-                        <span class="bet-entry-score">${e.score_a || 0} x ${e.score_b || 0}</span>
-                        <span class="bet-entry-amount">${e.amount}🪙</span>
-                        ${game.status === 'finished' ? 
-                            (e.won ? '<span class="bet-entry-result bet-entry-won">+'+e.amount_won+'</span>' : 
-                                     '<span class="bet-entry-result bet-entry-lost">Errou</span>') :
-                            '<span class="bet-entry-result bet-entry-pending">Aguardando</span>'}
-                    </div>
-                `).join('') || '<p style="text-align:center;color:#8E8E93;">Nenhum palpite ainda</p>'}
+                <div class="bets-list-title">📝 Palpites (${betsCount})</div>
+                ${entries?.map(e => {
+                    const betCurrency = e.currency || 'fatcoins';
+                    const coinIcon = betCurrency === 'fitcoins' ? '💎' : '🪙';
+                    const coinName = betCurrency === 'fitcoins' ? 'FitCoins' : 'FATCoins';
+                    const odd = calculateOdds(e.score_a || 0, e.score_b || 0);
+                    const estimatedReturn = Math.floor(e.amount * odd);
+                    
+                    return `
+                        <div class="bet-entry-row ${e.user_id === user.id ? 'mine' : ''}">
+                            <img src="${e.profiles?.avatar_url || 'perfil_padrao.png'}" class="bet-entry-avatar">
+                            <div style="flex:1;">
+                                <span class="bet-entry-name">${escapeHtml(e.profiles?.name || 'Usuário')} ${e.user_id === user.id ? '(você)' : ''}</span>
+                                <div style="font-size:0.7rem;color:#8E8E93;">
+                                    Odd: ${odd}x • Retorno: ${estimatedReturn} ${coinIcon}
+                                </div>
+                            </div>
+                            <span class="bet-entry-score">${e.score_a || 0} x ${e.score_b || 0}</span>
+                            <span class="bet-entry-amount">${e.amount}${coinIcon}</span>
+                            ${game.status === 'finished' ? 
+                                (e.won ? '<span class="bet-entry-result bet-entry-won">+'+e.amount_won+'</span>' : 
+                                         '<span class="bet-entry-result bet-entry-lost">Errou</span>') :
+                                '<span class="bet-entry-result bet-entry-pending">Aguardando</span>'}
+                        </div>
+                    `;
+                }).join('') || '<p style="text-align:center;color:#8E8E93;">Nenhum palpite ainda</p>'}
             </div>
             
             ${myBet ? `
@@ -5694,8 +5733,7 @@ async function openGameDetail(gameId) {
     `;
     
     document.body.appendChild(screen);
-}
-
+} 
 // Comentar no jogo
 async function addGameComment(gameId) {
     const user = await getCurrentUser();
@@ -5740,10 +5778,30 @@ async function loadBuyPage() {
     
     // Atualiza saldos
     const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
-    document.getElementById('buyBalanceAmount').innerHTML = `🪙 ${profile?.fatcoins || 0} FATCoins • 💎 ${profile?.fitcoins || 0} FitCoins`;
+    const balanceEl = document.getElementById('buyBalanceAmount');
+    if (balanceEl) {
+        balanceEl.innerHTML = `
+            <div style="display:flex;justify-content:center;gap:24px;align-items:center;">
+                <div>
+                    <span style="font-size:1.5rem;">🪙</span>
+                    <span style="font-weight:800;">${profile?.fatcoins || 0}</span>
+                    <div style="font-size:0.7rem;">FATCoins</div>
+                </div>
+                <div style="width:1px;height:30px;background:rgba(255,255,255,0.3);"></div>
+                <div>
+                    <span style="font-size:1.5rem;">💎</span>
+                    <span style="font-weight:800;">${profile?.fitcoins || 0}</span>
+                    <div style="font-size:0.7rem;">FitCoins</div>
+                </div>
+            </div>
+        `;
+    }
     
     // Carrega pacotes
-    const { data: packages } = await db.from('fatcoin_packages').select('*').eq('active', true).order('price_cents', { ascending: true });
+    const { data: packages } = await db.from('fatcoin_packages')
+        .select('*')
+        .eq('active', true)
+        .order('price_cents', { ascending: true });
     
     const grid = document.getElementById('packagesGrid');
     if (!packages || packages.length === 0) {
@@ -5760,42 +5818,76 @@ async function loadBuyPage() {
         </div>
     `).join('');
     
-    // Carrega histórico
+    // Carrega histórico de pedidos
     const { data: orders } = await db.from('fatcoin_orders')
         .select('*, packages:package_id(name, amount)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(20);
     
     const history = document.getElementById('orderHistory');
     if (orders && orders.length > 0) {
-        history.innerHTML = orders.map(o => `
-            <div class="order-history-card">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div>
-                        <span class="order-history-amount">💎 ${o.amount} FitCoins</span>
-                        <span style="font-size:0.8rem;color:#1C1C1E;margin-left:8px;">R$ ${(o.price_cents / 100).toFixed(2).replace('.', ',')}</span>
+        history.innerHTML = orders.map(o => {
+            let statusIcon = '';
+            let statusClass = '';
+            let statusText = '';
+            
+            switch (o.status) {
+                case 'paid':
+                    statusIcon = '✅';
+                    statusClass = 'status-paid';
+                    statusText = 'Pago';
+                    break;
+                case 'pending':
+                    statusIcon = '⏳';
+                    statusClass = 'status-pending';
+                    statusText = 'Pendente';
+                    break;
+                case 'expired':
+                    statusIcon = '⏰';
+                    statusClass = 'status-expired';
+                    statusText = 'Expirado';
+                    break;
+                case 'cancelled':
+                    statusIcon = '❌';
+                    statusClass = 'status-expired';
+                    statusText = 'Cancelado';
+                    break;
+            }
+            
+            return `
+                <div class="order-history-card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <span class="order-history-amount">💎 ${o.amount} FitCoins</span>
+                            <span style="font-size:0.8rem;color:#1C1C1E;margin-left:8px;">R$ ${(o.price_cents / 100).toFixed(2).replace('.', ',')}</span>
+                        </div>
+                        <span class="order-history-status ${statusClass}">${statusIcon} ${statusText}</span>
                     </div>
-                    <span class="order-history-status status-${o.status}">
-                        ${o.status === 'paid' ? '✅ Pago' : o.status === 'pending' ? '⏳ Pendente' : '❌ Expirado'}
-                    </span>
+                    <div class="order-history-date">${formatDate(o.created_at)} • ${formatTime(o.created_at)}</div>
+                    ${o.payment_method ? `<div style="font-size:0.7rem;color:#8E8E93;">Pix</div>` : ''}
                 </div>
-                <div class="order-history-date">${formatDate(o.created_at)}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+    } else {
+        history.innerHTML = '<p class="text-sm text-muted">Nenhuma compra ainda</p>';
     }
     
     // Verifica se tem pedido pendente
     const { data: pendingOrder } = await db.from('fatcoin_orders')
-        .select('*').eq('user_id', user.id).eq('status', 'pending')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
         .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
     
     if (pendingOrder) {
         showQRSection(pendingOrder);
+        checkPaymentStatus(pendingOrder.id, pendingOrder.mp_payment_id);
     }
 }
-
 function selectPackage(packageId, priceCents, element) {
     document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
     element.classList.add('selected');
@@ -5806,6 +5898,52 @@ function selectPackage(packageId, priceCents, element) {
 }
 
 async function generatePixPayment(packageId, priceCents) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    // Busca dados do pacote
+    const { data: pkg } = await db.from('fatcoin_packages').select('amount, name').eq('id', packageId).single();
+    
+    // Mostra tela de confirmação antes de gerar o Pix
+    const confirmModal = document.createElement('div');
+    confirmModal.id = 'confirmPixModal';
+    confirmModal.className = 'modal open';
+    confirmModal.innerHTML = `
+        <div class="modal-content" style="max-width:400px;border-radius:20px;">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                <h3>📋 Confirmar Pedido</h3>
+                <button class="icon-btn modal-close" onclick="document.getElementById('confirmPixModal').remove()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;text-align:center;">
+                <div style="font-size:3rem;margin-bottom:12px;">💎</div>
+                <div style="font-size:1.2rem;font-weight:700;color:#1C1C1E;margin-bottom:4px;">
+                    ${pkg?.name || 'FitCoins'}
+                </div>
+                <div style="font-size:2rem;font-weight:800;color:#F59E0B;margin-bottom:4px;">
+                    ${pkg?.amount || 0} 💎
+                </div>
+                <div style="font-size:1.5rem;font-weight:700;color:#1C1C1E;margin-bottom:16px;">
+                    R$ ${(priceCents / 100).toFixed(2).replace('.', ',')}
+                </div>
+                <div style="font-size:0.8rem;color:#8E8E93;margin-bottom:16px;">
+                    Pagamento via Pix • Aprovação em até 30 segundos
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-outline btn-block" onclick="document.getElementById('confirmPixModal').remove()" style="flex:1;">
+                        ❌ Cancelar
+                    </button>
+                    <button class="btn btn-primary btn-block" onclick="document.getElementById('confirmPixModal').remove(); processPixPayment('${packageId}', ${priceCents})" style="flex:1;">
+                        ✅ Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(confirmModal);
+}
+
+// Função separada para processar o pagamento após confirmação
+async function processPixPayment(packageId, priceCents) {
     const user = await getCurrentUser();
     if (!user) return;
     
@@ -5862,18 +6000,85 @@ async function generatePixPayment(packageId, priceCents) {
         }
     } catch (e) {
         console.error('Erro Pix:', e);
-        showToast('Erro ao gerar Pix. Tente novamente.', 'error');
+        const errorMsg = e.message || 'Erro ao processar pagamento. Tente novamente.';
+        showToast('❌ ' + errorMsg, 'error');
     }
 }
+
+window.processPixPayment = processPixPayment;
+
+
 function showQRSection(order) {
-    document.getElementById('qrSection').style.display = 'block';
-    document.getElementById('qrCodeImg').src = `data:image/png;base64,${order.pix_qr}`;
-    document.getElementById('qrValue').textContent = `R$ ${(order.price_cents / 100).toFixed(2).replace('.', ',')}`;
-    document.getElementById('pixCode').textContent = order.pix_code;
+    const qrSection = document.getElementById('qrSection');
+    if (!qrSection) return;
     
-    // Começa a verificar pagamento
-    checkPaymentStatus(order.id, order.mp_payment_id);
+    qrSection.style.display = 'block';
+    
+    const priceFormatted = (order.price_cents / 100).toFixed(2).replace('.', ',');
+    
+    qrSection.innerHTML = `
+        <div class="qr-container" style="background:#FFFFFF;border-radius:16px;margin-bottom:16px;">
+            <h3 style="font-size:0.9rem;font-weight:700;color:#1C1C1E;margin-bottom:16px;">📱 Pagamento via Pix</h3>
+            
+            ${order.pix_qr ? `
+                <img src="data:image/png;base64,${order.pix_qr}" class="qr-code-img" alt="QR Code Pix" style="width:200px;height:200px;margin:0 auto;display:block;">
+            ` : `
+                <div style="width:200px;height:200px;margin:0 auto;display:flex;align-items:center;justify-content:center;background:#F9FAFB;border-radius:16px;">
+                    <i class="fas fa-qrcode" style="font-size:4rem;color:#E5E5EA;"></i>
+                </div>
+            `}
+            
+            <div class="qr-code-value">R$ ${priceFormatted}</div>
+            <div class="qr-code-info">Escaneie o QR Code ou copie o código Pix abaixo</div>
+            
+            <div class="pix-copy-container">
+                <div class="pix-copy-label">Código Pix (copia e cola)</div>
+                <div class="pix-copy-code" id="pixCode">${order.pix_code || 'Gerando código...'}</div>
+                <button class="btn-copy-pix" onclick="copyPixCode()">
+                    <i class="fas fa-copy"></i> Copiar código Pix
+                </button>
+            </div>
+            
+            <div class="payment-status" id="paymentStatus">
+                <div class="payment-status-icon">⏳</div>
+                <div class="payment-status-title">Aguardando pagamento</div>
+                <div class="payment-status-text">O Pix expira em 30 minutos</div>
+            </div>
+            
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid #F2F2F7;">
+                <p style="font-size:0.75rem;color:#8E8E93;text-align:center;">
+                    Após o pagamento, seus 💎 FitCoins serão creditados automaticamente.
+                </p>
+                <button class="btn btn-text btn-sm" onclick="cancelOrder('${order.id}')" style="margin-top:8px;color:#EF4444;">
+                    ❌ Cancelar pedido
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Scroll suave até o QR Code
+    qrSection.scrollIntoView({ behavior: 'smooth' });
 }
+
+// Cancela um pedido pendente
+async function cancelOrder(orderId) {
+    if (!confirm('Tem certeza que deseja cancelar este pedido?')) return;
+    
+    const { error } = await db.from('fatcoin_orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+        .eq('status', 'pending');
+    
+    if (error) {
+        showToast('Erro ao cancelar pedido', 'error');
+    } else {
+        showToast('Pedido cancelado', 'info');
+        document.getElementById('qrSection').style.display = 'none';
+        document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
+    }
+}
+
+window.cancelOrder = cancelOrder;
 
 async function checkPaymentStatus(orderId, orderMpId) {
     let attempts = 0;
@@ -5889,9 +6094,17 @@ async function checkPaymentStatus(orderId, orderMpId) {
         document.getElementById('paymentStatus').innerHTML = `
             <div class="payment-status-icon">✅</div>
             <div class="payment-status-title">Pagamento já confirmado!</div>
+            <div class="payment-status-text">Seus FitCoins já foram creditados.</div>
         `;
         return;
     }
+    
+    // Status inicial
+    document.getElementById('paymentStatus').innerHTML = `
+        <div class="payment-status-icon">⏳</div>
+        <div class="payment-status-title">Aguardando pagamento</div>
+        <div class="payment-status-text">O Pix expira em 30 minutos</div>
+    `;
     
     const interval = setInterval(async () => {
         attempts++;
@@ -5902,6 +6115,11 @@ async function checkPaymentStatus(orderId, orderMpId) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order_id: orderMpId })
             });
+            
+            if (!response.ok) {
+                console.error('Erro na verificação:', response.status);
+                return;
+            }
             
             const data = await response.json();
             console.log('📱 Check:', data);
@@ -5916,7 +6134,7 @@ async function checkPaymentStatus(orderId, orderMpId) {
                     .eq('id', orderId)
                     .single();
                 
-                if (checkOrder?.status === 'paid') return; // Já foi pago, não faz nada
+                if (checkOrder?.status === 'paid') return;
                 
                 // Marca como pago
                 await db.from('fatcoin_orders').update({ 
@@ -5942,7 +6160,7 @@ async function checkPaymentStatus(orderId, orderMpId) {
                 document.getElementById('paymentStatus').innerHTML = `
                     <div class="payment-status-icon">✅</div>
                     <div class="payment-status-title">Pagamento confirmado!</div>
-                    <div class="payment-status-text">+${order?.amount || ''} 💎 FitCoins creditados</div>
+                    <div class="payment-status-text">+${order?.amount || ''} 💎 FitCoins creditados com sucesso</div>
                 `;
                 
                 showToast('✅ Pagamento aprovado! FitCoins creditados.', 'success');
@@ -5956,9 +6174,10 @@ async function checkPaymentStatus(orderId, orderMpId) {
             clearInterval(interval);
             document.getElementById('paymentStatus').innerHTML = `
                 <div class="payment-status-icon">⏰</div>
-                <div class="payment-status-title">Tempo expirado</div>
-                <div class="payment-status-text">O QR Code expirou. Gere um novo.</div>
+                <div class="payment-status-title">QR Code expirado</div>
+                <div class="payment-status-text">O tempo de pagamento acabou. Gere um novo QR Code.</div>
             `;
+            showToast('⏰ QR Code expirado. Gere um novo.', 'warning');
         }
     }, 10000);
 }
