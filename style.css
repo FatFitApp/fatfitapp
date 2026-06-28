@@ -3806,3 +3806,196 @@ body.chat-open .fab {
 .bet-day-games.expanded {
     max-height: 2000px;
 }
+
+
+/* ============================================
+   COMPRA DE FATCOINS - MERCADO PAGO
+   ============================================ */
+
+/* Cards de pacotes */
+.packages-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.package-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+    border: 2px solid #E5E5EA;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.package-card:hover {
+    border-color: #4F46E5;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(79,70,229,0.1);
+}
+
+.package-card.selected {
+    border-color: #4F46E5;
+    background: rgba(79,70,229,0.03);
+}
+
+.package-card.recommended {
+    border-color: #10B981;
+}
+
+.package-card .package-badge {
+    display: inline-block;
+    background: #10B981;
+    color: #FFFFFF;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.package-card .package-amount {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #F59E0B;
+    margin-bottom: 4px;
+}
+
+.package-card .package-label {
+    font-size: 0.8rem;
+    color: #8E8E93;
+    margin-bottom: 4px;
+}
+
+.package-card .package-price {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1C1C1E;
+}
+
+/* QR Code */
+.qr-container {
+    text-align: center;
+    padding: 24px;
+}
+
+.qr-code-img {
+    width: 200px;
+    height: 200px;
+    border: 2px solid #E5E5EA;
+    border-radius: 16px;
+    padding: 12px;
+    background: #FFFFFF;
+}
+
+.qr-code-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1C1C1E;
+    margin: 12px 0 4px;
+}
+
+.qr-code-info {
+    font-size: 0.8rem;
+    color: #8E8E93;
+    margin-bottom: 16px;
+}
+
+/* Pix copia e cola */
+.pix-copy-container {
+    background: #F9FAFB;
+    border: 1px solid #E5E5EA;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.pix-copy-label {
+    font-size: 0.7rem;
+    color: #8E8E93;
+    margin-bottom: 6px;
+}
+
+.pix-copy-code {
+    font-size: 0.7rem;
+    color: #1C1C1E;
+    word-break: break-all;
+    font-family: monospace;
+    margin-bottom: 8px;
+    max-height: 60px;
+    overflow-y: auto;
+}
+
+.btn-copy-pix {
+    width: 100%;
+    padding: 10px;
+    background: #4F46E5;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Status do pagamento */
+.payment-status {
+    text-align: center;
+    padding: 20px;
+}
+
+.payment-status-icon {
+    font-size: 4rem;
+    margin-bottom: 12px;
+}
+
+.payment-status-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1C1C1E;
+    margin-bottom: 4px;
+}
+
+.payment-status-text {
+    font-size: 0.85rem;
+    color: #8E8E93;
+}
+
+/* Histórico de compras */
+.order-history-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border-left: 4px solid #10B981;
+}
+
+.order-history-amount {
+    font-weight: 700;
+    color: #F59E0B;
+    font-size: 1rem;
+}
+
+.order-history-date {
+    font-size: 0.7rem;
+    color: #8E8E93;
+}
+
+.order-history-status {
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.status-paid {
+    color: #10B981;
+}
+
+.status-pending {
+    color: #F59E0B;
+}
+
+.status-expired {
+    color: #EF4444;
+}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="icon" type="image/png" href="logo.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#F2F2F7">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>FATFIT - Comprar FATCoins</title>
+    <link rel="stylesheet" href="style.css?v=1.0.12">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <button class="icon-btn" onclick="history.back()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="app-title">Comprar FATCoins</h1>
+        <div></div>
+    </header>
+
+    <main class="main-content">
+        <!-- Saldo atual -->
+        <div id="buyBalance" style="
+            background: linear-gradient(135deg, #F59E0B, #EF4444);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            color: #FFFFFF;
+            text-align: center;
+        ">
+            <div style="font-size:0.8rem;opacity:0.9;">Seu saldo atual</div>
+            <div style="font-size:2rem;font-weight:800;" id="buyBalanceAmount">🪙 0</div>
+        </div>
+
+        <!-- Pacotes -->
+        <h2 style="font-size:1rem;font-weight:700;color:#1C1C1E;margin-bottom:10px;">📦 Escolha um pacote</h2>
+        <div class="packages-grid" id="packagesGrid">
+            <div class="loading-state">
+                <img src="logo.png" alt="Carregando" class="loading-mini-logo">
+                <p>Carregando pacotes...</p>
+            </div>
+        </div>
+
+        <!-- QR Code (escondido até selecionar) -->
+        <div id="qrSection" style="display:none;">
+            <div class="qr-container" style="background:#FFFFFF;border-radius:16px;margin-bottom:16px;">
+                <h3 style="font-size:0.9rem;font-weight:700;color:#1C1C1E;margin-bottom:16px;">📱 Pague com Pix</h3>
+                <img id="qrCodeImg" class="qr-code-img" src="" alt="QR Code Pix">
+                <div class="qr-code-value" id="qrValue"></div>
+                <div class="qr-code-info">Escaneie o QR Code ou copie o código abaixo</div>
+                
+                <div class="pix-copy-container">
+                    <div class="pix-copy-label">Código Pix (copia e cola)</div>
+                    <div class="pix-copy-code" id="pixCode"></div>
+                    <button class="btn-copy-pix" onclick="copyPixCode()">
+                        <i class="fas fa-copy"></i> Copiar código Pix
+                    </button>
+                </div>
+                
+                <div class="payment-status" id="paymentStatus">
+                    <div class="payment-status-icon">⏳</div>
+                    <div class="payment-status-title">Aguardando pagamento</div>
+                    <div class="payment-status-text">O Pix expira em 30 minutos</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico de compras -->
+        <h2 style="font-size:1rem;font-weight:700;color:#1C1C1E;margin:20px 0 10px;">📋 Histórico de Compras</h2>
+        <div id="orderHistory">
+            <p class="text-sm text-muted">Nenhuma compra ainda</p>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js?v=1.0.12"></script>
+    <script src="app.js?v=1.0.12"></script>
+</body>
+</html>

@@ -15,4 +15,8 @@ window.db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     }
 });
 
+// Exporta para uso nas Edge Functions
+window.SUPABASE_URL = SUPABASE_URL;
+window.SUPABASE_KEY = SUPABASE_ANON_KEY;
+
 console.log('FATFIT - Supabase inicializado');

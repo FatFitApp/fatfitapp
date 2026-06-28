@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#F2F2F7">
     <meta name="mobile-web-app-capable" content="yes">
     <title>FATFIT - Bolão da Copa</title>
-    <link rel="stylesheet" href="style.css?v=1.0.11">
+    <link rel="stylesheet" href="style.css?v=1.0.13">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- PWA -->
@@ -27,14 +27,14 @@
             <i class="fas fa-arrow-left"></i>
         </button>
         <h1 class="app-title">🏆 Bolão da Copa</h1>
-        <button class="icon-btn" onclick="window.location.href='profile.html'">
-            <i class="fas fa-user-circle"></i>
+        <button class="icon-btn" onclick="window.location.href='buy.html'" title="Comprar FitCoins">
+            <i class="fas fa-gem" style="color:#00BCD4;"></i>
         </button>
     </header>
 
     <main class="main-content">
         <!-- Saldo do usuário -->
-        <div id="betBalance" class="bet-balance-card" style="
+        <div id="betBalance" style="
             background: linear-gradient(135deg, #F59E0B, #EF4444);
             border-radius: 16px;
             padding: 16px;
@@ -42,9 +42,20 @@
             color: #FFFFFF;
             text-align: center;
         ">
-            <div style="font-size:0.8rem;opacity:0.9;">Seu saldo para apostas</div>
-            <div style="font-size:2rem;font-weight:800;" id="betBalanceAmount">🪙 0</div>
-            <div style="font-size:0.7rem;opacity:0.8;">FATCoins</div>
+            <div style="font-size:0.8rem;opacity:0.9;margin-bottom:8px;">Seu saldo para apostas</div>
+            <div id="betBalanceAmount">
+                <div style="display:flex;justify-content:center;gap:24px;align-items:center;">
+                    <div>
+                        <span style="font-size:1.5rem;">🪙</span>
+                        <span style="font-weight:800;">0</span>
+                    </div>
+                    <div style="width:1px;height:30px;background:rgba(255,255,255,0.3);"></div>
+                    <div>
+                        <span style="font-size:1.5rem;">💎</span>
+                        <span style="font-weight:800;">0</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Lista de jogos -->
@@ -67,7 +78,7 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
-    <script src="supabase-config.js?v=1.0.11"></script>
-    <script src="app.js?v=1.0.11"></script>
+    <script src="supabase-config.js?v=1.0.13"></script>
+    <script src="app.js?v=1.0.13"></script>
 </body>
 </html>

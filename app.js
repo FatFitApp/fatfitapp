@@ -10,6 +10,7 @@ const db = window.db;
 // ============================================
 const APP_VERSION = '1.0.6';
 
+
 (function checkVersion() {
     const storedVersion = localStorage.getItem('fatfit_version');
     
@@ -3927,7 +3928,7 @@ async function renderLevelBar() {
     if (!user) return;
     
     const { data: profile } = await db.from('profiles')
-        .select('user_level, user_xp, fatcoins')
+        .select('user_level, user_xp, fatcoins, fitcoins')
         .eq('id', user.id)
         .single();
     
@@ -3935,6 +3936,7 @@ async function renderLevelBar() {
     
     const level = profile.user_level || 0;
     const coins = profile.fatcoins || 0;
+    const fitcoins = profile.fitcoins || 0;
     
     // Atualiza o header
     const headerLevel = document.getElementById('headerLevel');
@@ -3942,10 +3944,9 @@ async function renderLevelBar() {
         headerLevel.innerHTML = `
             <span class="header-level-badge">Nv.${level}</span>
             <span class="header-coins">🪙${coins}</span>
+            <span class="header-coins" style="color:#00BCD4;cursor:pointer;" onclick="window.location.href='buy.html'" title="Comprar FitCoins">💎${fitcoins}</span>
         `;
     }
-    
-    console.log('✅ Level bar atualizada: Nv.' + level + ' 🪙' + coins);
 }
 // ============================================
 // GAMIFICAÇÃO - CARD DO PERFIL
@@ -3953,7 +3954,7 @@ async function renderLevelBar() {
 
 async function renderGamificationCard(userId) {
     const { data: profile } = await db.from('profiles')
-        .select('user_level, user_xp, fatcoins')
+        .select('user_level, user_xp, fatcoins, fitcoins')
         .eq('id', userId)
         .single();
     
@@ -3966,7 +3967,6 @@ async function renderGamificationCard(userId) {
     const circumference = 2 * Math.PI * 30;
     const offset = circumference - (progress / 100) * circumference;
     
-    // Busca skills
     const skills = ['Academia', 'Corrida', 'Ciclismo', 'Natação'];
     const skillIcons = { 'Academia': '🏋️', 'Corrida': '🏃', 'Ciclismo': '🚴', 'Natação': '🏊' };
     
@@ -4008,8 +4008,13 @@ async function renderGamificationCard(userId) {
                 <div class="gamification-info">
                     <div class="gamification-level-title">Nível ${level}</div>
                     <div class="gamification-xp-text">${xp}/${nextXp} XP para o próximo nível</div>
-                    <div class="gamification-coins">
-                        <i class="fas fa-coins"></i> ${profile.fatcoins || 0} FATCoins
+                    <div style="display:flex;gap:16px;align-items:center;margin-top:8px;">
+                        <div class="gamification-coins" style="font-size:0.9rem;">
+                            <i class="fas fa-coins"></i> ${profile.fatcoins || 0} FATCoins
+                        </div>
+                        <div class="gamification-coins" style="font-size:0.9rem;color:#00BCD4;cursor:pointer;" onclick="window.location.href='buy.html'" title="Comprar FitCoins">
+                            <i class="fas fa-gem"></i> ${profile.fitcoins || 0} FitCoins
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4819,18 +4824,16 @@ async function loadBetGames() {
         .select('*')
         .eq('user_id', user.id);
     
+    const { data: profile } = await db.from('profiles').select('fitcoins, fatcoins').eq('id', user.id).single();
+    
     const myBetsMap = {};
     if (myBets) myBets.forEach(b => myBetsMap[b.game_id] = b);
     
-    // Agrupa jogos por data
     const gamesByDate = {};
     for (const game of games) {
         const dateKey = game.game_date.split('T')[0];
         if (!gamesByDate[dateKey]) {
-            gamesByDate[dateKey] = {
-                date: dateKey,
-                games: []
-            };
+            gamesByDate[dateKey] = { date: dateKey, games: [] };
         }
         gamesByDate[dateKey].games.push(game);
     }
@@ -4859,6 +4862,11 @@ async function loadBetGames() {
             const isOpen = game.status === 'open' && new Date(game.game_date) > new Date();
             const gameStarted = new Date(game.game_date) < new Date();
             const myBet = myBetsMap[game.id];
+            const currency = game.currency || 'fatcoins';
+            const isFitcoinGame = currency === 'fitcoins';
+            const isBothGame = currency === 'both';
+            const userHasFitcoins = (profile?.fitcoins || 0) >= 10;
+            const userHasFatcoins = (profile?.fatcoins || 0) >= 10;
             
             let statusBadge = '';
             if (game.status === 'finished') {
@@ -4869,10 +4877,6 @@ async function loadBetGames() {
                 statusBadge = `<span class="bet-status bet-status-open">Aberto</span>`;
             }
             
-            // Define ação do clique:
-            // - Tem aposta → sempre pode ver
-            // - Não tem aposta + jogo aberto → faz aposta
-            // - Não tem aposta + jogo começou → pode ver palpites
             let onClickAction = '';
             if (myBet) {
                 onClickAction = `onclick="openGameDetail('${game.id}')"`;
@@ -4880,6 +4884,40 @@ async function loadBetGames() {
                 onClickAction = `onclick="openBetForm('${game.id}')"`;
             } else if (gameStarted) {
                 onClickAction = `onclick="openGameDetail('${game.id}')"`;
+            }
+            
+            // Informações específicas da moeda
+            let currencyInfo = '';
+            if (isFitcoinGame) {
+                currencyInfo = `
+                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:0.75rem;color:#00BCD4;">
+                        <i class="fas fa-gem"></i> Aposta com 💎 FitCoins
+                        <span style="margin-left:4px;color:#8E8E93;">• Odds: 1.5x a 8x</span>
+                    </div>
+                `;
+            } else if (isBothGame) {
+                currencyInfo = `
+                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:0.75rem;color:#8E8E93;">
+                        🪙 FATCoins ou 💎 FitCoins
+                    </div>
+                `;
+            } else {
+                currencyInfo = `
+                    <div class="bet-game-pot">💰 Pote: ${game.pot_total || 0} 🪙 FATCoins</div>
+                `;
+            }
+            
+            // Botões de ação
+            let actionButtons = '';
+            if (isOpen && !myBet) {
+                if (isFitcoinGame && !userHasFitcoins) {
+                    actionButtons = `
+                        <div style="display:flex;gap:8px;margin-top:8px;">
+                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openBetForm('${game.id}')" style="flex:1;">💎 Apostar</button>
+                            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); window.location.href='buy.html'" style="flex:1;">🛒 Comprar</button>
+                        </div>
+                    `;
+                }
             }
             
             html += `
@@ -4902,13 +4940,14 @@ async function loadBetGames() {
                     <div class="bet-game-info">
                         <span>⏰ ${formatTime(game.game_date)}</span>
                     </div>
-                    <div class="bet-game-pot">💰 Pote: ${game.pot_total || 0} FATCoins</div>
+                    ${currencyInfo}
                     <div class="bet-game-bets">👥 ${game.total_bets || 0} palpites</div>
+                    ${actionButtons}
                     ${myBet ? `
                         <div class="my-bet-card ${myBet.won ? 'my-bet-won' : game.status === 'finished' ? 'my-bet-lost' : 'my-bet-pending'}" style="margin-top:10px;">
-                            <div class="my-bet-teams">Seu palpite: ${myBet.score_a || 0} x ${myBet.score_b || 0} • ${myBet.amount} 🪙</div>
+                            <div class="my-bet-teams">Seu palpite: ${myBet.score_a || 0} x ${myBet.score_b || 0} • ${myBet.amount} ${myBet.currency === 'fitcoins' ? '💎' : '🪙'}</div>
                             <div class="my-bet-info">
-                                ${myBet.won ? `<span style="color:#10B981;">+${myBet.amount_won} FATCoins</span>` : game.status === 'finished' ? '<span style="color:#EF4444;">Não foi dessa vez</span>' : '<span style="color:#F59E0B;">Aguardando resultado</span>'}
+                                ${myBet.won ? `<span style="color:#10B981;">+${myBet.amount_won} ${myBet.currency === 'fitcoins' ? '💎' : '🪙'}</span>` : game.status === 'finished' ? '<span style="color:#EF4444;">Não foi dessa vez</span>' : '<span style="color:#F59E0B;">Aguardando resultado</span>'}
                             </div>
                         </div>
                     ` : ''}
@@ -4916,10 +4955,7 @@ async function loadBetGames() {
             `;
         }
         
-        html += `
-                </div>
-            </div>
-        `;
+        html += `</div></div>`;
     }
     
     container.innerHTML = html;
@@ -4937,13 +4973,16 @@ function toggleBetDay(sectionId) {
 
 window.toggleBetDay = toggleBetDay;
 
-// Abre formulário de aposta
 function openBetForm(gameId) {
     db.from('bet_games').select('*').eq('id', gameId).single().then(async ({ data: game }) => {
         if (!game) return;
         
         const user = await getCurrentUser();
-        const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
+        const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
+        
+        const currency = game.currency || 'fatcoins';
+        const fatcoinBalance = profile?.fatcoins || 0;
+        const fitcoinBalance = profile?.fitcoins || 0;
         
         let modal = document.getElementById('betFormModal');
         if (!modal) {
@@ -4964,6 +5003,21 @@ function openBetForm(gameId) {
             modal.classList.add('open');
         }
         
+        let currencySelector = '';
+        if (currency === 'both') {
+            currencySelector = `
+                <div class="bet-type-selector" style="margin-bottom:12px;">
+                    <button class="bet-type-btn active" onclick="selectBetCurrency('fatcoins', '${gameId}')">🪙 FATCoins</button>
+                    <button class="bet-type-btn" onclick="selectBetCurrency('fitcoins', '${gameId}')">💎 FitCoins</button>
+                </div>
+            `;
+        }
+        
+        const displayCurrency = currency === 'fitcoins' ? 'fitcoins' : 'fatcoins';
+        const balance = displayCurrency === 'fitcoins' ? fitcoinBalance : fatcoinBalance;
+        const coinIcon = displayCurrency === 'fitcoins' ? '💎' : '🪙';
+        const coinName = displayCurrency === 'fitcoins' ? 'FitCoins' : 'FATCoins';
+        
         const body = document.getElementById('betFormBody');
         body.innerHTML = `
             <div class="bet-form-card bet-form-simple">
@@ -4974,31 +5028,117 @@ function openBetForm(gameId) {
                     <span>📅 ${formatDate(game.game_date)}</span>
                     <span>⏰ ${formatTime(game.game_date)}</span>
                 </div>
-                <div class="bet-balance" style="margin-top:12px;">
-                    Seu saldo: <strong>🪙 ${profile?.fatcoins || 0} FATCoins</strong>
+                ${currency === 'both' ? currencySelector : ''}
+                <div class="bet-balance" style="margin-top:12px;" id="betBalanceDisplay">
+                    Seu saldo: <strong>${coinIcon} ${balance} ${coinName}</strong>
                 </div>
                 
                 <div class="bet-score-simple">
-                    <input type="number" id="betScoreA" min="0" max="20" value="0" placeholder="0">
+                    <input type="number" id="betScoreA" min="0" max="20" value="0" placeholder="0" oninput="updateBetOdds()">
                     <span>x</span>
-                    <input type="number" id="betScoreB" min="0" max="20" value="0" placeholder="0">
+                    <input type="number" id="betScoreB" min="0" max="20" value="0" placeholder="0" oninput="updateBetOdds()">
+                </div>
+                
+                <div style="text-align:center;margin:8px 0;font-size:0.85rem;color:#8E8E93;">
+                    📊 Odd: <strong id="oddDisplay" style="color:#4F46E5;">1.5x</strong>
                 </div>
                 
                 <div class="bet-amount-input">
-                    <label>Valor da aposta (mín. 10 FATCoins)</label>
+                    <label>Valor da aposta (mín. 10 ${coinName})</label>
                     <div class="bet-amount-field">
-                        <input type="number" id="betAmountSimple" min="10" max="${profile?.fatcoins || 0}" value="10" step="10">
-                        <span>🪙 FATCoins</span>
+                        <input type="number" id="betAmountSimple" min="10" max="${balance}" value="10" step="10" oninput="updateBetOdds()">
+                        <span>${coinIcon} ${coinName}</span>
                     </div>
                 </div>
                 
-                <button class="btn btn-primary btn-block" onclick="placeBetSimple('${game.id}')" style="border-radius:10px;padding:14px;">
+                <div style="text-align:center;margin:4px 0 12px;font-size:0.9rem;">
+                    💰 Retorno estimado: <strong id="returnDisplay" style="color:#10B981;">15</strong> ${coinIcon}
+                </div>
+                
+                <button class="btn btn-primary btn-block" onclick="placeBetSimple('${game.id}', '${displayCurrency}')" style="border-radius:10px;padding:14px;">
                     ✅ Confirmar Palpite
                 </button>
             </div>
         `;
+        
+        window._betGame = game;
+        window._betCurrency = displayCurrency;
+        
+        // Inicializa a odd display
+        updateBetOdds();
     });
 }
+
+// Atualiza odd e retorno em tempo real
+function updateBetOdds() {
+    const sa = parseInt(document.getElementById('betScoreA')?.value) || 0;
+    const sb = parseInt(document.getElementById('betScoreB')?.value) || 0;
+    const amount = parseInt(document.getElementById('betAmountSimple')?.value) || 10;
+    
+    const odd = calculateOdds(sa, sb);
+    const returns = Math.floor(amount * odd);
+    
+    const oddDisplay = document.getElementById('oddDisplay');
+    const returnDisplay = document.getElementById('returnDisplay');
+    
+    if (oddDisplay) oddDisplay.textContent = odd + 'x';
+    if (returnDisplay) returnDisplay.textContent = returns;
+}
+
+// Calcula odd baseado no placar
+function calculateOdds(scoreA, scoreB) {
+    const diff = Math.abs(scoreA - scoreB);
+    const total = scoreA + scoreB;
+    
+    if (scoreA === 0 && scoreB === 0) return 4;
+    if (diff === 0 && total <= 2) return 4;
+    if (diff === 0 && total > 2) return 6;
+    if (diff >= 4) return 5;
+    if (total >= 6 && diff <= 2) return 8;
+    if (diff >= 3) return 4;
+    if (diff === 2 && total >= 5) return 3;
+    if (diff <= 1 && total >= 5) return 3;
+    return 1.5;
+}
+
+window.updateBetOdds = updateBetOdds;
+window.calculateOdds = calculateOdds;
+// Seleciona moeda (quando both)
+function selectBetCurrency(currency, gameId) {
+    window._betCurrency = currency;
+    document.querySelectorAll('.bet-type-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    getCurrentUser().then(async (user) => {
+        const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
+        const balance = currency === 'fitcoins' ? (profile?.fitcoins || 0) : (profile?.fatcoins || 0);
+        const coinIcon = currency === 'fitcoins' ? '💎' : '🪙';
+        const coinName = currency === 'fitcoins' ? 'FitCoins' : 'FATCoins';
+        
+        document.getElementById('betBalanceDisplay').innerHTML = `Seu saldo: <strong>${coinIcon} ${balance} ${coinName}</strong>`;
+        document.getElementById('betAmountSimple').max = balance;
+    });
+}
+
+window.selectBetCurrency = selectBetCurrency;
+// Seleciona moeda (quando both)
+function selectBetCurrency(currency, gameId) {
+    window._betCurrency = currency;
+    document.querySelectorAll('.bet-type-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    getCurrentUser().then(async (user) => {
+        const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
+        const balance = currency === 'fitcoins' ? (profile?.fitcoins || 0) : (profile?.fatcoins || 0);
+        const coinIcon = currency === 'fitcoins' ? '💎' : '🪙';
+        const coinName = currency === 'fitcoins' ? 'FitCoins' : 'FATCoins';
+        
+        document.getElementById('betBalanceDisplay').innerHTML = `Seu saldo: <strong>${coinIcon} ${balance} ${coinName}</strong>`;
+        document.getElementById('betAmountSimple').max = balance;
+    });
+}
+
+window.selectBetCurrency = selectBetCurrency;
 // Seleciona tipo de aposta
 function selectBetType(type, gameId) {
     window._betType = type;
@@ -5089,10 +5229,24 @@ async function updateBetBalance() {
     const user = await getCurrentUser();
     if (!user) return;
     
-    const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
+    const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
     const balanceEl = document.getElementById('betBalanceAmount');
     if (balanceEl) {
-        balanceEl.textContent = '🪙 ' + (profile?.fatcoins || 0);
+        balanceEl.innerHTML = `
+            <div style="display:flex;justify-content:center;gap:24px;align-items:center;">
+                <div>
+                    <span style="font-size:1.5rem;">🪙</span>
+                    <span style="font-weight:800;">${profile?.fatcoins || 0}</span>
+                    <div style="font-size:0.7rem;opacity:0.8;">FATCoins</div>
+                </div>
+                <div style="width:1px;height:30px;background:rgba(255,255,255,0.3);"></div>
+                <div>
+                    <span style="font-size:1.5rem;">💎</span>
+                    <span style="font-weight:800;">${profile?.fitcoins || 0}</span>
+                    <div style="font-size:0.7rem;opacity:0.8;">FitCoins</div>
+                </div>
+            </div>
+        `;
     }
     
     // Carrega minhas apostas
@@ -5105,14 +5259,15 @@ async function updateBetBalance() {
     if (myBetsContainer && myBets && myBets.length > 0) {
         myBetsContainer.innerHTML = myBets.map(b => {
             const game = b.bet_games;
+            const coinIcon = b.currency === 'fitcoins' ? '💎' : '🪙';
             return `
                 <div class="my-bet-card ${b.won ? 'my-bet-won' : game?.status === 'finished' ? 'my-bet-lost' : 'my-bet-pending'}">
                     <div class="my-bet-teams">
                         ${game?.team_a_flag || ''} ${escapeHtml(game?.team_a || '')} x ${escapeHtml(game?.team_b || '')} ${game?.team_b_flag || ''}
                     </div>
                     <div class="my-bet-info">
-                        <span>${b.amount} FATCoins • ${b.bet_type === 'winner' ? 'Vencedor' : 'Placar'}</span>
-                        ${b.won ? `<span style="color:#10B981;">+${b.amount_won}</span>` : game?.status === 'finished' ? '<span style="color:#EF4444;">Perdeu</span>' : '<span style="color:#F59E0B;">Aguardando</span>'}
+                        <span>${b.amount} ${coinIcon} • ${b.bet_type === 'exact_score' ? 'Placar: ' + (b.score_a || 0) + 'x' + (b.score_b || 0) : 'Vencedor'}</span>
+                        ${b.won ? `<span style="color:#10B981;">+${b.amount_won} ${coinIcon}</span>` : game?.status === 'finished' ? '<span style="color:#EF4444;">Perdeu</span>' : '<span style="color:#F59E0B;">Aguardando</span>'}
                     </div>
                 </div>
             `;
@@ -5121,7 +5276,6 @@ async function updateBetBalance() {
         myBetsContainer.innerHTML = '<p class="text-sm text-muted">Nenhuma aposta ainda</p>';
     }
 }
-
 
 // ============================================
 // VISUALIZAÇÃO DETALHADA DA FOTO
@@ -5368,7 +5522,7 @@ window.focusDetailComment = focusDetailComment;
 
 
 
-async function placeBetSimple(gameId) {
+async function placeBetSimple(gameId, currency) {
     const user = await getCurrentUser();
     
     const scoreAInput = document.getElementById('betScoreA');
@@ -5383,21 +5537,24 @@ async function placeBetSimple(gameId) {
     const scoreA = parseInt(scoreAInput.value) || 0;
     const scoreB = parseInt(scoreBInput.value) || 0;
     const amount = parseInt(amountInput.value);
+    const betCurrency = window._betCurrency || currency || 'fatcoins';
     
-    console.log('📊 Palpite:', scoreA, 'x', scoreB, '| Valor:', amount);
+    console.log('📊 Palpite:', scoreA, 'x', scoreB, '| Valor:', amount, '| Moeda:', betCurrency);
     
     if (amount < 10) {
-        showToast('Aposta mínima: 10 FATCoins', 'error');
+        showToast('Aposta mínima: 10 ' + (betCurrency === 'fitcoins' ? 'FitCoins' : 'FATCoins'), 'error');
         return;
     }
     
-    const { data: profile } = await db.from('profiles').select('fatcoins').eq('id', user.id).single();
-    if (amount > (profile?.fatcoins || 0)) {
+    const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
+    const balance = betCurrency === 'fitcoins' ? (profile?.fitcoins || 0) : (profile?.fatcoins || 0);
+    
+    if (amount > balance) {
         showToast('Saldo insuficiente!', 'error');
         return;
     }
     
-    if (!confirm(`Confirmar palpite ${scoreA}x${scoreB} com ${amount} FATCoins?`)) return;
+    if (!confirm(`Confirmar palpite ${scoreA}x${scoreB} com ${amount} ${betCurrency === 'fitcoins' ? '💎 FitCoins' : '🪙 FATCoins'}?`)) return;
     
     const { error } = await db.from('bet_entries').insert({
         game_id: gameId,
@@ -5406,7 +5563,8 @@ async function placeBetSimple(gameId) {
         bet_type: 'exact_score',
         prediction: scoreA + 'x' + scoreB,
         score_a: scoreA,
-        score_b: scoreB
+        score_b: scoreB,
+        currency: betCurrency
     });
     
     if (error) {
@@ -5416,16 +5574,18 @@ async function placeBetSimple(gameId) {
             showToast('Erro: ' + error.message, 'error');
         }
     } else {
+        // Desconta a moeda correta
+        if (betCurrency === 'fitcoins') {
+            await db.from('profiles').update({ fitcoins: balance - amount }).eq('id', user.id);
+        } else {
+            await db.from('profiles').update({ fatcoins: balance - amount }).eq('id', user.id);
+        }
+        
         showToast('✅ Palpite registrado! Boa sorte! 🍀', 'success');
         document.getElementById('betFormModal')?.remove();
-        
-        // Abre a tela de detalhes do jogo com os palpites
-        setTimeout(() => {
-            openGameDetail(gameId);
-        }, 500);
+        setTimeout(() => openGameDetail(gameId), 500);
     }
 }
-
 window.placeBetSimple = placeBetSimple;
 
 async function openGameDetail(gameId) {
@@ -5558,3 +5718,274 @@ async function addGameComment(gameId) {
 window.openGameDetail = openGameDetail;
 window.addGameComment = addGameComment;
 window.placeBetSimple = placeBetSimple;
+
+
+// ============================================
+// COMPRA DE FITCOINS - MERCADO PAGO
+// ============================================
+
+if (window.location.pathname.includes('buy')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        await loadBuyPage();
+    });
+}
+
+let selectedPackage = null;
+
+async function loadBuyPage() {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    // Atualiza saldos
+    const { data: profile } = await db.from('profiles').select('fatcoins, fitcoins').eq('id', user.id).single();
+    document.getElementById('buyBalanceAmount').innerHTML = `🪙 ${profile?.fatcoins || 0} FATCoins • 💎 ${profile?.fitcoins || 0} FitCoins`;
+    
+    // Carrega pacotes
+    const { data: packages } = await db.from('fatcoin_packages').select('*').eq('active', true).order('price_cents', { ascending: true });
+    
+    const grid = document.getElementById('packagesGrid');
+    if (!packages || packages.length === 0) {
+        grid.innerHTML = '<p class="text-muted text-center">Nenhum pacote disponível</p>';
+        return;
+    }
+    
+    grid.innerHTML = packages.map((p, i) => `
+        <div class="package-card ${i === 2 ? 'recommended' : ''}" onclick="selectPackage('${p.id}', ${p.price_cents}, this)" data-id="${p.id}">
+            ${i === 2 ? '<div class="package-badge">MAIS POPULAR</div>' : ''}
+            <div class="package-amount">💎 ${p.amount}</div>
+            <div class="package-label">${p.name}</div>
+            <div class="package-price">R$ ${(p.price_cents / 100).toFixed(2).replace('.', ',')}</div>
+        </div>
+    `).join('');
+    
+    // Carrega histórico
+    const { data: orders } = await db.from('fatcoin_orders')
+        .select('*, packages:package_id(name, amount)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+    
+    const history = document.getElementById('orderHistory');
+    if (orders && orders.length > 0) {
+        history.innerHTML = orders.map(o => `
+            <div class="order-history-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <span class="order-history-amount">💎 ${o.amount} FitCoins</span>
+                        <span style="font-size:0.8rem;color:#1C1C1E;margin-left:8px;">R$ ${(o.price_cents / 100).toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <span class="order-history-status status-${o.status}">
+                        ${o.status === 'paid' ? '✅ Pago' : o.status === 'pending' ? '⏳ Pendente' : '❌ Expirado'}
+                    </span>
+                </div>
+                <div class="order-history-date">${formatDate(o.created_at)}</div>
+            </div>
+        `).join('');
+    }
+    
+    // Verifica se tem pedido pendente
+    const { data: pendingOrder } = await db.from('fatcoin_orders')
+        .select('*').eq('user_id', user.id).eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+    
+    if (pendingOrder) {
+        showQRSection(pendingOrder);
+    }
+}
+
+function selectPackage(packageId, priceCents, element) {
+    document.querySelectorAll('.package-card').forEach(c => c.classList.remove('selected'));
+    element.classList.add('selected');
+    selectedPackage = { id: packageId, price_cents: priceCents };
+    
+    // Gera QR Code automaticamente
+    generatePixPayment(packageId, priceCents);
+}
+
+async function generatePixPayment(packageId, priceCents) {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    showToast('📱 Gerando QR Code Pix...', 'info');
+    
+    try {
+        const response = await fetch(`${window.SUPABASE_URL}/functions/v1/create-pix`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: priceCents / 100,
+                email: user.email,
+                name: user.user_metadata?.name || 'Usuário'
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao gerar Pix');
+        }
+        
+        const data = await response.json();
+        console.log('📱 Order:', data);
+        
+        if (data.qr_code) {
+            const { data: pkg } = await db.from('fatcoin_packages').select('amount').eq('id', packageId).single();
+            const fitcoinAmount = pkg?.amount || 10;
+            
+            const { data: order, error } = await db.from('fatcoin_orders').insert({
+                user_id: user.id,
+                package_id: packageId,
+                amount: fitcoinAmount,
+                price_cents: priceCents,
+                pix_code: data.qr_code,
+                pix_qr: data.qr_code_base64,
+                mp_payment_id: data.id,
+                status: 'pending'
+            }).select().single();
+            
+            if (error) {
+                console.error('Erro ao salvar pedido:', error);
+                showToast('Erro ao criar pedido. Tente novamente.', 'error');
+                return;
+            }
+            
+            if (order) {
+                showQRSection(order);
+                checkPaymentStatus(order.id, data.id);
+                showToast('✅ QR Code gerado! Escaneie ou copie o código.', 'success');
+            }
+        } else {
+            console.error('Resposta inesperada:', data);
+            showToast('Erro ao gerar QR Code. Tente novamente.', 'error');
+        }
+    } catch (e) {
+        console.error('Erro Pix:', e);
+        showToast('Erro ao gerar Pix. Tente novamente.', 'error');
+    }
+}
+function showQRSection(order) {
+    document.getElementById('qrSection').style.display = 'block';
+    document.getElementById('qrCodeImg').src = `data:image/png;base64,${order.pix_qr}`;
+    document.getElementById('qrValue').textContent = `R$ ${(order.price_cents / 100).toFixed(2).replace('.', ',')}`;
+    document.getElementById('pixCode').textContent = order.pix_code;
+    
+    // Começa a verificar pagamento
+    checkPaymentStatus(order.id, order.mp_payment_id);
+}
+
+async function checkPaymentStatus(orderId, orderMpId) {
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    // Verifica se já foi processado
+    const { data: existingOrder } = await db.from('fatcoin_orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+    
+    if (existingOrder?.status === 'paid') {
+        document.getElementById('paymentStatus').innerHTML = `
+            <div class="payment-status-icon">✅</div>
+            <div class="payment-status-title">Pagamento já confirmado!</div>
+        `;
+        return;
+    }
+    
+    const interval = setInterval(async () => {
+        attempts++;
+        
+        try {
+            const response = await fetch(`${window.SUPABASE_URL}/functions/v1/check-pix`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order_id: orderMpId })
+            });
+            
+            const data = await response.json();
+            console.log('📱 Check:', data);
+            
+            if (data.status === 'approved' || data.payment_status === 'approved' || 
+                data.status === 'processed' || data.payment_status === 'processed') {
+                clearInterval(interval);
+                
+                // Verifica NOVAMENTE se já foi pago (evita duplicata)
+                const { data: checkOrder } = await db.from('fatcoin_orders')
+                    .select('status')
+                    .eq('id', orderId)
+                    .single();
+                
+                if (checkOrder?.status === 'paid') return; // Já foi pago, não faz nada
+                
+                // Marca como pago
+                await db.from('fatcoin_orders').update({ 
+                    status: 'paid', 
+                    paid_at: new Date().toISOString() 
+                }).eq('id', orderId);
+                
+                const { data: order } = await db.from('fatcoin_orders')
+                    .select('amount, user_id')
+                    .eq('id', orderId)
+                    .single();
+                
+                if (order) {
+                    const { data: profile } = await db.from('profiles')
+                        .select('fitcoins')
+                        .eq('id', order.user_id)
+                        .single();
+                    
+                    const newBalance = (profile?.fitcoins || 0) + order.amount;
+                    await db.from('profiles').update({ fitcoins: newBalance }).eq('id', order.user_id);
+                }
+                
+                document.getElementById('paymentStatus').innerHTML = `
+                    <div class="payment-status-icon">✅</div>
+                    <div class="payment-status-title">Pagamento confirmado!</div>
+                    <div class="payment-status-text">+${order?.amount || ''} 💎 FitCoins creditados</div>
+                `;
+                
+                showToast('✅ Pagamento aprovado! FitCoins creditados.', 'success');
+                setTimeout(() => location.reload(), 2000);
+            }
+        } catch (e) {
+            console.error('Erro ao verificar pagamento:', e);
+        }
+        
+        if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            document.getElementById('paymentStatus').innerHTML = `
+                <div class="payment-status-icon">⏰</div>
+                <div class="payment-status-title">Tempo expirado</div>
+                <div class="payment-status-text">O QR Code expirou. Gere um novo.</div>
+            `;
+        }
+    }, 10000);
+}
+
+function copyPixCode() {
+    const code = document.getElementById('pixCode').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        showToast('✅ Código Pix copiado!', 'success');
+    });
+}
+
+window.selectPackage = selectPackage;
+window.copyPixCode = copyPixCode;
+
+
+// Calcula odd baseado no placar
+function calculateOdds(scoreA, scoreB) {
+    const diff = Math.abs(scoreA - scoreB);
+    const total = scoreA + scoreB;
+    
+    if (scoreA === 0 && scoreB === 0) return 4;     // 0x0
+    if (diff === 0 && total <= 2) return 4;          // 1x1
+    if (diff === 0 && total > 2) return 6;           // 2x2, 3x3
+    if (diff >= 4) return 5;                          // Goleada
+    if (total >= 6 && diff <= 2) return 8;           // 4x2, 5x1, 4x3
+    if (diff >= 3) return 4;                          // 3x0, 4x1
+    if (diff === 2 && total >= 5) return 3;           // 3x1, 4x2
+    if (diff <= 1 && total >= 5) return 3;            // 3x2, 4x3
+    return 1.5;                                        // Placar comum
+}
