@@ -6547,25 +6547,28 @@ function addResetButton() {
     if (existingBar) existingBar.remove();
     
     const isSimulating = JSON.stringify(simulationTournament) !== JSON.stringify(originalTournament);
+    const hasChampion = simulationTournament[5][0]?.name !== '';
     
     if (isSimulating || simulationHistory.length > 0) {
         const btnBar = document.createElement('div');
         btnBar.id = 'simBtns';
         btnBar.style.cssText = `
             position: fixed;
-            bottom: 20px;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 100;
             display: flex;
-            gap: 8px;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
         `;
         
         const btnStyle = `
             background: #ffcc00;
             color: #0b0c10;
             border: none;
-            padding: 10px 16px;
+            padding: 10px 18px;
             border-radius: 20px;
             font-weight: 700;
             font-size: 0.8rem;
@@ -6575,9 +6578,24 @@ function addResetButton() {
         `;
         
         btnBar.innerHTML = `
-            <button style="${btnStyle}" onclick="resetSimulation()">🔄 Resetar</button>
-            <button style="${btnStyle}" onclick="undoLastAdvance()">↩ Desfazer</button>
-            <button style="${btnStyle}" onclick="shareSimulation()">📤 Compartilhar</button>
+            <div style="display:flex;gap:8px;">
+                <button style="${btnStyle}" onclick="event.stopPropagation(); resetSimulation()">🔄 Resetar</button>
+                <button style="${btnStyle}" onclick="event.stopPropagation(); undoLastAdvance()">↩ Desfazer</button>
+            </div>
+            ${hasChampion ? `
+                <div style="
+                    color: #ffcc00;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    text-align: center;
+                    background: rgba(0,0,0,0.7);
+                    padding: 8px 16px;
+                    border-radius: 12px;
+                    animation: pulse 2s infinite;
+                ">
+                    📸 Tire print da tela e compartilhe sua previsão final!
+                </div>
+            ` : ''}
         `;
         
         document.body.appendChild(btnBar);
@@ -6594,39 +6612,118 @@ async function shareSimulation() {
         const svgElement = document.getElementById('bracket-svg');
         if (!svgElement) return;
         
-        // Aumenta temporariamente para melhor qualidade
-        const originalWidth = svgElement.getAttribute('width');
-        const originalHeight = svgElement.getAttribute('height');
-        svgElement.setAttribute('width', '2000');
-        svgElement.setAttribute('height', '2000');
+        // Cria um canvas do tamanho do SVG
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
         
-        // Converte SVG para string
-        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgSize = 1000;
+        canvas.width = svgSize;
+        canvas.height = svgSize;
         
-        // Restaura tamanho original
-        svgElement.setAttribute('width', originalWidth || '100%');
-        svgElement.setAttribute('height', originalHeight || '100%');
+        // Fundo escuro
+        ctx.fillStyle = '#0b0c10';
+        ctx.fillRect(0, 0, svgSize, svgSize);
         
-        // Cria blob e download
-        const blob = new Blob([svgData], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
+        // Renderiza cada nó do SVG manualmente no canvas
+        const nodes = svgElement.querySelectorAll('.node-group');
         
-        if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
-            // No mobile, tenta compartilhar
-            const file = new File([blob], 'copa-2026-previsao.svg', { type: 'image/svg+xml' });
-            await navigator.share({
-                title: 'Minha previsão Copa 2026',
-                text: 'Essa é a minha previsão para a copa do mundo! 😄',
-                files: [file]
-            });
-        } else {
-            // No PC, faz download
-            const link = document.createElement('a');
-            link.download = 'copa-2026-previsao.svg';
-            link.href = url;
-            link.click();
-            showToast('✅ Imagem salva! Abra no navegador.', 'success');
+        for (const node of nodes) {
+            const transform = node.getAttribute('transform');
+            if (!transform) continue;
+            
+            // Extrai posição x, y do transform
+            const match = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+            if (!match) continue;
+            
+            const x = parseFloat(match[1]);
+            const y = parseFloat(match[2]);
+            
+            // Verifica se é um time (tem emoji)
+            const textEl = node.querySelector('.node-emoji');
+            const circleEl = node.querySelector('circle');
+            const titleEl = node.querySelector('title');
+            
+            if (!textEl || !circleEl) continue;
+            
+            const emoji = textEl.textContent;
+            const fontSize = parseFloat(textEl.style.fontSize) || 30;
+            const radius = parseFloat(circleEl.getAttribute('r')) || 20;
+            const isEliminated = node.classList.contains('eliminated');
+            const isPending = node.classList.contains('pending');
+            
+            // Desenha círculo
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            
+            if (isEliminated) {
+                ctx.fillStyle = 'rgba(26, 30, 45, 0.25)';
+                ctx.strokeStyle = '#161922';
+            } else if (isPending) {
+                ctx.fillStyle = '#0f111a';
+                ctx.strokeStyle = '#222738';
+                ctx.setLineDash([4, 4]);
+            } else {
+                ctx.fillStyle = '#1a1e2d';
+                ctx.strokeStyle = '#ffcc00';
+            }
+            
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Desenha emoji
+            if (emoji && emoji.trim()) {
+                ctx.fillStyle = isEliminated ? 'rgba(255,255,255,0.25)' : '#ffffff';
+                ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(emoji, x, y + 2);
+            }
+            
+            // Nome do time (tooltip)
+            if (titleEl && titleEl.textContent && !isPending) {
+                ctx.fillStyle = isEliminated ? 'rgba(255,255,255,0.3)' : '#ffffff';
+                ctx.font = `${fontSize * 0.3}px -apple-system, sans-serif`;
+                ctx.fillText(titleEl.textContent, x, y + radius + 12);
+            }
         }
+        
+        // Cria imagem final no formato story (9:16)
+        const finalCanvas = document.createElement('canvas');
+        const finalCtx = finalCanvas.getContext('2d');
+        
+        const width = 600;
+        const height = 1067;
+        finalCanvas.width = width;
+        finalCanvas.height = height;
+        
+        // Fundo escuro
+        finalCtx.fillStyle = '#0b0c10';
+        finalCtx.fillRect(0, 0, width, height);
+        
+        // Chaveamento centralizado
+        const imgSize = width - 20;
+        const imgX = 10;
+        const imgY = 50;
+        finalCtx.drawImage(canvas, imgX, imgY, imgSize, imgSize);
+        
+        // Frase
+        finalCtx.fillStyle = '#ffcc00';
+        finalCtx.font = 'bold 18px -apple-system, sans-serif';
+        finalCtx.textAlign = 'center';
+        finalCtx.fillText('Essa é a minha previsão', width / 2, height - 50);
+        finalCtx.fillText('para a copa do mundo 😄', width / 2, height - 25);
+        
+        const dataUrl = finalCanvas.toDataURL('image/png', 0.95);
+        
+        // Download direto
+        const link = document.createElement('a');
+        link.download = 'copa-2026-previsao.png';
+        link.href = dataUrl;
+        link.click();
+        showToast('✅ Imagem PNG salva!', 'success');
+        
     } catch (e) {
         console.error('Erro:', e);
         showToast('Erro ao gerar imagem', 'error');
