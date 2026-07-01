@@ -6577,48 +6577,62 @@ async function shareSimulation() {
     showToast('📤 Gerando imagem...', 'info');
     
     try {
-        const svgContainer = document.querySelector('.canvas-container');
-        if (!svgContainer) return;
+        const svgElement = document.getElementById('bracket-svg');
+        if (!svgElement) return;
         
-        // Usa html2canvas para capturar o SVG com emojis
-        const canvas = await html2canvas(svgContainer, {
-            backgroundColor: '#0b0c10',
-            scale: 2, // Melhor qualidade
-            useCORS: true,
-            allowTaint: true
+        // Clona o SVG e ajusta para exportação
+        const clone = svgElement.cloneNode(true);
+        clone.setAttribute('width', '1000');
+        clone.setAttribute('height', '1000');
+        
+        // Converte SVG para string
+        const svgData = new XMLSerializer().serializeToString(clone);
+        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+        const svgUrl = 'data:image/svg+xml;base64,' + svgBase64;
+        
+        // Cria imagem do SVG
+        const img = new Image();
+        
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = svgUrl;
         });
         
-        // Cria novo canvas no formato story (9:16)
-        const finalCanvas = document.createElement('canvas');
-        const ctx = finalCanvas.getContext('2d');
+        // Cria canvas final (story 9:16)
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
         
         const width = 600;
         const height = 1067;
-        finalCanvas.width = width;
-        finalCanvas.height = height;
+        canvas.width = width;
+        canvas.height = height;
         
-        // Fundo gradiente escuro
-        const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, '#1a1e2d');
-        gradient.addColorStop(1, '#0b0c10');
-        ctx.fillStyle = gradient;
+        // Fundo escuro
+        ctx.fillStyle = '#0b0c10';
         ctx.fillRect(0, 0, width, height);
         
-        // Desenha o SVG capturado centralizado
-        const svgSize = Math.min(width - 40, height - 160);
-        const svgX = (width - svgSize) / 2;
+        // Chaveamento centralizado
+        const svgSize = width - 30;
+        const svgX = 15;
         const svgY = 60;
-        ctx.drawImage(canvas, svgX, svgY, svgSize, svgSize);
+        ctx.drawImage(img, svgX, svgY, svgSize, svgSize);
         
         // Frase
-        ctx.fillStyle = '#ffcc00';
-        ctx.font = 'bold 20px -apple-system, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Essa é a minha previsão', width / 2, height - 50);
-        ctx.fillText('para a copa do mundo 😄', width / 2, height - 20);
+        ctx.fillText('Essa é a minha previsão', width / 2, height - 60);
+        ctx.fillText('para a copa do mundo 😄', width / 2, height - 30);
         
-        const dataUrl = finalCanvas.toDataURL('image/png');
+        // Logo FATFIT
+        ctx.fillStyle = '#ffcc00';
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('🦫 FATFIT', width / 2, height - 10);
         
+        const dataUrl = canvas.toDataURL('image/png', 0.9);
+        
+        // Download automático (fallback se não puder compartilhar)
         if (navigator.share) {
             const blob = await (await fetch(dataUrl)).blob();
             const file = new File([blob], 'copa-2026-previsao.png', { type: 'image/png' });
@@ -6628,11 +6642,21 @@ async function shareSimulation() {
                 files: [file]
             });
         } else {
-            window.open(dataUrl);
+            // Download direto no PC
+            const link = document.createElement('a');
+            link.download = 'copa-2026-previsao.png';
+            link.href = dataUrl;
+            link.click();
+            showToast('✅ Imagem salva!', 'success');
         }
     } catch (e) {
         console.error('Erro ao compartilhar:', e);
-        showToast('Erro ao gerar imagem', 'error');
+        // Fallback: abre em nova aba
+        const svgElement = document.getElementById('bracket-svg');
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+        window.open('data:image/svg+xml;base64,' + svgBase64);
+        showToast('Imagem aberta em nova aba', 'info');
     }
 }
 window.shareSimulation = shareSimulation;
