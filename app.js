@@ -6300,21 +6300,34 @@ function simulateAdvance(round, index) {
     if (round >= 5) return;
     
     const currentSlot = simulationTournament[round][index];
-    if (currentSlot.name === '' || currentSlot.status === 'eliminated' || currentSlot.status === 'pending') return;
+    
+    // Verificações
+    if (!currentSlot || currentSlot.name === '') return;
+    if (currentSlot.status === 'eliminated') return;
+    if (currentSlot.status === 'pending') return;
     
     const parentIndex = Math.floor(index / 2);
-    const originalParent = originalTournament[round + 1][parentIndex];
     
-    if (originalParent.name !== '' && originalParent.status !== 'pending') {
+    // Verifica se já tem resultado oficial
+    const originalParent = originalTournament[round + 1]?.[parentIndex];
+    if (originalParent && originalParent.name !== '' && originalParent.status !== 'pending') {
         showToast('Este jogo já tem resultado oficial!', 'warning');
         return;
     }
     
-    // Salva estado antes de modificar (para desfazer)
+    // O adversário precisa existir (não pode avançar sozinho)
+    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
+    const siblingSlot = simulationTournament[round][siblingIndex];
+    
+    if (!siblingSlot || siblingSlot.name === '' || siblingSlot.status === 'pending') {
+        showToast('Este jogo ainda não tem adversário definido!', 'warning');
+        return;
+    }
+    
+    // Salva estado antes de modificar
     simulationHistory.push(JSON.parse(JSON.stringify(simulationTournament)));
     
-    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
-    
+    // Avança o time
     simulationTournament[round + 1][parentIndex] = {
         id: currentSlot.id,
         name: currentSlot.name,
@@ -6322,6 +6335,7 @@ function simulateAdvance(round, index) {
         status: 'active'
     };
     
+    // Elimina o adversário
     simulationTournament[round][siblingIndex].status = 'eliminated';
     simulationTournament[round][index].status = 'active';
     
@@ -6580,83 +6594,42 @@ async function shareSimulation() {
         const svgElement = document.getElementById('bracket-svg');
         if (!svgElement) return;
         
-        // Clona o SVG e ajusta para exportação
-        const clone = svgElement.cloneNode(true);
-        clone.setAttribute('width', '1000');
-        clone.setAttribute('height', '1000');
+        // Aumenta temporariamente para melhor qualidade
+        const originalWidth = svgElement.getAttribute('width');
+        const originalHeight = svgElement.getAttribute('height');
+        svgElement.setAttribute('width', '2000');
+        svgElement.setAttribute('height', '2000');
         
         // Converte SVG para string
-        const svgData = new XMLSerializer().serializeToString(clone);
-        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
-        const svgUrl = 'data:image/svg+xml;base64,' + svgBase64;
+        const svgData = new XMLSerializer().serializeToString(svgElement);
         
-        // Cria imagem do SVG
-        const img = new Image();
+        // Restaura tamanho original
+        svgElement.setAttribute('width', originalWidth || '100%');
+        svgElement.setAttribute('height', originalHeight || '100%');
         
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            img.src = svgUrl;
-        });
+        // Cria blob e download
+        const blob = new Blob([svgData], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
         
-        // Cria canvas final (story 9:16)
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        const width = 600;
-        const height = 1067;
-        canvas.width = width;
-        canvas.height = height;
-        
-        // Fundo escuro
-        ctx.fillStyle = '#0b0c10';
-        ctx.fillRect(0, 0, width, height);
-        
-        // Chaveamento centralizado
-        const svgSize = width - 30;
-        const svgX = 15;
-        const svgY = 60;
-        ctx.drawImage(img, svgX, svgY, svgSize, svgSize);
-        
-        // Frase
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Essa é a minha previsão', width / 2, height - 60);
-        ctx.fillText('para a copa do mundo 😄', width / 2, height - 30);
-        
-        // Logo FATFIT
-        ctx.fillStyle = '#ffcc00';
-        ctx.font = 'bold 14px -apple-system, sans-serif';
-        ctx.fillText('🦫 FATFIT', width / 2, height - 10);
-        
-        const dataUrl = canvas.toDataURL('image/png', 0.9);
-        
-        // Download automático (fallback se não puder compartilhar)
-        if (navigator.share) {
-            const blob = await (await fetch(dataUrl)).blob();
-            const file = new File([blob], 'copa-2026-previsao.png', { type: 'image/png' });
+        if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+            // No mobile, tenta compartilhar
+            const file = new File([blob], 'copa-2026-previsao.svg', { type: 'image/svg+xml' });
             await navigator.share({
                 title: 'Minha previsão Copa 2026',
                 text: 'Essa é a minha previsão para a copa do mundo! 😄',
                 files: [file]
             });
         } else {
-            // Download direto no PC
+            // No PC, faz download
             const link = document.createElement('a');
-            link.download = 'copa-2026-previsao.png';
-            link.href = dataUrl;
+            link.download = 'copa-2026-previsao.svg';
+            link.href = url;
             link.click();
-            showToast('✅ Imagem salva!', 'success');
+            showToast('✅ Imagem salva! Abra no navegador.', 'success');
         }
     } catch (e) {
-        console.error('Erro ao compartilhar:', e);
-        // Fallback: abre em nova aba
-        const svgElement = document.getElementById('bracket-svg');
-        const svgData = new XMLSerializer().serializeToString(svgElement);
-        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
-        window.open('data:image/svg+xml;base64,' + svgBase64);
-        showToast('Imagem aberta em nova aba', 'info');
+        console.error('Erro:', e);
+        showToast('Erro ao gerar imagem', 'error');
     }
 }
 window.shareSimulation = shareSimulation;
