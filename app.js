@@ -6208,3 +6208,255 @@ function calculateOdds(scoreA, scoreB) {
     if (diff <= 1 && total >= 5) return 3;            // 3x2, 4x3
     return 1.5;                                        // Placar comum
 }
+
+
+// ============================================
+// PÁGINA: cup.html - CHAVEAMENTO DA COPA
+// ============================================
+
+if (window.location.pathname.includes('cup')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        await loadCupData();
+    });
+}
+
+let cupTeams = [];
+const centerX = 500;
+const centerY = 500;
+
+async function loadCupData() {
+    const { data: teams } = await db.from('cup_teams')
+        .select('*')
+        .order('group_name', { ascending: true })
+        .order('position', { ascending: true });
+    
+    if (!teams || teams.length === 0) {
+        console.log('Nenhum time cadastrado');
+        return;
+    }
+    
+    cupTeams = teams;
+    
+    // Monta o array tournament baseado nos rounds
+    const tournament = [
+        teams.filter(t => t.round === 0).map(t => ({
+            name: t.team_name,
+            flag: t.team_flag,
+            status: t.status
+        })),
+        teams.filter(t => t.round === 1).map(t => ({
+            name: t.team_name,
+            flag: t.team_flag,
+            status: t.status
+        })),
+        teams.filter(t => t.round === 2).map(t => ({
+            name: t.team_name,
+            flag: t.team_flag,
+            status: t.status || 'pending'
+        })),
+        teams.filter(t => t.round === 3).map(t => ({
+            name: t.team_name,
+            flag: t.team_flag,
+            status: t.status || 'pending'
+        })),
+        teams.filter(t => t.round === 4).map(t => ({
+            name: t.team_name,
+            flag: t.team_flag,
+            status: t.status || 'pending'
+        })),
+        teams.filter(t => t.round === 5).map(t => ({
+            name: t.team_name,
+            flag: t.team_flag,
+            status: t.status || 'pending'
+        }))
+    ];
+    
+    // Se algum round estiver vazio, preenche com slots vazios
+    const expectedSlots = [32, 16, 8, 4, 2, 1];
+    for (let r = 0; r < 6; r++) {
+        while (tournament[r].length < expectedSlots[r]) {
+            tournament[r].push({ name: '', flag: '', status: 'pending' });
+        }
+    }
+    
+    renderTournament(tournament);
+}
+
+function getRadius(round) {
+    return 440 - (round * 78);
+}
+
+function getAngle(round, index) {
+    const slotsInRound = 32 / Math.pow(2, round);
+    return (Math.pow(2, round) * index + (Math.pow(2, round) - 1) / 2) * (360 / 32);
+}
+
+function polarToCartesian(r, angleDegrees) {
+    const angleRadians = (angleDegrees - 90) * Math.PI / 180.0;
+    return {
+        x: centerX + (r * Math.cos(angleRadians)),
+        y: centerY + (r * Math.sin(angleRadians))
+    };
+}
+
+function renderTournament(tournament) {
+    const linksGroup = document.getElementById('links-group');
+    const nodesGroup = document.getElementById('nodes-group');
+    const clipDefs = document.getElementById('clip-defs');
+    
+    if (!linksGroup || !nodesGroup || !clipDefs) return;
+    
+    linksGroup.innerHTML = '';
+    nodesGroup.innerHTML = '';
+    clipDefs.innerHTML = '';
+
+    for (let r = 0; r <= 5; r++) {
+        const rad = r === 5 ? 55 : 24 + (r * 3.5);
+        clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${rad}" cx="0" cy="0" /></clipPath>`;
+    }
+
+    // Linhas
+    for (let r = 0; r < 4; r++) {
+        const slots = 32 / Math.pow(2, r);
+        for (let i = 0; i < slots; i++) {
+            const childSlot = tournament[r][i];
+            const parentIndex = Math.floor(i / 2);
+            const parentSlot = tournament[r + 1][parentIndex];
+
+            const angleChild = getAngle(r, i);
+            const angleParent = getAngle(r + 1, parentIndex);
+            
+            const rChild = getRadius(r);
+            const rParent = getRadius(r + 1);
+            const rMid = (rChild + rParent) / 2;
+
+            const p1 = polarToCartesian(rChild, angleChild);
+            const pMid1 = polarToCartesian(rMid, angleChild);
+            const pMid2 = polarToCartesian(rMid, angleParent);
+            const p2 = polarToCartesian(rParent, angleParent);
+
+            const sweepFlag = angleChild < angleParent ? 1 : 0;
+            const d = `M ${p1.x} ${p1.y} L ${pMid1.x} ${pMid1.y} A ${rMid} ${rMid} 0 0 ${sweepFlag} ${pMid2.x} ${pMid2.y} L ${p2.x} ${p2.y}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', d);
+
+            if (childSlot.name !== '' && parentSlot.name === childSlot.name) {
+                path.setAttribute('class', 'link-active');
+            } else if (childSlot.status === 'eliminated') {
+                path.setAttribute('class', 'link-eliminated');
+            } else {
+                path.setAttribute('class', 'link-pending');
+            }
+            linksGroup.appendChild(path);
+        }
+    }
+
+    // Linha final
+    for (let i = 0; i < 2; i++) {
+        const childSlot = tournament[4][i];
+        const champSlot = tournament[5][0];
+        const p1 = polarToCartesian(getRadius(4), getAngle(4, i));
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${p1.x} ${p1.y} L ${centerX} ${centerY}`);
+        
+        if (childSlot.name !== '' && champSlot.name === childSlot.name) {
+            path.setAttribute('class', 'link-active');
+        } else if (childSlot.status === 'eliminated') {
+            path.setAttribute('class', 'link-eliminated');
+        } else {
+            path.setAttribute('class', 'link-pending');
+        }
+        linksGroup.appendChild(path);
+    }
+
+    // Nós
+    for (let r = 0; r < 5; r++) {
+        const slots = 32 / Math.pow(2, r);
+        const radiusNode = 24 + (r * 3.5);
+
+        for (let i = 0; i < slots; i++) {
+            const slot = tournament[r][i];
+            const pos = polarToCartesian(getRadius(r), getAngle(r, i));
+
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+
+            let gClass = 'node-group';
+            if (slot.status === 'eliminated') gClass += ' eliminated';
+            if (slot.status === 'pending') gClass += ' pending';
+            if (slot.status === 'active' && slot.name !== '') gClass += ' active';
+            g.setAttribute('class', gClass);
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('r', radiusNode);
+            circle.setAttribute('class', 'node-circle');
+            g.appendChild(circle);
+
+            if (slot.name !== '') {
+                const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
+                
+                const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                textEmoji.setAttribute('x', '0');
+                textEmoji.setAttribute('y', '2');
+                textEmoji.setAttribute('text-anchor', 'middle');
+                textEmoji.setAttribute('class', 'node-emoji');
+                textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
+                textEmoji.textContent = slot.flag;
+                
+                gClip.appendChild(textEmoji);
+                g.appendChild(gClip);
+
+                const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                title.textContent = slot.name;
+                g.appendChild(title);
+            }
+            nodesGroup.appendChild(g);
+        }
+    }
+
+    // Centro (campeão)
+    const champ = tournament[5][0];
+    const radiusNode = 55;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${centerX}, ${centerY})`);
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('r', radiusNode);
+
+    if (champ.name === '') {
+        g.setAttribute('class', 'node-group pending');
+        circle.setAttribute('class', 'node-circle center-circle');
+        g.appendChild(circle);
+
+        const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        textTrophy.setAttribute('y', '12');
+        textTrophy.setAttribute('text-anchor', 'middle');
+        textTrophy.style.fontSize = '40px';
+        textTrophy.textContent = '🏆';
+        g.appendChild(textTrophy);
+    } else {
+        g.setAttribute('class', 'node-group active pulsing');
+        circle.setAttribute('class', 'node-circle center-circle-winner');
+        g.appendChild(circle);
+
+        const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        gClip.setAttribute('clip-path', 'url(#clip-round-5)');
+        
+        const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        textEmoji.setAttribute('x', '0');
+        textEmoji.setAttribute('y', '3');
+        textEmoji.setAttribute('text-anchor', 'middle');
+        textEmoji.setAttribute('class', 'node-emoji');
+        textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
+        textEmoji.textContent = champ.flag;
+        
+        gClip.appendChild(textEmoji);
+        g.appendChild(gClip);
+    }
+    nodesGroup.appendChild(g);
+}
