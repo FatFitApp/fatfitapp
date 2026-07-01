@@ -6223,6 +6223,8 @@ if (window.location.pathname.includes('cup')) {
 }
 
 let cupTeams = [];
+let simulationTournament = null;
+let originalTournament = null;
 const centerX = 500;
 const centerY = 500;
 
@@ -6239,50 +6241,96 @@ async function loadCupData() {
     
     cupTeams = teams;
     
-    // Monta o array tournament baseado nos rounds
     const tournament = [
         teams.filter(t => t.round === 0).map(t => ({
+            id: t.id,
             name: t.team_name,
             flag: t.team_flag,
             status: t.status
         })),
         teams.filter(t => t.round === 1).map(t => ({
+            id: t.id,
             name: t.team_name,
             flag: t.team_flag,
             status: t.status
         })),
         teams.filter(t => t.round === 2).map(t => ({
+            id: t.id,
             name: t.team_name,
             flag: t.team_flag,
             status: t.status || 'pending'
         })),
         teams.filter(t => t.round === 3).map(t => ({
+            id: t.id,
             name: t.team_name,
             flag: t.team_flag,
             status: t.status || 'pending'
         })),
         teams.filter(t => t.round === 4).map(t => ({
+            id: t.id,
             name: t.team_name,
             flag: t.team_flag,
             status: t.status || 'pending'
         })),
         teams.filter(t => t.round === 5).map(t => ({
+            id: t.id,
             name: t.team_name,
             flag: t.team_flag,
             status: t.status || 'pending'
         }))
     ];
     
-    // Se algum round estiver vazio, preenche com slots vazios
     const expectedSlots = [32, 16, 8, 4, 2, 1];
     for (let r = 0; r < 6; r++) {
         while (tournament[r].length < expectedSlots[r]) {
-            tournament[r].push({ name: '', flag: '', status: 'pending' });
+            tournament[r].push({ id: null, name: '', flag: '', status: 'pending' });
         }
     }
     
-    renderTournament(tournament);
+    originalTournament = JSON.parse(JSON.stringify(tournament));
+    simulationTournament = JSON.parse(JSON.stringify(tournament));
+    
+    renderTournament(simulationTournament);
 }
+
+function simulateAdvance(round, index) {
+    if (round >= 5) return;
+    
+    const currentSlot = simulationTournament[round][index];
+    
+    if (currentSlot.name === '' || currentSlot.status === 'eliminated' || currentSlot.status === 'pending') return;
+    
+    const parentIndex = Math.floor(index / 2);
+    const originalParent = originalTournament[round + 1][parentIndex];
+    
+    if (originalParent.name !== '' && originalParent.status !== 'pending') {
+        showToast('Este jogo já tem resultado oficial!', 'warning');
+        return;
+    }
+    
+    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
+    
+    simulationTournament[round + 1][parentIndex] = {
+        id: currentSlot.id,
+        name: currentSlot.name,
+        flag: currentSlot.flag,
+        status: 'active'
+    };
+    
+    simulationTournament[round][siblingIndex].status = 'eliminated';
+    simulationTournament[round][index].status = 'active';
+    
+    renderTournament(simulationTournament);
+    
+    showToast(`🔄 Simulação: ${currentSlot.name} avançou! (visual apenas)`, 'info');
+}
+
+function resetSimulation() {
+    simulationTournament = JSON.parse(JSON.stringify(originalTournament));
+    renderTournament(simulationTournament);
+    showToast('🔄 Simulação resetada aos dados oficiais', 'info');
+}
+window.resetSimulation = resetSimulation;
 
 function getRadius(round) {
     return 440 - (round * 78);
@@ -6317,7 +6365,6 @@ function renderTournament(tournament) {
         clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${rad}" cx="0" cy="0" /></clipPath>`;
     }
 
-    // Linhas
     for (let r = 0; r < 4; r++) {
         const slots = 32 / Math.pow(2, r);
         for (let i = 0; i < slots; i++) {
@@ -6343,7 +6390,7 @@ function renderTournament(tournament) {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
 
-            if (childSlot.name !== '' && parentSlot.name === childSlot.name) {
+            if (childSlot.name !== '' && parentSlot.name === childSlot.name && parentSlot.name !== '') {
                 path.setAttribute('class', 'link-active');
             } else if (childSlot.status === 'eliminated') {
                 path.setAttribute('class', 'link-eliminated');
@@ -6354,7 +6401,6 @@ function renderTournament(tournament) {
         }
     }
 
-    // Linha final
     for (let i = 0; i < 2; i++) {
         const childSlot = tournament[4][i];
         const champSlot = tournament[5][0];
@@ -6363,7 +6409,7 @@ function renderTournament(tournament) {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', `M ${p1.x} ${p1.y} L ${centerX} ${centerY}`);
         
-        if (childSlot.name !== '' && champSlot.name === childSlot.name) {
+        if (childSlot.name !== '' && champSlot.name === childSlot.name && champSlot.name !== '') {
             path.setAttribute('class', 'link-active');
         } else if (childSlot.status === 'eliminated') {
             path.setAttribute('class', 'link-eliminated');
@@ -6373,7 +6419,6 @@ function renderTournament(tournament) {
         linksGroup.appendChild(path);
     }
 
-    // Nós
     for (let r = 0; r < 5; r++) {
         const slots = 32 / Math.pow(2, r);
         const radiusNode = 24 + (r * 3.5);
@@ -6390,6 +6435,11 @@ function renderTournament(tournament) {
             if (slot.status === 'pending') gClass += ' pending';
             if (slot.status === 'active' && slot.name !== '') gClass += ' active';
             g.setAttribute('class', gClass);
+
+            if (slot.name !== '' && slot.status === 'active' && slot.status !== 'eliminated') {
+                g.setAttribute('onclick', `simulateAdvance(${r}, ${i})`);
+                g.style.cursor = 'pointer';
+            }
 
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('r', radiusNode);
@@ -6419,7 +6469,6 @@ function renderTournament(tournament) {
         }
     }
 
-    // Centro (campeão)
     const champ = tournament[5][0];
     const radiusNode = 55;
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -6459,4 +6508,37 @@ function renderTournament(tournament) {
         g.appendChild(gClip);
     }
     nodesGroup.appendChild(g);
+    
+    addResetButton();
+}
+
+function addResetButton() {
+    const existing = document.getElementById('resetSimBtn');
+    if (existing) existing.remove();
+    
+    const isSimulating = JSON.stringify(simulationTournament) !== JSON.stringify(originalTournament);
+    
+    if (isSimulating) {
+        const btn = document.createElement('button');
+        btn.id = 'resetSimBtn';
+        btn.textContent = '🔄 Resetar';
+        btn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            background: #ffcc00;
+            color: #0b0c10;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(255,204,0,0.4);
+        `;
+        btn.onclick = resetSimulation;
+        document.body.appendChild(btn);
+    }
 }
