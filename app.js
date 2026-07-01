@@ -6225,6 +6225,7 @@ if (window.location.pathname.includes('cup')) {
 let cupTeams = [];
 let simulationTournament = null;
 let originalTournament = null;
+let simulationHistory = [];
 const centerX = 500;
 const centerY = 500;
 
@@ -6293,45 +6294,27 @@ async function loadCupData() {
     renderTournament(simulationTournament);
 }
 
+
+
 function simulateAdvance(round, index) {
     if (round >= 5) return;
     
     const currentSlot = simulationTournament[round][index];
-    
-    // Não pode avançar se: vazio, eliminado, pendente
     if (currentSlot.name === '' || currentSlot.status === 'eliminated' || currentSlot.status === 'pending') return;
     
     const parentIndex = Math.floor(index / 2);
-    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
-    const siblingSlot = simulationTournament[round][siblingIndex];
-    
-    // Verifica se o adversário existe (não está vazio)
-    if (siblingSlot.name === '' || siblingSlot.status === 'pending') {
-        showToast('⚠️ Aguarde o adversário ser definido primeiro!', 'warning');
-        return;
-    }
-    
-    // Verifica se o adversário já está eliminado (já tem vencedor)
-    if (siblingSlot.status === 'eliminated') {
-        showToast('⚠️ Este confronto já tem vencedor!', 'warning');
-        return;
-    }
-    
-    // Verifica se já existe um vencedor oficial (do banco) nesta fase
     const originalParent = originalTournament[round + 1][parentIndex];
+    
     if (originalParent.name !== '' && originalParent.status !== 'pending') {
         showToast('Este jogo já tem resultado oficial!', 'warning');
         return;
     }
     
-    // Verifica se a vaga do round seguinte está ocupada por OUTRO time
-    const currentParentSlot = simulationTournament[round + 1][parentIndex];
-    if (currentParentSlot.name !== '' && currentParentSlot.name !== currentSlot.name) {
-        showToast('⚠️ Esta vaga já está ocupada por outro time!', 'warning');
-        return;
-    }
+    // Salva estado antes de modificar (para desfazer)
+    simulationHistory.push(JSON.parse(JSON.stringify(simulationTournament)));
     
-    // Avança o time
+    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
+    
     simulationTournament[round + 1][parentIndex] = {
         id: currentSlot.id,
         name: currentSlot.name,
@@ -6339,14 +6322,24 @@ function simulateAdvance(round, index) {
         status: 'active'
     };
     
-    // Elimina o adversário
     simulationTournament[round][siblingIndex].status = 'eliminated';
     simulationTournament[round][index].status = 'active';
     
     renderTournament(simulationTournament);
-    
-    showToast(`🔄 Simulação: ${currentSlot.name} avançou! (visual apenas)`, 'info');
+    showToast(`🔄 Simulação: ${currentSlot.name} avançou!`, 'info');
 }
+
+function undoLastAdvance() {
+    if (simulationHistory.length === 0) {
+        showToast('Nada para desfazer', 'warning');
+        return;
+    }
+    
+    simulationTournament = simulationHistory.pop();
+    renderTournament(simulationTournament);
+    showToast('↩ Último avanço desfeito', 'info');
+}
+window.undoLastAdvance = undoLastAdvance;
 
 function resetSimulation() {
     simulationTournament = JSON.parse(JSON.stringify(originalTournament));
@@ -6536,32 +6529,111 @@ function renderTournament(tournament) {
 }
 
 function addResetButton() {
-    const existing = document.getElementById('resetSimBtn');
-    if (existing) existing.remove();
+    const existingBar = document.getElementById('simBtns');
+    if (existingBar) existingBar.remove();
     
     const isSimulating = JSON.stringify(simulationTournament) !== JSON.stringify(originalTournament);
     
-    if (isSimulating) {
-        const btn = document.createElement('button');
-        btn.id = 'resetSimBtn';
-        btn.textContent = '🔄 Resetar';
-        btn.style.cssText = `
+    if (isSimulating || simulationHistory.length > 0) {
+        const btnBar = document.createElement('div');
+        btnBar.id = 'simBtns';
+        btnBar.style.cssText = `
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 100;
+            display: flex;
+            gap: 8px;
+        `;
+        
+        const btnStyle = `
             background: #ffcc00;
             color: #0b0c10;
             border: none;
-            padding: 10px 20px;
+            padding: 10px 16px;
             border-radius: 20px;
             font-weight: 700;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(255,204,0,0.4);
+            white-space: nowrap;
         `;
-        btn.onclick = resetSimulation;
-        document.body.appendChild(btn);
+        
+        btnBar.innerHTML = `
+            <button style="${btnStyle}" onclick="resetSimulation()">🔄 Resetar</button>
+            <button style="${btnStyle}" onclick="undoLastAdvance()">↩ Desfazer</button>
+            <button style="${btnStyle}" onclick="shareSimulation()">📤 Compartilhar</button>
+        `;
+        
+        document.body.appendChild(btnBar);
     }
 }
+
+
+
+
+async function shareSimulation() {
+    showToast('📤 Gerando imagem...', 'info');
+    
+    try {
+        const svgElement = document.getElementById('bracket-svg');
+        if (!svgElement) return;
+        
+        // Clona o SVG para renderizar em canvas
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        
+        const img = new Image();
+        img.onload = async () => {
+            // Cria canvas no formato story (9:16)
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const width = 600;
+            const height = 1067;
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Fundo gradiente escuro
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, '#1a1e2d');
+            gradient.addColorStop(1, '#0b0c10');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+            
+            // Chaveamento centralizado
+            const svgSize = Math.min(width - 40, height - 160);
+            const svgX = (width - svgSize) / 2;
+            const svgY = 60;
+            ctx.drawImage(img, svgX, svgY, svgSize, svgSize);
+            
+            // Frase
+            ctx.fillStyle = '#ffcc00';
+            ctx.font = 'bold 22px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Essa é a minha previsão', width / 2, height - 50);
+            ctx.fillText('para a copa do mundo 😄', width / 2, height - 20);
+            
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            if (navigator.share) {
+                const blob = await (await fetch(dataUrl)).blob();
+                const file = new File([blob], 'copa-2026-previsao.png', { type: 'image/png' });
+                await navigator.share({
+                    title: 'Minha previsão Copa 2026',
+                    text: 'Essa é a minha previsão para a copa do mundo! 😄',
+                    files: [file]
+                });
+            } else {
+                window.open(dataUrl);
+            }
+        };
+        img.src = url;
+    } catch (e) {
+        console.error('Erro ao compartilhar:', e);
+        showToast('Erro ao gerar imagem', 'error');
+    }
+}
+window.shareSimulation = shareSimulation;
