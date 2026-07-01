@@ -6577,60 +6577,59 @@ async function shareSimulation() {
     showToast('📤 Gerando imagem...', 'info');
     
     try {
-        const svgElement = document.getElementById('bracket-svg');
-        if (!svgElement) return;
+        const svgContainer = document.querySelector('.canvas-container');
+        if (!svgContainer) return;
         
-        // Clona o SVG para renderizar em canvas
-        const svgData = new XMLSerializer().serializeToString(svgElement);
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
+        // Usa html2canvas para capturar o SVG com emojis
+        const canvas = await html2canvas(svgContainer, {
+            backgroundColor: '#0b0c10',
+            scale: 2, // Melhor qualidade
+            useCORS: true,
+            allowTaint: true
+        });
         
-        const img = new Image();
-        img.onload = async () => {
-            // Cria canvas no formato story (9:16)
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            const width = 600;
-            const height = 1067;
-            canvas.width = width;
-            canvas.height = height;
-            
-            // Fundo gradiente escuro
-            const gradient = ctx.createLinearGradient(0, 0, 0, height);
-            gradient.addColorStop(0, '#1a1e2d');
-            gradient.addColorStop(1, '#0b0c10');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
-            
-            // Chaveamento centralizado
-            const svgSize = Math.min(width - 40, height - 160);
-            const svgX = (width - svgSize) / 2;
-            const svgY = 60;
-            ctx.drawImage(img, svgX, svgY, svgSize, svgSize);
-            
-            // Frase
-            ctx.fillStyle = '#ffcc00';
-            ctx.font = 'bold 22px -apple-system, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Essa é a minha previsão', width / 2, height - 50);
-            ctx.fillText('para a copa do mundo 😄', width / 2, height - 20);
-            
-            const dataUrl = canvas.toDataURL('image/png');
-            
-            if (navigator.share) {
-                const blob = await (await fetch(dataUrl)).blob();
-                const file = new File([blob], 'copa-2026-previsao.png', { type: 'image/png' });
-                await navigator.share({
-                    title: 'Minha previsão Copa 2026',
-                    text: 'Essa é a minha previsão para a copa do mundo! 😄',
-                    files: [file]
-                });
-            } else {
-                window.open(dataUrl);
-            }
-        };
-        img.src = url;
+        // Cria novo canvas no formato story (9:16)
+        const finalCanvas = document.createElement('canvas');
+        const ctx = finalCanvas.getContext('2d');
+        
+        const width = 600;
+        const height = 1067;
+        finalCanvas.width = width;
+        finalCanvas.height = height;
+        
+        // Fundo gradiente escuro
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#1a1e2d');
+        gradient.addColorStop(1, '#0b0c10');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+        
+        // Desenha o SVG capturado centralizado
+        const svgSize = Math.min(width - 40, height - 160);
+        const svgX = (width - svgSize) / 2;
+        const svgY = 60;
+        ctx.drawImage(canvas, svgX, svgY, svgSize, svgSize);
+        
+        // Frase
+        ctx.fillStyle = '#ffcc00';
+        ctx.font = 'bold 20px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Essa é a minha previsão', width / 2, height - 50);
+        ctx.fillText('para a copa do mundo 😄', width / 2, height - 20);
+        
+        const dataUrl = finalCanvas.toDataURL('image/png');
+        
+        if (navigator.share) {
+            const blob = await (await fetch(dataUrl)).blob();
+            const file = new File([blob], 'copa-2026-previsao.png', { type: 'image/png' });
+            await navigator.share({
+                title: 'Minha previsão Copa 2026',
+                text: 'Essa é a minha previsão para a copa do mundo! 😄',
+                files: [file]
+            });
+        } else {
+            window.open(dataUrl);
+        }
     } catch (e) {
         console.error('Erro ao compartilhar:', e);
         showToast('Erro ao gerar imagem', 'error');
