@@ -6298,18 +6298,40 @@ function simulateAdvance(round, index) {
     
     const currentSlot = simulationTournament[round][index];
     
+    // Não pode avançar se: vazio, eliminado, pendente
     if (currentSlot.name === '' || currentSlot.status === 'eliminated' || currentSlot.status === 'pending') return;
     
     const parentIndex = Math.floor(index / 2);
-    const originalParent = originalTournament[round + 1][parentIndex];
+    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
+    const siblingSlot = simulationTournament[round][siblingIndex];
     
+    // Verifica se o adversário existe (não está vazio)
+    if (siblingSlot.name === '' || siblingSlot.status === 'pending') {
+        showToast('⚠️ Aguarde o adversário ser definido primeiro!', 'warning');
+        return;
+    }
+    
+    // Verifica se o adversário já está eliminado (já tem vencedor)
+    if (siblingSlot.status === 'eliminated') {
+        showToast('⚠️ Este confronto já tem vencedor!', 'warning');
+        return;
+    }
+    
+    // Verifica se já existe um vencedor oficial (do banco) nesta fase
+    const originalParent = originalTournament[round + 1][parentIndex];
     if (originalParent.name !== '' && originalParent.status !== 'pending') {
         showToast('Este jogo já tem resultado oficial!', 'warning');
         return;
     }
     
-    const siblingIndex = (index % 2 === 0) ? index + 1 : index - 1;
+    // Verifica se a vaga do round seguinte está ocupada por OUTRO time
+    const currentParentSlot = simulationTournament[round + 1][parentIndex];
+    if (currentParentSlot.name !== '' && currentParentSlot.name !== currentSlot.name) {
+        showToast('⚠️ Esta vaga já está ocupada por outro time!', 'warning');
+        return;
+    }
     
+    // Avança o time
     simulationTournament[round + 1][parentIndex] = {
         id: currentSlot.id,
         name: currentSlot.name,
@@ -6317,6 +6339,7 @@ function simulateAdvance(round, index) {
         status: 'active'
     };
     
+    // Elimina o adversário
     simulationTournament[round][siblingIndex].status = 'eliminated';
     simulationTournament[round][index].status = 'active';
     
