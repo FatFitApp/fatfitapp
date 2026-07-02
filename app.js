@@ -6395,6 +6395,9 @@ function renderTournament(tournament) {
         clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${rad}" cx="0" cy="0" /></clipPath>`;
     }
 
+    // ========== ETAPA 1: Mostrar todas as 32 seleções primeiro ==========
+    
+    // Linhas (invisíveis no início)
     for (let r = 0; r < 4; r++) {
         const slots = 32 / Math.pow(2, r);
         for (let i = 0; i < slots; i++) {
@@ -6404,51 +6407,37 @@ function renderTournament(tournament) {
 
             const angleChild = getAngle(r, i);
             const angleParent = getAngle(r + 1, parentIndex);
-            
             const rChild = getRadius(r);
             const rParent = getRadius(r + 1);
             const rMid = (rChild + rParent) / 2;
-
             const p1 = polarToCartesian(rChild, angleChild);
             const pMid1 = polarToCartesian(rMid, angleChild);
             const pMid2 = polarToCartesian(rMid, angleParent);
             const p2 = polarToCartesian(rParent, angleParent);
-
             const sweepFlag = angleChild < angleParent ? 1 : 0;
             const d = `M ${p1.x} ${p1.y} L ${pMid1.x} ${pMid1.y} A ${rMid} ${rMid} 0 0 ${sweepFlag} ${pMid2.x} ${pMid2.y} L ${p2.x} ${p2.y}`;
 
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
-
-            if (childSlot.name !== '' && parentSlot.name === childSlot.name && parentSlot.name !== '') {
-                path.setAttribute('class', 'link-active');
-            } else if (childSlot.status === 'eliminated') {
-                path.setAttribute('class', 'link-eliminated');
-            } else {
-                path.setAttribute('class', 'link-pending');
-            }
+            path.setAttribute('class', 'link-pending');
+            path.style.opacity = '0';
             linksGroup.appendChild(path);
         }
     }
 
+    // Linha final
     for (let i = 0; i < 2; i++) {
-        const childSlot = tournament[4][i];
-        const champSlot = tournament[5][0];
         const p1 = polarToCartesian(getRadius(4), getAngle(4, i));
-        
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', `M ${p1.x} ${p1.y} L ${centerX} ${centerY}`);
-        
-        if (childSlot.name !== '' && champSlot.name === childSlot.name && champSlot.name !== '') {
-            path.setAttribute('class', 'link-active');
-        } else if (childSlot.status === 'eliminated') {
-            path.setAttribute('class', 'link-eliminated');
-        } else {
-            path.setAttribute('class', 'link-pending');
-        }
+        path.setAttribute('class', 'link-pending');
+        path.style.opacity = '0';
         linksGroup.appendChild(path);
     }
 
+    // Nós do round 0 (32 times)
+    const allNodes = [];
+    
     for (let r = 0; r < 5; r++) {
         const slots = 32 / Math.pow(2, r);
         const radiusNode = 24 + (r * 3.5);
@@ -6459,14 +6448,11 @@ function renderTournament(tournament) {
 
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+            g.setAttribute('class', 'node-group pending');
+            g.style.opacity = '0';
+            g.style.transition = 'all 0.6s ease';
 
-            let gClass = 'node-group';
-            if (slot.status === 'eliminated') gClass += ' eliminated';
-            if (slot.status === 'pending') gClass += ' pending';
-            if (slot.status === 'active' && slot.name !== '') gClass += ' active';
-            g.setAttribute('class', gClass);
-
-            if (slot.name !== '' && slot.status === 'active' && slot.status !== 'eliminated') {
+            if (slot.name !== '' && slot.status === 'active') {
                 g.setAttribute('onclick', `simulateAdvance(${r}, ${i})`);
                 g.style.cursor = 'pointer';
             }
@@ -6479,7 +6465,6 @@ function renderTournament(tournament) {
             if (slot.name !== '') {
                 const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
-                
                 const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 textEmoji.setAttribute('x', '0');
                 textEmoji.setAttribute('y', '2');
@@ -6487,7 +6472,6 @@ function renderTournament(tournament) {
                 textEmoji.setAttribute('class', 'node-emoji');
                 textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
                 textEmoji.textContent = slot.flag;
-                
                 gClip.appendChild(textEmoji);
                 g.appendChild(gClip);
 
@@ -6495,52 +6479,82 @@ function renderTournament(tournament) {
                 title.textContent = slot.name;
                 g.appendChild(title);
             }
+            
             nodesGroup.appendChild(g);
+            allNodes.push({ node: g, slot, r, i });
         }
     }
 
+    // Centro
     const champ = tournament[5][0];
     const radiusNode = 55;
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('transform', `translate(${centerX}, ${centerY})`);
+    const centerG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    centerG.setAttribute('transform', `translate(${centerX}, ${centerY})`);
+    centerG.style.opacity = '0';
+    centerG.style.transition = 'opacity 0.8s ease';
 
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('r', radiusNode);
+    const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    centerCircle.setAttribute('r', radiusNode);
 
     if (champ.name === '') {
-        g.setAttribute('class', 'node-group pending');
-        circle.setAttribute('class', 'node-circle center-circle');
-        g.appendChild(circle);
-
+        centerG.setAttribute('class', 'node-group pending');
+        centerCircle.setAttribute('class', 'node-circle center-circle');
+        centerG.appendChild(centerCircle);
         const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textTrophy.setAttribute('y', '12');
         textTrophy.setAttribute('text-anchor', 'middle');
         textTrophy.style.fontSize = '40px';
         textTrophy.textContent = '🏆';
-        g.appendChild(textTrophy);
-    } else {
-        g.setAttribute('class', 'node-group active pulsing');
-        circle.setAttribute('class', 'node-circle center-circle-winner');
-        g.appendChild(circle);
-
-        const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        gClip.setAttribute('clip-path', 'url(#clip-round-5)');
-        
-        const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textEmoji.setAttribute('x', '0');
-        textEmoji.setAttribute('y', '3');
-        textEmoji.setAttribute('text-anchor', 'middle');
-        textEmoji.setAttribute('class', 'node-emoji');
-        textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
-        textEmoji.textContent = champ.flag;
-        
-        gClip.appendChild(textEmoji);
-        g.appendChild(gClip);
+        centerG.appendChild(textTrophy);
     }
-    nodesGroup.appendChild(g);
+    nodesGroup.appendChild(centerG);
+
+    // ========== ANIMAÇÃO EM 3 ETAPAS ==========
+    
+    // ETAPA 1: Aparecem todos os 32 times (0.5s)
+    setTimeout(() => {
+        allNodes.forEach(({ node }) => {
+            node.style.opacity = '1';
+            node.setAttribute('class', 'node-group active');
+        });
+    }, 300);
+
+    // ETAPA 2: Eliminados esmaecem E classificados brilham (após 1.5s)
+    setTimeout(() => {
+        allNodes.forEach(({ node, slot }) => {
+            if (slot.status === 'eliminated') {
+                node.style.opacity = '0.25';
+                node.style.filter = 'grayscale(100%)';
+                node.setAttribute('class', 'node-group eliminated');
+            }
+            if (slot.round === 1 && slot.status === 'active') {
+                node.style.filter = 'drop-shadow(0px 0px 15px rgba(255,204,0,0.9))';
+                node.setAttribute('class', 'node-group active');
+                // Brilho some após 1s
+                setTimeout(() => {
+                    node.style.filter = '';
+                }, 1000);
+            }
+        });
+    }, 1500);
+
+    // ETAPA 3: Centro aparece (após 2s)
+    setTimeout(() => {
+        centerG.style.opacity = '1';
+    }, 2000);
+    
+    // Revela linhas gradualmente
+    setTimeout(() => {
+        document.querySelectorAll('#links-group path').forEach((path, i) => {
+            setTimeout(() => {
+                path.style.opacity = '1';
+            }, i * 30);
+        });
+    }, 500);
     
     addResetButton();
 }
+
 
 function addResetButton() {
     const existingBar = document.getElementById('simBtns');
