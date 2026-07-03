@@ -6395,16 +6395,13 @@ function renderTournament(tournament) {
         clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${rad}" cx="0" cy="0" /></clipPath>`;
     }
 
-    // ========== ETAPA 1: Mostrar todas as 32 seleções primeiro ==========
-    
-    // Linhas (invisíveis no início)
+    // Linhas
     for (let r = 0; r < 4; r++) {
         const slots = 32 / Math.pow(2, r);
         for (let i = 0; i < slots; i++) {
             const childSlot = tournament[r][i];
             const parentIndex = Math.floor(i / 2);
             const parentSlot = tournament[r + 1][parentIndex];
-
             const angleChild = getAngle(r, i);
             const angleParent = getAngle(r + 1, parentIndex);
             const rChild = getRadius(r);
@@ -6416,7 +6413,6 @@ function renderTournament(tournament) {
             const p2 = polarToCartesian(rParent, angleParent);
             const sweepFlag = angleChild < angleParent ? 1 : 0;
             const d = `M ${p1.x} ${p1.y} L ${pMid1.x} ${pMid1.y} A ${rMid} ${rMid} 0 0 ${sweepFlag} ${pMid2.x} ${pMid2.y} L ${p2.x} ${p2.y}`;
-
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
             path.setAttribute('class', 'link-pending');
@@ -6425,7 +6421,6 @@ function renderTournament(tournament) {
         }
     }
 
-    // Linha final
     for (let i = 0; i < 2; i++) {
         const p1 = polarToCartesian(getRadius(4), getAngle(4, i));
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -6435,7 +6430,7 @@ function renderTournament(tournament) {
         linksGroup.appendChild(path);
     }
 
-    // Nós do round 0 (32 times)
+    // Nós
     const allNodes = [];
     
     for (let r = 0; r < 5; r++) {
@@ -6452,7 +6447,7 @@ function renderTournament(tournament) {
             g.style.opacity = '0';
             g.style.transition = 'all 0.6s ease';
 
-            if (slot.name !== '' && slot.status === 'active') {
+            if (slot.name !== '' && slot.status === 'active' && slot.status !== 'eliminated') {
                 g.setAttribute('onclick', `simulateAdvance(${r}, ${i})`);
                 g.style.cursor = 'pointer';
             }
@@ -6495,53 +6490,65 @@ function renderTournament(tournament) {
 
     const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     centerCircle.setAttribute('r', radiusNode);
-
-    if (champ.name === '') {
-        centerG.setAttribute('class', 'node-group pending');
-        centerCircle.setAttribute('class', 'node-circle center-circle');
-        centerG.appendChild(centerCircle);
-        const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textTrophy.setAttribute('y', '12');
-        textTrophy.setAttribute('text-anchor', 'middle');
-        textTrophy.style.fontSize = '40px';
-        textTrophy.textContent = '🏆';
-        centerG.appendChild(textTrophy);
-    }
+    centerG.setAttribute('class', 'node-group pending');
+    centerCircle.setAttribute('class', 'node-circle center-circle');
+    centerG.appendChild(centerCircle);
+    const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    textTrophy.setAttribute('y', '12');
+    textTrophy.setAttribute('text-anchor', 'middle');
+    textTrophy.style.fontSize = '40px';
+    textTrophy.textContent = '🏆';
+    centerG.appendChild(textTrophy);
     nodesGroup.appendChild(centerG);
 
-    // ========== ANIMAÇÃO EM 3 ETAPAS ==========
+    // ========== ANIMAÇÃO EM 4 ETAPAS ==========
     
-    // ETAPA 1: Aparecem todos os 32 times (0.5s)
+    // ETAPA 1: Aparecem apenas os 32 times (round 0)
     setTimeout(() => {
-        allNodes.forEach(({ node }) => {
-            node.style.opacity = '1';
-            node.setAttribute('class', 'node-group active');
+        allNodes.forEach(({ node, slot }) => {
+            if (slot.round === 0) {
+                node.style.opacity = '1';
+                node.setAttribute('class', 'node-group active');
+            }
         });
     }, 300);
 
-    // ETAPA 2: Eliminados esmaecem E classificados brilham (após 1.5s)
+    // ETAPA 2: Eliminados esmaecem + ativos permanecem
     setTimeout(() => {
         allNodes.forEach(({ node, slot }) => {
-            if (slot.status === 'eliminated') {
+            if (slot.round === 0 && slot.status === 'eliminated') {
                 node.style.opacity = '0.25';
                 node.style.filter = 'grayscale(100%)';
                 node.setAttribute('class', 'node-group eliminated');
             }
-            if (slot.round === 1 && slot.status === 'active') {
-                node.style.filter = 'drop-shadow(0px 0px 15px rgba(255,204,0,0.9))';
+            if (slot.round === 0 && slot.status === 'active') {
                 node.setAttribute('class', 'node-group active');
-                // Brilho some após 1s
-                setTimeout(() => {
-                    node.style.filter = '';
-                }, 1000);
             }
         });
     }, 1500);
 
-    // ETAPA 3: Centro aparece (após 2s)
+    // ETAPA 3: Classificados para oitavas aparecem
+    setTimeout(() => {
+        allNodes.forEach(({ node, slot }) => {
+            if (slot.round === 1 && slot.name !== 'A definir' && slot.name !== '⏳ Aguardando') {
+                node.style.opacity = '1';
+                node.style.filter = 'drop-shadow(0px 0px 15px rgba(255,204,0,0.9))';
+                node.setAttribute('class', 'node-group active');
+                setTimeout(() => {
+                    node.style.filter = '';
+                }, 1200);
+            }
+            if (slot.round === 1 && (slot.name === 'A definir' || slot.name === '⏳ Aguardando')) {
+                node.style.opacity = '0.5';
+                node.setAttribute('class', 'node-group pending');
+            }
+        });
+    }, 2500);
+
+    // ETAPA 4: Centro aparece
     setTimeout(() => {
         centerG.style.opacity = '1';
-    }, 2000);
+    }, 3000);
     
     // Revela linhas gradualmente
     setTimeout(() => {
@@ -6554,7 +6561,6 @@ function renderTournament(tournament) {
     
     addResetButton();
 }
-
 
 function addResetButton() {
     const existingBar = document.getElementById('simBtns');
