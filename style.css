@@ -3999,3 +3999,236 @@ body.chat-open .fab {
 .status-expired {
     color: #EF4444;
 }
+
+
+/* ===== CONTAINER DO SVG ===== */
+.canvas-container {
+    flex: 1;
+    width: 100%;
+    overflow: auto;
+    background: #0a0b12;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+}
+
+#bracket-svg {
+    width: 100%;
+    height: auto;
+    max-width: 1200px;
+    min-width: 600px;
+    aspect-ratio: 1/1;
+    background: radial-gradient(ellipse at center, #11141f 0%, #0a0b12 100%);
+}
+
+/* ===== LINHAS - ESTILO CHAVEAMENTO ===== */
+
+/* Linha de confronto DEFINIDO (dourada) - time já avançou */
+.link-active {
+    stroke: #ffcc00;
+    stroke-width: 4px;
+    fill: none;
+    stroke-linecap: round;
+    filter: drop-shadow(0px 0px 8px rgba(255, 204, 0, 0.3));
+    animation: linkGlow 2s ease-in-out infinite;
+}
+
+@keyframes linkGlow {
+    0%, 100% { opacity: 0.7; stroke-width: 4px; }
+    50% { opacity: 1; stroke-width: 5px; }
+}
+
+/* Linha de confronto AGENDADO (branca/azul) - vai acontecer */
+.link-pending {
+    stroke: #4a6fa5;
+    stroke-width: 3px;
+    fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 8 4;
+    opacity: 0.7;
+}
+
+/* Linha de confronto ELIMINADO (escura) */
+.link-eliminated {
+    stroke: #1a1e2d;
+    stroke-width: 2px;
+    fill: none;
+    stroke-linecap: round;
+    opacity: 0.3;
+}
+
+/* ===== NÓS (TIMES) - ESTILO CHAVEAMENTO ===== */
+
+/* Fundo do círculo - todos os times */
+.node-circle {
+    fill: #1a1e2d;
+    stroke: #4a6fa5;
+    stroke-width: 2.5px;
+    transition: all 0.3s ease;
+}
+
+/* Time ATIVO (pode avançar) - destaque */
+.node-group.active .node-circle {
+    stroke: #ffcc00;
+    stroke-width: 3px;
+    fill: #1f253a;
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.1);
+}
+
+.node-group.active:hover .node-circle {
+    stroke: #ffaa00;
+    fill: #2a3045;
+    stroke-width: 4px;
+}
+
+/* Time AGUARDANDO (sem adversário definido) */
+.node-group.pending .node-circle {
+    stroke: #4a6fa5;
+    stroke-dasharray: 6 4;
+    fill: #0f111a;
+    opacity: 0.6;
+}
+
+/* Time ELIMINADO */
+.node-group.eliminated {
+    filter: grayscale(100%) brightness(0.4);
+    opacity: 0.3;
+}
+
+.node-group.eliminated .node-circle {
+    stroke: #1a1e2d;
+}
+
+/* ===== EMOJI DAS BANDEIRAS (MAIORES!) ===== */
+.node-emoji {
+    font-size: 22px !important;
+    user-select: none;
+    dominant-baseline: central;
+    text-anchor: middle;
+    filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
+}
+
+.node-group.eliminated .node-emoji {
+    filter: grayscale(100%) brightness(0.5);
+}
+
+/* ===== CENTRO (CAMPEÃO) ===== */
+.center-circle {
+    fill: #11141f;
+    stroke: #4a6fa5;
+    stroke-dasharray: 6 4;
+    stroke-width: 2px;
+}
+
+.center-circle-winner {
+    fill: #1f253a;
+    stroke: #ffcc00;
+    stroke-width: 4px;
+    animation: winnerPulse 2s ease-in-out infinite;
+    filter: drop-shadow(0px 0px 20px rgba(255, 204, 0, 0.4));
+}
+
+@keyframes winnerPulse {
+    0%, 100% { 
+        filter: drop-shadow(0px 0px 15px rgba(255, 204, 0, 0.3));
+        transform: scale(1);
+    }
+    50% { 
+        filter: drop-shadow(0px 0px 35px rgba(255, 204, 0, 0.6));
+        transform: scale(1.05);
+    }
+}
+
+/* ===== LEGENDA ===== */
+.cup-legend {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    background: rgba(10, 11, 18, 0.95);
+    padding: 8px 20px;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 0.65rem;
+    z-index: 20;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.cup-legend span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.legend-line {
+    display: inline-block;
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.legend-line.gold {
+    background: #ffcc00;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.3);
+}
+
+.legend-line.blue {
+    background: #4a6fa5;
+    border-top: 2px dashed #4a6fa5;
+    height: 0;
+}
+
+.legend-line.dark {
+    background: #1a1e2d;
+}
+
+.legend-line.center {
+    background: #ffcc00;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 480px) {
+    .node-emoji {
+        font-size: 16px !important;
+    }
+    
+    .cup-legend {
+        font-size: 0.5rem;
+        padding: 6px 12px;
+        gap: 8px;
+        bottom: 10px;
+    }
+    
+    .legend-line {
+        width: 14px;
+    }
+    
+    #bracket-svg {
+        min-width: 500px;
+    }
+}
+
+@media (max-width: 380px) {
+    .node-emoji {
+        font-size: 13px !important;
+    }
+    
+    #bracket-svg {
+        min-width: 400px;
+    }
+}
+
+
+
+

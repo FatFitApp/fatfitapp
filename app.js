@@ -6392,12 +6392,22 @@ function renderTournament(tournament) {
     nodesGroup.innerHTML = '';
     clipDefs.innerHTML = '';
 
+    // Definindo raios maiores para os círculos
     for (let r = 0; r <= 5; r++) {
-        const rad = r === 5 ? 55 : 24 + (r * 3.5);
-        clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${rad}" cx="0" cy="0" /></clipPath>`;
+        let radius;
+        if (r === 0) radius = 30;      // Fase de grupos - maior
+        else if (r === 1) radius = 28; // Oitavas
+        else if (r === 2) radius = 26; // Quartas
+        else if (r === 3) radius = 24; // Semifinal
+        else if (r === 4) radius = 22; // Final
+        else radius = 45;              // Campeão (centro)
+        
+        clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${radius - 2}" cx="0" cy="0" /></clipPath>`;
     }
 
-    // Linhas
+    // ============================================
+    // LINHAS DO CHAVEAMENTO
+    // ============================================
     for (let r = 0; r < 4; r++) {
         const slots = 32 / Math.pow(2, r);
         for (let i = 0; i < slots; i++) {
@@ -6415,37 +6425,69 @@ function renderTournament(tournament) {
             const pMid2 = polarToCartesian(rMid, angleParent);
             const p2 = polarToCartesian(rParent, angleParent);
             const sweepFlag = angleChild < angleParent ? 1 : 0;
+            
+            // Caminho da linha com curvas suaves
             const d = `M ${p1.x} ${p1.y} L ${pMid1.x} ${pMid1.y} A ${rMid} ${rMid} 0 0 ${sweepFlag} ${pMid2.x} ${pMid2.y} L ${p2.x} ${p2.y}`;
 
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
 
-            // Linha dourada = time avançou para a próxima fase
-            if (childSlot.name !== '' && parentSlot.name !== '' && parentSlot.name === childSlot.name) {
+            // DEFINIÇÃO DAS LINHAS POR STATUS
+            const hasTeam = childSlot.name !== '' && childSlot.name !== 'A definir' && childSlot.name !== '⏳ Aguardando';
+            const hasParent = parentSlot.name !== '' && parentSlot.name !== 'A definir' && parentSlot.name !== '⏳ Aguardando';
+            const isSameTeam = hasTeam && hasParent && parentSlot.name === childSlot.name;
+            
+            if (isSameTeam) {
+                // 🔶 LINHA DOURADA - Time avançou (confronto definido)
                 path.setAttribute('class', 'link-active');
-                path.style.stroke = '#ffcc00';
-                path.style.strokeWidth = '3px';
-                path.style.filter = 'drop-shadow(0px 0px 4px rgba(255,204,0,0.6))';
-            }
-            // Linha cinza escuro = time eliminado
-            else if (childSlot.status === 'eliminated') {
+                
+                // Ponto de encontro iluminado
+                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot.setAttribute('cx', pMid2.x);
+                dot.setAttribute('cy', pMid2.y);
+                dot.setAttribute('r', '5');
+                dot.setAttribute('fill', '#ffcc00');
+                dot.setAttribute('filter', 'drop-shadow(0px 0px 10px rgba(255,204,0,0.6))');
+                linksGroup.appendChild(dot);
+                
+                // Linha brilhante
+                const glowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                glowPath.setAttribute('d', d);
+                glowPath.setAttribute('class', 'link-active');
+                glowPath.setAttribute('filter', 'blur(4px)');
+                glowPath.setAttribute('opacity', '0.4');
+                linksGroup.appendChild(glowPath);
+                
+            } else if (childSlot.status === 'eliminated') {
+                // ⚫ LINHA ESCURA - Eliminado
                 path.setAttribute('class', 'link-eliminated');
-                path.style.stroke = '#1a1e2d';
-                path.style.strokeWidth = '1.5px';
-                path.style.opacity = '0.4';
-            }
-            // Linha cinza claro = aguardando jogo
-            else {
+                
+            } else if (hasTeam && !hasParent) {
+                // 🔵 LINHA AZUL TRACEJADA - Aguardando adversário (confronto agendado)
                 path.setAttribute('class', 'link-pending');
-                path.style.stroke = '#363d56';
-                path.style.strokeWidth = '1.5px';
+                
+                // Ponto de encontro com interrogação (aguardando)
+                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot.setAttribute('cx', pMid2.x);
+                dot.setAttribute('cy', pMid2.y);
+                dot.setAttribute('r', '4');
+                dot.setAttribute('fill', '#4a6fa5');
+                dot.setAttribute('opacity', '0.5');
+                linksGroup.appendChild(dot);
+                
+            } else {
+                // ⚪ LINHA CINZA CLARO - Sem confronto definido ainda
+                path.setAttribute('class', 'link-pending');
+                path.setAttribute('opacity', '0.3');
             }
             
             linksGroup.appendChild(path);
         }
     }
 
-    // Linha final
+    // ============================================
+    // LINHAS FINAIS (PARA O CENTRO)
+    // ============================================
     for (let i = 0; i < 2; i++) {
         const childSlot = tournament[4][i];
         const champSlot = tournament[5][0];
@@ -6454,29 +6496,41 @@ function renderTournament(tournament) {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', `M ${p1.x} ${p1.y} L ${centerX} ${centerY}`);
         
-        if (childSlot.name !== '' && champSlot.name !== '' && champSlot.name === childSlot.name) {
+        const hasTeam = childSlot.name !== '' && childSlot.name !== 'A definir' && childSlot.name !== '⏳ Aguardando';
+        const hasChamp = champSlot.name !== '' && champSlot.name !== 'A definir' && champSlot.name !== '⏳ Aguardando';
+        const isSameTeam = hasTeam && hasChamp && champSlot.name === childSlot.name;
+        
+        if (isSameTeam) {
             path.setAttribute('class', 'link-active');
-            path.style.stroke = '#ffcc00';
-            path.style.strokeWidth = '3px';
-            path.style.filter = 'drop-shadow(0px 0px 4px rgba(255,204,0,0.6))';
+            // Ponto central iluminado
+            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dot.setAttribute('cx', centerX);
+            dot.setAttribute('cy', centerY);
+            dot.setAttribute('r', '6');
+            dot.setAttribute('fill', '#ffcc00');
+            dot.setAttribute('filter', 'drop-shadow(0px 0px 15px rgba(255,204,0,0.8))');
+            linksGroup.appendChild(dot);
         } else if (childSlot.status === 'eliminated') {
             path.setAttribute('class', 'link-eliminated');
-            path.style.stroke = '#1a1e2d';
-            path.style.strokeWidth = '1.5px';
-            path.style.opacity = '0.4';
         } else {
             path.setAttribute('class', 'link-pending');
-            path.style.stroke = '#363d56';
-            path.style.strokeWidth = '1.5px';
+            path.setAttribute('opacity', '0.3');
         }
         
         linksGroup.appendChild(path);
     }
 
-    // Nós
+    // ============================================
+    // NÓS (TIMES)
+    // ============================================
     for (let r = 0; r < 5; r++) {
         const slots = 32 / Math.pow(2, r);
-        const radiusNode = 24 + (r * 3.5);
+        let circleRadius;
+        if (r === 0) circleRadius = 30;
+        else if (r === 1) circleRadius = 28;
+        else if (r === 2) circleRadius = 26;
+        else if (r === 3) circleRadius = 24;
+        else circleRadius = 22;
 
         for (let i = 0; i < slots; i++) {
             const slot = tournament[r][i];
@@ -6485,105 +6539,137 @@ function renderTournament(tournament) {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
 
-            // Classes visuais
+            // CLASSIFICAÇÃO DO TIME
+            const hasTeam = slot.name !== '' && slot.name !== 'A definir' && slot.name !== '⏳ Aguardando';
+            
             if (slot.status === 'eliminated') {
                 g.setAttribute('class', 'node-group eliminated');
-                g.style.opacity = '0.3';
-                g.style.filter = 'grayscale(100%)';
-            } else if (slot.status === 'pending' || slot.name === 'A definir' || slot.name === '⏳ Aguardando') {
+            } else if (!hasTeam) {
                 g.setAttribute('class', 'node-group pending');
-            } else if (slot.status === 'active' && slot.name !== '') {
+            } else if (slot.status === 'active' || slot.status === 'pending') {
                 g.setAttribute('class', 'node-group active');
                 g.setAttribute('onclick', `simulateAdvance(${r}, ${i})`);
                 g.style.cursor = 'pointer';
+                g.style.transition = 'all 0.3s ease';
             }
 
+            // CÍRCULO DO TIME
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('r', radiusNode);
+            circle.setAttribute('r', circleRadius);
             circle.setAttribute('class', 'node-circle');
-            
-            // Círculo dourado para times que avançaram
-            if (r > 0 && slot.name !== '' && slot.status === 'active' && slot.name !== 'A definir' && slot.name !== '⏳ Aguardando') {
-                circle.style.stroke = '#ffcc00';
-                circle.style.strokeWidth = '2.5px';
-            }
-            
             g.appendChild(circle);
 
-            if (slot.name !== '' && slot.name !== 'A definir' && slot.name !== '⏳ Aguardando') {
-                const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-                gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
-                const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                textEmoji.setAttribute('x', '0');
-                textEmoji.setAttribute('y', '2');
-                textEmoji.setAttribute('text-anchor', 'middle');
-                textEmoji.setAttribute('class', 'node-emoji');
-                textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
-                textEmoji.textContent = slot.flag;
-                gClip.appendChild(textEmoji);
-                g.appendChild(gClip);
-
-                const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-                title.textContent = slot.name;
-                g.appendChild(title);
-            }
+            // EMOJI DA BANDEIRA
+            const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
             
-            // Placeholder ⏳
-            if (slot.name === 'A definir' || slot.name === '⏳ Aguardando') {
-                const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                textEmoji.setAttribute('x', '0');
-                textEmoji.setAttribute('y', '2');
-                textEmoji.setAttribute('text-anchor', 'middle');
-                textEmoji.setAttribute('class', 'node-emoji');
-                textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
+            const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            textEmoji.setAttribute('x', '0');
+            textEmoji.setAttribute('y', '0');
+            textEmoji.setAttribute('text-anchor', 'middle');
+            textEmoji.setAttribute('dominant-baseline', 'central');
+            textEmoji.setAttribute('class', 'node-emoji');
+            
+            if (hasTeam) {
+                textEmoji.textContent = slot.flag || '⚽';
+            } else {
                 textEmoji.textContent = '⏳';
-                g.appendChild(textEmoji);
+                textEmoji.style.fontSize = '16px';
+                textEmoji.style.opacity = '0.5';
             }
+            gClip.appendChild(textEmoji);
+            g.appendChild(gClip);
             
             nodesGroup.appendChild(g);
         }
     }
 
-    // Centro
+    // ============================================
+    // CENTRO - CAMPEÃO
+    // ============================================
     const champ = tournament[5][0];
-    const radiusNode = 55;
+    const centerRadius = 45;
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('transform', `translate(${centerX}, ${centerY})`);
 
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('r', radiusNode);
+    circle.setAttribute('r', centerRadius);
+    circle.setAttribute('class', 'node-circle');
 
-    if (champ.name === '' || champ.name === 'A definir') {
+    const hasChamp = champ.name !== '' && champ.name !== 'A definir' && champ.name !== '⏳ Aguardando';
+
+    if (!hasChamp) {
+        // SEM CAMPEÃO AINDA
         g.setAttribute('class', 'node-group pending');
-        circle.setAttribute('class', 'node-circle center-circle');
+        circle.setAttribute('class', 'center-circle');
         g.appendChild(circle);
+        
         const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textTrophy.setAttribute('y', '12');
+        textTrophy.setAttribute('x', '0');
+        textTrophy.setAttribute('y', '6');
         textTrophy.setAttribute('text-anchor', 'middle');
         textTrophy.style.fontSize = '40px';
         textTrophy.textContent = '🏆';
+        textTrophy.style.opacity = '0.3';
         g.appendChild(textTrophy);
+        
+        const textWait = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        textWait.setAttribute('x', '0');
+        textWait.setAttribute('y', `${centerRadius + 16}`);
+        textWait.setAttribute('text-anchor', 'middle');
+        textWait.style.fill = '#555';
+        textWait.style.fontSize = '10px';
+        textWait.style.fontWeight = '600';
+        textWait.textContent = 'AGUARDANDO';
+        g.appendChild(textWait);
+        
     } else {
-        g.setAttribute('class', 'node-group active pulsing');
-        circle.setAttribute('class', 'node-circle center-circle-winner');
-        circle.style.stroke = '#ffcc00';
-        circle.style.strokeWidth = '4px';
+        // 🏆 CAMPEÃO DEFINIDO
+        g.setAttribute('class', 'node-group active');
+        circle.setAttribute('class', 'center-circle-winner');
         g.appendChild(circle);
+
+        // Efeito de brilho atrás do campeão
+        const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        glow.setAttribute('r', centerRadius + 12);
+        glow.setAttribute('fill', 'none');
+        glow.setAttribute('stroke', '#ffcc00');
+        glow.setAttribute('stroke-width', '2');
+        glow.setAttribute('opacity', '0.2');
+        glow.setAttribute('filter', 'blur(8px)');
+        g.appendChild(glow);
 
         const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         gClip.setAttribute('clip-path', 'url(#clip-round-5)');
+        
         const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textEmoji.setAttribute('x', '0');
-        textEmoji.setAttribute('y', '3');
+        textEmoji.setAttribute('y', '0');
         textEmoji.setAttribute('text-anchor', 'middle');
+        textEmoji.setAttribute('dominant-baseline', 'central');
         textEmoji.setAttribute('class', 'node-emoji');
-        textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
-        textEmoji.textContent = champ.flag;
+        textEmoji.style.fontSize = '40px';
+        textEmoji.textContent = champ.flag || '🏆';
         gClip.appendChild(textEmoji);
         g.appendChild(gClip);
+
+        // Texto "CAMPEÃO"
+        const textChamp = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        textChamp.setAttribute('x', '0');
+        textChamp.setAttribute('y', `${centerRadius + 16}`);
+        textChamp.setAttribute('text-anchor', 'middle');
+        textChamp.style.fill = '#ffcc00';
+        textChamp.style.fontSize = '12px';
+        textChamp.style.fontWeight = '800';
+        textChamp.style.letterSpacing = '2px';
+        textChamp.textContent = '🏆 CAMPEÃO!';
+        g.appendChild(textChamp);
     }
     nodesGroup.appendChild(g);
     
+    // ============================================
+    // ADICIONAR BOTÕES DE CONTROLE (se houver simulação)
+    // ============================================
     addResetButton();
 }
 function addResetButton() {
@@ -6774,3 +6860,205 @@ async function shareSimulation() {
     }
 }
 window.shareSimulation = shareSimulation;
+
+
+// ============================================
+// 🔔 NOTIFICAÇÕES PUSH
+// ============================================
+
+async function setupPushNotifications() {
+    // Verifica se o navegador suporta notificações
+    if (!('Notification' in window)) {
+        console.log('❌ Navegador não suporta notificações');
+        return;
+    }
+
+    // Verifica permissão
+    if (Notification.permission === 'denied') {
+        console.log('❌ Notificações bloqueadas pelo usuário');
+        return;
+    }
+
+    // Se já tem permissão, registra
+    if (Notification.permission === 'granted') {
+        await registerPushSubscription();
+        return;
+    }
+
+    // Se ainda não perguntou, pergunta
+    if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            await registerPushSubscription();
+            showToast('🔔 Notificações ativadas!', 'success');
+        } else {
+            showToast('❌ Notificações bloqueadas. Ative nas configurações.', 'warning');
+        }
+    }
+}
+
+async function registerPushSubscription() {
+    try {
+        const user = await getCurrentUser();
+        if (!user) return;
+
+        // Verifica se o Service Worker está registrado
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Gera a subscription
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array('SUA_PUBLIC_KEY_AQUI') // Gerar depois
+        });
+
+        console.log('✅ Push subscription criada:', subscription);
+
+        // Salva a subscription no Supabase
+        await savePushSubscription(user.id, subscription);
+
+        return subscription;
+    } catch (error) {
+        console.error('❌ Erro ao registrar push:', error);
+    }
+}
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function savePushSubscription(userId, subscription) {
+    const { error } = await window.db.from('profiles')
+        .update({ 
+            push_subscription: subscription,
+            push_enabled: true
+        })
+        .eq('id', userId);
+
+    if (error) {
+        console.error('❌ Erro ao salvar subscription:', error);
+    } else {
+        console.log('✅ Subscription salva com sucesso');
+    }
+}
+
+// ============================================
+// FUNÇÃO PARA ENVIAR NOTIFICAÇÃO
+// ============================================
+async function sendPushNotification(userId, title, body, data = {}) {
+    try {
+        // Busca a subscription do usuário
+        const { data: profile } = await window.db.from('profiles')
+            .select('push_subscription')
+            .eq('id', userId)
+            .single();
+
+        if (!profile?.push_subscription) {
+            console.log('⚠️ Usuário não tem push subscription');
+            return;
+        }
+
+        // Envia via Edge Function
+        const response = await fetch(`${window.SUPABASE_URL}/functions/v1/send-push`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${window.SUPABASE_KEY}`
+            },
+            body: JSON.stringify({
+                subscription: profile.push_subscription,
+                title: title,
+                body: body,
+                data: data
+            })
+        });
+
+        const result = await response.json();
+        console.log('📨 Notificação enviada:', result);
+        return result;
+    } catch (error) {
+        console.error('❌ Erro ao enviar notificação:', error);
+    }
+}
+
+// ============================================
+// NOTIFICAÇÕES POR EVENTOS
+// ============================================
+
+// Quando recebe mensagem no chat
+async function notifyNewMessage(message, groupId, senderId) {
+    // Busca todos os membros do grupo (exceto o remetente)
+    const { data: members } = await window.db.from('group_members')
+        .select('user_id, profiles:user_id(name)')
+        .eq('group_id', groupId)
+        .neq('user_id', senderId)
+        .eq('status', 'approved');
+
+    if (!members || members.length === 0) return;
+
+    const sender = await getProfile(senderId);
+    const group = await window.db.from('groups').select('name').eq('id', groupId).single();
+
+    for (const member of members) {
+        await sendPushNotification(
+            member.user_id,
+            `💬 ${sender?.name || 'Alguém'} no ${group?.name || 'grupo'}`,
+            message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+            { 
+                url: '/home.html',
+                groupId: groupId,
+                type: 'message'
+            }
+        );
+    }
+}
+
+// Quando recebe like
+async function notifyLike(activityId, likerId, ownerId) {
+    if (likerId === ownerId) return;
+
+    const liker = await getProfile(likerId);
+    const { data: activity } = await window.db.from('daily_activities')
+        .select('challenge:challenge_id(name)')
+        .eq('id', activityId)
+        .single();
+
+    await sendPushNotification(
+        ownerId,
+        '❤️ Nova curtida!',
+        `${liker?.name || 'Alguém'} curtiu sua atividade em ${activity?.challenge?.name || 'um desafio'}`,
+        {
+            url: `/home.html?activity=${activityId}`,
+            activityId: activityId,
+            type: 'like'
+        }
+    );
+}
+
+// Quando recebe comentário
+async function notifyComment(activityId, commenterId, ownerId, comment) {
+    if (commenterId === ownerId) return;
+
+    const commenter = await getProfile(commenterId);
+    const { data: activity } = await window.db.from('daily_activities')
+        .select('challenge:challenge_id(name)')
+        .eq('id', activityId)
+        .single();
+
+    await sendPushNotification(
+        ownerId,
+        '💬 Novo comentário!',
+        `${commenter?.name || 'Alguém'} comentou: "${comment.substring(0, 50)}${comment.length > 50 ? '...' : ''}"`,
+        {
+            url: `/home.html?activity=${activityId}`,
+            activityId: activityId,
+            type: 'comment'
+        }
+    );
+}

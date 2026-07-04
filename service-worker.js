@@ -1,81 +1,148 @@
-// FATFIT - Service Worker v4
-const CACHE_NAME = 'fatfit-v5';
+// ============================================
+// FATFIT - Service Worker
+// ============================================
 
-// Detecta o base path (localhost ou GitHub Pages)
-const BASE_PATH = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost'
-    ? '/'
-    : '/fatfitapp/';
-
-// Arquivos para cache offline
-const CACHE_FILES = [
-    BASE_PATH,
-    BASE_PATH + 'index.html',
-    BASE_PATH + 'home.html',
-    BASE_PATH + 'profile.html',
-    BASE_PATH + 'person.html',
-    BASE_PATH + 'body.html',
-    BASE_PATH + 'search.html',
-    BASE_PATH + 'activity.html',
-    BASE_PATH + 'bet.html',
-    BASE_PATH + 'style.css',
-    BASE_PATH + 'app.js',
-    BASE_PATH + 'supabase-config.js',
-    BASE_PATH + 'logo.png',
-    BASE_PATH + 'corpo.png',
-    BASE_PATH + 'perfil_padrao.png',
-    BASE_PATH + 'icon-192.png',
-    BASE_PATH + 'manifest.json',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js'
+const CACHE_NAME = 'fatfit-v1';
+const urlsToCache = [
+    '/',
+    '/index.html',
+    '/home.html',
+    '/profile.html',
+    '/activity.html',
+    '/bet.html',
+    '/buy.html',
+    '/body.html',
+    '/cup.html',
+    '/style.css',
+    '/app.js',
+    '/supabase-config.js',
+    '/logo.png',
+    '/perfil_padrao.png',
+    '/manifest.json'
 ];
 
-// Instala - faz cache dos arquivos e força ativação
-self.addEventListener('install', (event) => {
-    self.skipWaiting();
+// ============================================
+// INSTALAÇÃO
+// ============================================
+self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(CACHE_FILES))
-            .catch(err => console.log('Cache parcial:', err))
+            .then(cache => cache.addAll(urlsToCache))
+            .then(() => self.skipWaiting())
     );
 });
 
-// Ativa - limpa caches antigos e assume controle
-self.addEventListener('activate', (event) => {
+// ============================================
+// ATIVAÇÃO
+// ============================================
+self.addEventListener('activate', event => {
     event.waitUntil(
-        caches.keys().then(keys => {
+        caches.keys().then(cacheNames => {
             return Promise.all(
-                keys.filter(key => key !== CACHE_NAME)
-                    .map(key => caches.delete(key))
+                cacheNames.map(cacheName => {
+                    if (cacheName !== CACHE_NAME) {
+                        return caches.delete(cacheName);
+                    }
+                })
             );
         }).then(() => self.clients.claim())
     );
 });
 
-// Fetch - serve do cache, depois atualiza
-self.addEventListener('fetch', (event) => {
-    // Ignora requisições chrome-extension, supabase e vídeos
-    if (event.request.url.includes('supabase.co') || 
-        event.request.url.startsWith('chrome-extension://') ||
-        (event.request.url.includes('activity-photos') && 
-         (event.request.url.endsWith('.webm') || event.request.url.endsWith('.mp4')))) {
-        return;
-    }
-    
+// ============================================
+// FETCH (Cache First)
+// ============================================
+self.addEventListener('fetch', event => {
     event.respondWith(
         caches.match(event.request)
-            .then(cached => {
-                const fetchPromise = fetch(event.request)
+            .then(response => {
+                if (response) return response;
+                return fetch(event.request)
                     .then(response => {
-                        if (response.ok) {
-                            const clone = response.clone();
-                            caches.open(CACHE_NAME)
-                                .then(cache => cache.put(event.request, clone));
-                        }
+                        if (!response || response.status !== 200) return response;
+                        const responseToCache = response.clone();
+                        caches.open(CACHE_NAME)
+                            .then(cache => cache.put(event.request, responseToCache));
                         return response;
-                    })
-                    .catch(() => cached);
-                
-                return cached || fetchPromise;
+                    });
+            })
+    );
+});
+
+// ============================================
+// 🔔 PUSH NOTIFICATIONS
+// ============================================
+self.addEventListener('push', event => {
+    console.log('🔔 Push recebido:', event);
+    
+    let data = {};
+    
+    if (event.data) {
+        try {
+            data = event.data.json();
+        } catch (e) {
+            data = {
+                title: 'FATFIT',
+                body: event.data.text(),
+                icon: '/logo.png',
+                badge: '/logo.png'
+            };
+        }
+    }
+    
+    const options = {
+        body: data.body || 'Nova notificação do FATFIT!',
+        icon: data.icon || '/logo.png',
+        badge: data.badge || '/logo.png',
+        vibrate: [200, 100, 200],
+        data: {
+            url: data.url || '/home.html',
+            groupId: data.groupId || null,
+            activityId: data.activityId || null
+        },
+        actions: [
+            {
+                action: 'open',
+                title: '📱 Abrir'
+            },
+            {
+                action: 'dismiss',
+                title: '❌ Fechar'
+            }
+        ]
+    };
+    
+    event.waitUntil(
+        self.registration.showNotification(data.title || 'FATFIT', options)
+    );
+});
+
+// ============================================
+// CLIQUE NA NOTIFICAÇÃO
+// ============================================
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    
+    const url = event.notification.data?.url || '/home.html';
+    const groupId = event.notification.data?.groupId || null;
+    
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then(windowClients => {
+                // Se já tem uma janela aberta, foca nela
+                for (let client of windowClients) {
+                    if (client.url.includes(url) && 'focus' in client) {
+                        return client.focus();
+                    }
+                }
+                // Se não, abre uma nova
+                if (clients.openWindow) {
+                    let finalUrl = url;
+                    if (groupId) {
+                        finalUrl += `?openChat=${groupId}`;
+                    }
+                    return clients.openWindow(finalUrl);
+                }
             })
     );
 });
