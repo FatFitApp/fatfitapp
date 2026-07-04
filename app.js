@@ -6392,15 +6392,15 @@ function renderTournament(tournament) {
     nodesGroup.innerHTML = '';
     clipDefs.innerHTML = '';
 
-    // Definindo raios maiores para os círculos
+    // Definindo raios maiores para os círculos (para caber o emoji)
     for (let r = 0; r <= 5; r++) {
         let radius;
-        if (r === 0) radius = 30;      // Fase de grupos - maior
-        else if (r === 1) radius = 28; // Oitavas
-        else if (r === 2) radius = 26; // Quartas
-        else if (r === 3) radius = 24; // Semifinal
-        else if (r === 4) radius = 22; // Final
-        else radius = 45;              // Campeão (centro)
+        if (r === 0) radius = 32;      // Fase de grupos
+        else if (r === 1) radius = 30; // Oitavas
+        else if (r === 2) radius = 28; // Quartas
+        else if (r === 3) radius = 26; // Semifinal
+        else if (r === 4) radius = 24; // Final
+        else radius = 48;              // Campeão (centro)
         
         clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${radius - 2}" cx="0" cy="0" /></clipPath>`;
     }
@@ -6426,22 +6426,19 @@ function renderTournament(tournament) {
             const p2 = polarToCartesian(rParent, angleParent);
             const sweepFlag = angleChild < angleParent ? 1 : 0;
             
-            // Caminho da linha com curvas suaves
             const d = `M ${p1.x} ${p1.y} L ${pMid1.x} ${pMid1.y} A ${rMid} ${rMid} 0 0 ${sweepFlag} ${pMid2.x} ${pMid2.y} L ${p2.x} ${p2.y}`;
 
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
 
-            // DEFINIÇÃO DAS LINHAS POR STATUS
             const hasTeam = childSlot.name !== '' && childSlot.name !== 'A definir' && childSlot.name !== '⏳ Aguardando';
             const hasParent = parentSlot.name !== '' && parentSlot.name !== 'A definir' && parentSlot.name !== '⏳ Aguardando';
             const isSameTeam = hasTeam && hasParent && parentSlot.name === childSlot.name;
             
             if (isSameTeam) {
-                // 🔶 LINHA DOURADA - Time avançou (confronto definido)
+                // 🔶 LINHA DOURADA - Time avançou
                 path.setAttribute('class', 'link-active');
                 
-                // Ponto de encontro iluminado
                 const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 dot.setAttribute('cx', pMid2.x);
                 dot.setAttribute('cy', pMid2.y);
@@ -6450,23 +6447,14 @@ function renderTournament(tournament) {
                 dot.setAttribute('filter', 'drop-shadow(0px 0px 10px rgba(255,204,0,0.6))');
                 linksGroup.appendChild(dot);
                 
-                // Linha brilhante
-                const glowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                glowPath.setAttribute('d', d);
-                glowPath.setAttribute('class', 'link-active');
-                glowPath.setAttribute('filter', 'blur(4px)');
-                glowPath.setAttribute('opacity', '0.4');
-                linksGroup.appendChild(glowPath);
-                
             } else if (childSlot.status === 'eliminated') {
                 // ⚫ LINHA ESCURA - Eliminado
                 path.setAttribute('class', 'link-eliminated');
                 
             } else if (hasTeam && !hasParent) {
-                // 🔵 LINHA AZUL TRACEJADA - Aguardando adversário (confronto agendado)
+                // 🔵 LINHA AZUL TRACEJADA - Aguardando
                 path.setAttribute('class', 'link-pending');
                 
-                // Ponto de encontro com interrogação (aguardando)
                 const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 dot.setAttribute('cx', pMid2.x);
                 dot.setAttribute('cy', pMid2.y);
@@ -6476,7 +6464,6 @@ function renderTournament(tournament) {
                 linksGroup.appendChild(dot);
                 
             } else {
-                // ⚪ LINHA CINZA CLARO - Sem confronto definido ainda
                 path.setAttribute('class', 'link-pending');
                 path.setAttribute('opacity', '0.3');
             }
@@ -6486,7 +6473,7 @@ function renderTournament(tournament) {
     }
 
     // ============================================
-    // LINHAS FINAIS (PARA O CENTRO)
+    // LINHAS FINAIS
     // ============================================
     for (let i = 0; i < 2; i++) {
         const childSlot = tournament[4][i];
@@ -6502,7 +6489,6 @@ function renderTournament(tournament) {
         
         if (isSameTeam) {
             path.setAttribute('class', 'link-active');
-            // Ponto central iluminado
             const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             dot.setAttribute('cx', centerX);
             dot.setAttribute('cy', centerY);
@@ -6521,16 +6507,16 @@ function renderTournament(tournament) {
     }
 
     // ============================================
-    // NÓS (TIMES)
+    // NÓS (TIMES) - EMOJI PREENCHE O CÍRCULO
     // ============================================
     for (let r = 0; r < 5; r++) {
         const slots = 32 / Math.pow(2, r);
         let circleRadius;
-        if (r === 0) circleRadius = 30;
-        else if (r === 1) circleRadius = 28;
-        else if (r === 2) circleRadius = 26;
-        else if (r === 3) circleRadius = 24;
-        else circleRadius = 22;
+        if (r === 0) circleRadius = 32;
+        else if (r === 1) circleRadius = 30;
+        else if (r === 2) circleRadius = 28;
+        else if (r === 3) circleRadius = 26;
+        else circleRadius = 24;
 
         for (let i = 0; i < slots; i++) {
             const slot = tournament[r][i];
@@ -6539,7 +6525,6 @@ function renderTournament(tournament) {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
 
-            // CLASSIFICAÇÃO DO TIME
             const hasTeam = slot.name !== '' && slot.name !== 'A definir' && slot.name !== '⏳ Aguardando';
             
             if (slot.status === 'eliminated') {
@@ -6553,13 +6538,12 @@ function renderTournament(tournament) {
                 g.style.transition = 'all 0.3s ease';
             }
 
-            // CÍRCULO DO TIME
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('r', circleRadius);
             circle.setAttribute('class', 'node-circle');
             g.appendChild(circle);
 
-            // EMOJI DA BANDEIRA
+            // EMOJI - CENTRALIZADO E GRANDE
             const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
             
@@ -6574,7 +6558,7 @@ function renderTournament(tournament) {
                 textEmoji.textContent = slot.flag || '⚽';
             } else {
                 textEmoji.textContent = '⏳';
-                textEmoji.style.fontSize = '16px';
+                textEmoji.style.fontSize = '20px';
                 textEmoji.style.opacity = '0.5';
             }
             gClip.appendChild(textEmoji);
@@ -6588,7 +6572,7 @@ function renderTournament(tournament) {
     // CENTRO - CAMPEÃO
     // ============================================
     const champ = tournament[5][0];
-    const centerRadius = 45;
+    const centerRadius = 48;
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('transform', `translate(${centerX}, ${centerY})`);
 
@@ -6599,37 +6583,25 @@ function renderTournament(tournament) {
     const hasChamp = champ.name !== '' && champ.name !== 'A definir' && champ.name !== '⏳ Aguardando';
 
     if (!hasChamp) {
-        // SEM CAMPEÃO AINDA
         g.setAttribute('class', 'node-group pending');
         circle.setAttribute('class', 'center-circle');
         g.appendChild(circle);
         
         const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textTrophy.setAttribute('x', '0');
-        textTrophy.setAttribute('y', '6');
+        textTrophy.setAttribute('y', '0');
         textTrophy.setAttribute('text-anchor', 'middle');
-        textTrophy.style.fontSize = '40px';
+        textTrophy.setAttribute('dominant-baseline', 'central');
+        textTrophy.style.fontSize = '44px';
         textTrophy.textContent = '🏆';
         textTrophy.style.opacity = '0.3';
         g.appendChild(textTrophy);
         
-        const textWait = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textWait.setAttribute('x', '0');
-        textWait.setAttribute('y', `${centerRadius + 16}`);
-        textWait.setAttribute('text-anchor', 'middle');
-        textWait.style.fill = '#555';
-        textWait.style.fontSize = '10px';
-        textWait.style.fontWeight = '600';
-        textWait.textContent = 'AGUARDANDO';
-        g.appendChild(textWait);
-        
     } else {
-        // 🏆 CAMPEÃO DEFINIDO
         g.setAttribute('class', 'node-group active');
         circle.setAttribute('class', 'center-circle-winner');
         g.appendChild(circle);
 
-        // Efeito de brilho atrás do campeão
         const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         glow.setAttribute('r', centerRadius + 12);
         glow.setAttribute('fill', 'none');
@@ -6648,28 +6620,13 @@ function renderTournament(tournament) {
         textEmoji.setAttribute('text-anchor', 'middle');
         textEmoji.setAttribute('dominant-baseline', 'central');
         textEmoji.setAttribute('class', 'node-emoji');
-        textEmoji.style.fontSize = '40px';
+        textEmoji.style.fontSize = '48px';
         textEmoji.textContent = champ.flag || '🏆';
         gClip.appendChild(textEmoji);
         g.appendChild(gClip);
-
-        // Texto "CAMPEÃO"
-        const textChamp = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textChamp.setAttribute('x', '0');
-        textChamp.setAttribute('y', `${centerRadius + 16}`);
-        textChamp.setAttribute('text-anchor', 'middle');
-        textChamp.style.fill = '#ffcc00';
-        textChamp.style.fontSize = '12px';
-        textChamp.style.fontWeight = '800';
-        textChamp.style.letterSpacing = '2px';
-        textChamp.textContent = '🏆 CAMPEÃO!';
-        g.appendChild(textChamp);
     }
     nodesGroup.appendChild(g);
     
-    // ============================================
-    // ADICIONAR BOTÕES DE CONTROLE (se houver simulação)
-    // ============================================
     addResetButton();
 }
 function addResetButton() {
