@@ -4106,7 +4106,6 @@ body.chat-open .fab {
 
 /* ===== EMOJI DAS BANDEIRAS - PREENCHE O CÍRCULO ===== */
 .node-emoji {
-    font-size: 80px !important;
     user-select: none;
     text-anchor: middle;
     dominant-baseline: central;
@@ -4117,7 +4116,6 @@ body.chat-open .fab {
 .node-group.eliminated .node-emoji {
     filter: grayscale(100%) brightness(0.4);
 }
-
 /* ===== CENTRO (CAMPEÃO) ===== */
 .center-circle {
     fill: #11141f;
@@ -4148,12 +4146,12 @@ body.chat-open .fab {
 /* ===== RESPONSIVIDADE ===== */
 @media (max-width: 480px) {
     .node-emoji {
-        font-size: 65px !important;
+        font-size: inherit !important; /* Deixa o JS controlar */
     }
 }
 
 @media (max-width: 380px) {
     .node-emoji {
-        font-size: 55px !important;
+        font-size: inherit !important;
     }
 }
