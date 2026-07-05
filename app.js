@@ -6504,8 +6504,17 @@ function renderTournament(tournament) {
     }
 
     // ============================================
-    // NÓS (TIMES) - EMOJI COM Y="-12"
+    // NÓS (TIMES) - AJUSTES INDIVIDUAIS POR RODADA
     // ============================================
+    // Configurações por rodada: [tamanho_emoji, posicao_Y]
+    const configs = {
+        0: { size: 86, y: -16 },   // Fase de grupos
+        1: { size: 82, y: -15 },   // Oitavas
+        2: { size: 76, y: -14 },   // Quartas
+        3: { size: 66, y: -12 },   // Semifinal
+        4: { size: 60, y: -12 }    // Final
+    };
+
     for (let r = 0; r < 5; r++) {
         const slots = 32 / Math.pow(2, r);
         let circleRadius;
@@ -6515,13 +6524,9 @@ function renderTournament(tournament) {
         else if (r === 3) circleRadius = 24;
         else circleRadius = 22;
 
-        // Tamanho do emoji - AUMENTADO
-        let emojiSize;
-        if (r === 0) emojiSize = 80;
-        else if (r === 1) emojiSize = 74;
-        else if (r === 2) emojiSize = 68;
-        else if (r === 3) emojiSize = 62;
-        else emojiSize = 56;
+        const config = configs[r];
+        const emojiSize = config.size;
+        const emojiY = config.y;
 
         for (let i = 0; i < slots; i++) {
             const slot = tournament[r][i];
@@ -6549,14 +6554,14 @@ function renderTournament(tournament) {
             circle.setAttribute('class', 'node-circle');
             g.appendChild(circle);
 
-            // Emoji da bandeira - com y="-12"
+            // Emoji da bandeira - com configuração individual
             if (hasTeam) {
                 const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
                 
                 const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 textEmoji.setAttribute('x', '0');
-                textEmoji.setAttribute('y', '-12');
+                textEmoji.setAttribute('y', emojiY);
                 textEmoji.setAttribute('text-anchor', 'middle');
                 textEmoji.setAttribute('dominant-baseline', 'central');
                 textEmoji.setAttribute('class', 'node-emoji');
@@ -6573,7 +6578,7 @@ function renderTournament(tournament) {
     }
 
     // ============================================
-    // CENTRO - CAMPEÃO
+    // CENTRO - CAMPEÃO (r=5) - COM Y="-4" PARA O TROFÉU
     // ============================================
     const champ = tournament[5][0];
     const centerRadius = 45;
@@ -6593,7 +6598,7 @@ function renderTournament(tournament) {
         
         const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textTrophy.setAttribute('x', '0');
-        textTrophy.setAttribute('y', '-12');
+        textTrophy.setAttribute('y', '-4');  // ← AJUSTADO PARA -4
         textTrophy.setAttribute('text-anchor', 'middle');
         textTrophy.setAttribute('dominant-baseline', 'central');
         textTrophy.style.fontSize = '60px';
@@ -6620,11 +6625,11 @@ function renderTournament(tournament) {
         
         const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textEmoji.setAttribute('x', '0');
-        textEmoji.setAttribute('y', '-12');
+        textEmoji.setAttribute('y', '-24');
         textEmoji.setAttribute('text-anchor', 'middle');
         textEmoji.setAttribute('dominant-baseline', 'central');
         textEmoji.setAttribute('class', 'node-emoji');
-        textEmoji.style.fontSize = '100px';
+        textEmoji.style.fontSize = '130px';
         textEmoji.textContent = champ.flag || '🏆';
         gClip.appendChild(textEmoji);
         g.appendChild(gClip);
