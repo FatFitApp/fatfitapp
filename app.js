@@ -6504,15 +6504,20 @@ function renderTournament(tournament) {
     }
 
     // ============================================
-    // NÓS (TIMES) - AJUSTES INDIVIDUAIS POR RODADA
+    // NÓS (TIMES) - COM AJUSTE PARA MOBILE
     // ============================================
+    
+    // Detecta se é mobile
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
     // Configurações por rodada: [tamanho_emoji, posicao_Y]
+    // Mobile: tamanhos maiores para compensar renderização diferente
     const configs = {
-        0: { size: 86, y: -16 },   // Fase de grupos
-        1: { size: 82, y: -15 },   // Oitavas
-        2: { size: 76, y: -14 },   // Quartas
-        3: { size: 66, y: -12 },   // Semifinal
-        4: { size: 60, y: -12 }    // Final
+        0: { size: isMobile ? 110 : 86, y: isMobile ? -20 : -16 },   // Fase de grupos
+        1: { size: isMobile ? 105 : 82, y: isMobile ? -19 : -15 },   // Oitavas
+        2: { size: isMobile ? 98 : 76, y: isMobile ? -18 : -14 },    // Quartas
+        3: { size: isMobile ? 85 : 66, y: isMobile ? -16 : -12 },    // Semifinal
+        4: { size: isMobile ? 78 : 60, y: isMobile ? -16 : -12 }     // Final
     };
 
     for (let r = 0; r < 5; r++) {
@@ -6578,7 +6583,7 @@ function renderTournament(tournament) {
     }
 
     // ============================================
-    // CENTRO - CAMPEÃO (r=5) - COM Y="-4" PARA O TROFÉU
+    // CENTRO - CAMPEÃO (r=5) - COM AJUSTE MOBILE
     // ============================================
     const champ = tournament[5][0];
     const centerRadius = 45;
@@ -6598,10 +6603,10 @@ function renderTournament(tournament) {
         
         const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textTrophy.setAttribute('x', '0');
-        textTrophy.setAttribute('y', '-4');  // ← AJUSTADO PARA -4
+        textTrophy.setAttribute('y', isMobile ? '-8' : '-4');
         textTrophy.setAttribute('text-anchor', 'middle');
         textTrophy.setAttribute('dominant-baseline', 'central');
-        textTrophy.style.fontSize = '60px';
+        textTrophy.style.fontSize = isMobile ? '80px' : '60px';
         textTrophy.textContent = '🏆';
         textTrophy.style.opacity = '0.3';
         g.appendChild(textTrophy);
@@ -6625,11 +6630,11 @@ function renderTournament(tournament) {
         
         const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textEmoji.setAttribute('x', '0');
-        textEmoji.setAttribute('y', '-24');
+        textEmoji.setAttribute('y', isMobile ? '-32' : '-24');
         textEmoji.setAttribute('text-anchor', 'middle');
         textEmoji.setAttribute('dominant-baseline', 'central');
         textEmoji.setAttribute('class', 'node-emoji');
-        textEmoji.style.fontSize = '130px';
+        textEmoji.style.fontSize = isMobile ? '170px' : '130px';
         textEmoji.textContent = champ.flag || '🏆';
         gClip.appendChild(textEmoji);
         g.appendChild(gClip);
@@ -6638,7 +6643,6 @@ function renderTournament(tournament) {
     
     addResetButton();
 }
-
 function addResetButton() {
     const existingBar = document.getElementById('simBtns');
     if (existingBar) existingBar.remove();
