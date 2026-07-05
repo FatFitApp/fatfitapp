@@ -6392,22 +6392,11 @@ function renderTournament(tournament) {
     nodesGroup.innerHTML = '';
     clipDefs.innerHTML = '';
 
-    // Definindo raios dos círculos
     for (let r = 0; r <= 5; r++) {
-        let radius;
-        if (r === 0) radius = 30;
-        else if (r === 1) radius = 28;
-        else if (r === 2) radius = 26;
-        else if (r === 3) radius = 24;
-        else if (r === 4) radius = 22;
-        else radius = 45;
-        
-        clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${radius}" cx="0" cy="0" /></clipPath>`;
+        const rad = r === 5 ? 55 : 24 + (r * 3.5);
+        clipDefs.innerHTML += `<clipPath id="clip-round-${r}"><circle r="${rad}" cx="0" cy="0" /></clipPath>`;
     }
 
-    // ============================================
-    // LINHAS DO CHAVEAMENTO
-    // ============================================
     for (let r = 0; r < 4; r++) {
         const slots = 32 / Math.pow(2, r);
         for (let i = 0; i < slots; i++) {
@@ -6417,61 +6406,33 @@ function renderTournament(tournament) {
 
             const angleChild = getAngle(r, i);
             const angleParent = getAngle(r + 1, parentIndex);
+            
             const rChild = getRadius(r);
             const rParent = getRadius(r + 1);
             const rMid = (rChild + rParent) / 2;
+
             const p1 = polarToCartesian(rChild, angleChild);
             const pMid1 = polarToCartesian(rMid, angleChild);
             const pMid2 = polarToCartesian(rMid, angleParent);
             const p2 = polarToCartesian(rParent, angleParent);
+
             const sweepFlag = angleChild < angleParent ? 1 : 0;
-            
             const d = `M ${p1.x} ${p1.y} L ${pMid1.x} ${pMid1.y} A ${rMid} ${rMid} 0 0 ${sweepFlag} ${pMid2.x} ${pMid2.y} L ${p2.x} ${p2.y}`;
 
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', d);
 
-            const hasTeam = childSlot.name !== '' && childSlot.name !== 'A definir' && childSlot.name !== '⏳ Aguardando';
-            const hasParent = parentSlot.name !== '' && parentSlot.name !== 'A definir' && parentSlot.name !== '⏳ Aguardando';
-            const isSameTeam = hasTeam && hasParent && parentSlot.name === childSlot.name;
-            
-            if (isSameTeam) {
+            if (childSlot.name !== '' && parentSlot.name === childSlot.name && parentSlot.name !== '') {
                 path.setAttribute('class', 'link-active');
-                
-                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                dot.setAttribute('cx', pMid2.x);
-                dot.setAttribute('cy', pMid2.y);
-                dot.setAttribute('r', '5');
-                dot.setAttribute('fill', '#ffcc00');
-                dot.setAttribute('filter', 'drop-shadow(0px 0px 10px rgba(255,204,0,0.6))');
-                linksGroup.appendChild(dot);
-                
             } else if (childSlot.status === 'eliminated') {
                 path.setAttribute('class', 'link-eliminated');
-                
-            } else if (hasTeam && !hasParent) {
-                path.setAttribute('class', 'link-pending');
-                
-                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                dot.setAttribute('cx', pMid2.x);
-                dot.setAttribute('cy', pMid2.y);
-                dot.setAttribute('r', '4');
-                dot.setAttribute('fill', '#4a6fa5');
-                dot.setAttribute('opacity', '0.5');
-                linksGroup.appendChild(dot);
-                
             } else {
                 path.setAttribute('class', 'link-pending');
-                path.setAttribute('opacity', '0.3');
             }
-            
             linksGroup.appendChild(path);
         }
     }
 
-    // ============================================
-    // LINHAS FINAIS
-    // ============================================
     for (let i = 0; i < 2; i++) {
         const childSlot = tournament[4][i];
         const champSlot = tournament[5][0];
@@ -6480,58 +6441,19 @@ function renderTournament(tournament) {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', `M ${p1.x} ${p1.y} L ${centerX} ${centerY}`);
         
-        const hasTeam = childSlot.name !== '' && childSlot.name !== 'A definir' && childSlot.name !== '⏳ Aguardando';
-        const hasChamp = champSlot.name !== '' && champSlot.name !== 'A definir' && champSlot.name !== '⏳ Aguardando';
-        const isSameTeam = hasTeam && hasChamp && champSlot.name === childSlot.name;
-        
-        if (isSameTeam) {
+        if (childSlot.name !== '' && champSlot.name === childSlot.name && champSlot.name !== '') {
             path.setAttribute('class', 'link-active');
-            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            dot.setAttribute('cx', centerX);
-            dot.setAttribute('cy', centerY);
-            dot.setAttribute('r', '6');
-            dot.setAttribute('fill', '#ffcc00');
-            dot.setAttribute('filter', 'drop-shadow(0px 0px 15px rgba(255,204,0,0.8))');
-            linksGroup.appendChild(dot);
         } else if (childSlot.status === 'eliminated') {
             path.setAttribute('class', 'link-eliminated');
         } else {
             path.setAttribute('class', 'link-pending');
-            path.setAttribute('opacity', '0.3');
         }
-        
         linksGroup.appendChild(path);
     }
 
-    // ============================================
-    // NÓS (TIMES) - COM AJUSTE PARA MOBILE
-    // ============================================
-    
-    // Detecta se é mobile
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    // Configurações por rodada: [tamanho_emoji, posicao_Y]
-    // Mobile: tamanhos maiores para compensar renderização diferente
-    const configs = {
-        0: { size: isMobile ? 110 : 86, y: isMobile ? -20 : -16 },   // Fase de grupos
-        1: { size: isMobile ? 105 : 82, y: isMobile ? -19 : -15 },   // Oitavas
-        2: { size: isMobile ? 98 : 76, y: isMobile ? -18 : -14 },    // Quartas
-        3: { size: isMobile ? 85 : 66, y: isMobile ? -16 : -12 },    // Semifinal
-        4: { size: isMobile ? 78 : 60, y: isMobile ? -16 : -12 }     // Final
-    };
-
     for (let r = 0; r < 5; r++) {
         const slots = 32 / Math.pow(2, r);
-        let circleRadius;
-        if (r === 0) circleRadius = 30;
-        else if (r === 1) circleRadius = 28;
-        else if (r === 2) circleRadius = 26;
-        else if (r === 3) circleRadius = 24;
-        else circleRadius = 22;
-
-        const config = configs[r];
-        const emojiSize = config.size;
-        const emojiY = config.y;
+        const radiusNode = 24 + (r * 3.5);
 
         for (let i = 0; i < slots; i++) {
             const slot = tournament[r][i];
@@ -6540,102 +6462,80 @@ function renderTournament(tournament) {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
 
-            const hasTeam = slot.name !== '' && slot.name !== 'A definir' && slot.name !== '⏳ Aguardando';
-            
-            if (slot.status === 'eliminated') {
-                g.setAttribute('class', 'node-group eliminated');
-            } else if (!hasTeam) {
-                g.setAttribute('class', 'node-group pending');
-            } else if (slot.status === 'active' || slot.status === 'pending') {
-                g.setAttribute('class', 'node-group active');
+            let gClass = 'node-group';
+            if (slot.status === 'eliminated') gClass += ' eliminated';
+            if (slot.status === 'pending') gClass += ' pending';
+            if (slot.status === 'active' && slot.name !== '') gClass += ' active';
+            g.setAttribute('class', gClass);
+
+            if (slot.name !== '' && slot.status === 'active' && slot.status !== 'eliminated') {
                 g.setAttribute('onclick', `simulateAdvance(${r}, ${i})`);
                 g.style.cursor = 'pointer';
-                g.style.transition = 'all 0.3s ease';
             }
 
-            // Círculo do time
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('r', circleRadius);
+            circle.setAttribute('r', radiusNode);
             circle.setAttribute('class', 'node-circle');
             g.appendChild(circle);
 
-            // Emoji da bandeira - com configuração individual
-            if (hasTeam) {
+            if (slot.name !== '') {
                 const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 gClip.setAttribute('clip-path', `url(#clip-round-${r})`);
                 
                 const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 textEmoji.setAttribute('x', '0');
-                textEmoji.setAttribute('y', emojiY);
+                textEmoji.setAttribute('y', '2');
                 textEmoji.setAttribute('text-anchor', 'middle');
-                textEmoji.setAttribute('dominant-baseline', 'central');
                 textEmoji.setAttribute('class', 'node-emoji');
-                textEmoji.style.fontSize = emojiSize + 'px';
-                textEmoji.style.lineHeight = '1';
-                textEmoji.textContent = slot.flag || '⚽';
+                textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
+                textEmoji.textContent = slot.flag;
                 
                 gClip.appendChild(textEmoji);
                 g.appendChild(gClip);
+
+                const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                title.textContent = slot.name;
+                g.appendChild(title);
             }
-            
             nodesGroup.appendChild(g);
         }
     }
 
-    // ============================================
-    // CENTRO - CAMPEÃO (r=5) - COM AJUSTE MOBILE
-    // ============================================
     const champ = tournament[5][0];
-    const centerRadius = 45;
+    const radiusNode = 55;
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('transform', `translate(${centerX}, ${centerY})`);
 
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('r', centerRadius);
-    circle.setAttribute('class', 'node-circle');
+    circle.setAttribute('r', radiusNode);
 
-    const hasChamp = champ.name !== '' && champ.name !== 'A definir' && champ.name !== '⏳ Aguardando';
-
-    if (!hasChamp) {
+    if (champ.name === '') {
         g.setAttribute('class', 'node-group pending');
-        circle.setAttribute('class', 'center-circle');
-        g.appendChild(circle);
-        
-        const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        textTrophy.setAttribute('x', '0');
-        textTrophy.setAttribute('y', isMobile ? '-8' : '-4');
-        textTrophy.setAttribute('text-anchor', 'middle');
-        textTrophy.setAttribute('dominant-baseline', 'central');
-        textTrophy.style.fontSize = isMobile ? '80px' : '60px';
-        textTrophy.textContent = '🏆';
-        textTrophy.style.opacity = '0.3';
-        g.appendChild(textTrophy);
-        
-    } else {
-        g.setAttribute('class', 'node-group active');
-        circle.setAttribute('class', 'center-circle-winner');
+        circle.setAttribute('class', 'node-circle center-circle');
         g.appendChild(circle);
 
-        const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        glow.setAttribute('r', centerRadius + 12);
-        glow.setAttribute('fill', 'none');
-        glow.setAttribute('stroke', '#ffcc00');
-        glow.setAttribute('stroke-width', '2');
-        glow.setAttribute('opacity', '0.2');
-        glow.setAttribute('filter', 'blur(8px)');
-        g.appendChild(glow);
+        const textTrophy = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        textTrophy.setAttribute('y', '12');
+        textTrophy.setAttribute('text-anchor', 'middle');
+        textTrophy.style.fontSize = '40px';
+        textTrophy.textContent = '🏆';
+        g.appendChild(textTrophy);
+    } else {
+        g.setAttribute('class', 'node-group active pulsing');
+        circle.setAttribute('class', 'node-circle center-circle-winner');
+        g.appendChild(circle);
 
         const gClip = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         gClip.setAttribute('clip-path', 'url(#clip-round-5)');
         
         const textEmoji = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         textEmoji.setAttribute('x', '0');
-        textEmoji.setAttribute('y', isMobile ? '-32' : '-24');
+        textEmoji.setAttribute('y', '3');
         textEmoji.setAttribute('text-anchor', 'middle');
-        textEmoji.setAttribute('dominant-baseline', 'central');
         textEmoji.setAttribute('class', 'node-emoji');
-        textEmoji.style.fontSize = isMobile ? '170px' : '130px';
-        textEmoji.textContent = champ.flag || '🏆';
+        textEmoji.style.fontSize = `${radiusNode * 2.8}px`;
+        textEmoji.textContent = champ.flag;
+        
         gClip.appendChild(textEmoji);
         g.appendChild(gClip);
     }
@@ -6643,6 +6543,7 @@ function renderTournament(tournament) {
     
     addResetButton();
 }
+
 function addResetButton() {
     const existingBar = document.getElementById('simBtns');
     if (existingBar) existingBar.remove();
