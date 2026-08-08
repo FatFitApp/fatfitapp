@@ -4155,3 +4155,166 @@ body.chat-open .fab {
         font-size: inherit !important;
     }
 }
+
+/* ============================================
+   MAPA DE CONQUISTAS
+   ============================================ */
+
+/* Página do mapa */
+.map-page {
+    background: #F2F2F7;
+    padding-bottom: 0;
+}
+
+.map-page .main-content {
+    padding: 0;
+    max-width: 100%;
+}
+
+/* Container do mapa */
+#mapContainer {
+    width: 100%;
+    height: calc(100vh - 56px);
+    position: relative;
+}
+
+/* Marcador de cidade no mapa */
+.city-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.city-marker:hover {
+    transform: scale(1.1);
+    z-index: 1000;
+}
+
+.city-marker-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #ffcc00;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: #fff;
+}
+
+.city-marker-points {
+    background: #ffcc00;
+    color: #1a1e2d;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-top: -6px;
+    z-index: 10;
+}
+
+.city-marker-name {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #1a1e2d;
+    text-shadow: 0 0 4px #fff;
+    margin-top: 2px;
+    text-align: center;
+    max-width: 80px;
+}
+
+/* Modal de ranking da cidade */
+.city-ranking-modal .modal-content {
+    max-width: 420px;
+    border-radius: 20px;
+}
+
+.city-ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #F2F2F7;
+}
+
+.city-ranking-item:last-child {
+    border-bottom: none;
+}
+
+.city-ranking-pos {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.city-ranking-pos.gold { background: #FCD34D; color: #92400E; }
+.city-ranking-pos.silver { background: #D1D5DB; color: #374151; }
+.city-ranking-pos.bronze { background: #FBBF24; color: #78350F; }
+
+.city-ranking-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.city-ranking-info {
+    flex: 1;
+}
+
+.city-ranking-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #1C1C1E;
+}
+
+.city-ranking-points {
+    font-weight: 700;
+    color: #4F46E5;
+    font-size: 0.9rem;
+}
+
+/* Loading do mapa */
+.map-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(242,242,247,0.95);
+    z-index: 100;
+}
+
+/* Leaflet - remover logo */
+.leaflet-control-attribution {
+    font-size: 0.6rem !important;
+    display: none;
+}
+
+/* Ajustar controles do mapa */
+.leaflet-control-zoom {
+    margin-top: 70px !important;
+}
+
+/* Label da cidade no mapa */
+.city-label-tooltip {
+    background: rgba(26, 30, 45, 0.85) !important;
+    border: 1px solid #ffcc00 !important;
+    color: #ffcc00 !important;
+    font-weight: 700 !important;
+    font-size: 0.75rem !important;
+    padding: 4px 10px !important;
+    border-radius: 12px !important;
+    white-space: nowrap !important;
+}
+
+.city-label-tooltip::before {
+    border-top-color: #ffcc00 !important;
+}

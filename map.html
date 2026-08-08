@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="icon" type="image/png" href="logo.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#F2F2F7">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>FATFIT - Mapa de Conquistas</title>
+    <link rel="stylesheet" href="style.css?v=1.0.15">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <style>
+        .map-page {
+            background: #F2F2F7;
+            padding-bottom: 0;
+        }
+        
+        #mapContainer {
+            width: 100%;
+            height: calc(100vh - 56px);
+            position: relative;
+        }
+        
+        .city-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .city-marker-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #ffcc00;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            background: #fff;
+        }
+        
+        .city-marker-points {
+            background: #ffcc00;
+            color: #1a1e2d;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: -6px;
+            z-index: 10;
+        }
+        
+        .city-marker-name {
+            font-size: 0.6rem;
+            font-weight: 600;
+            color: #1a1e2d;
+            text-shadow: 0 0 4px #fff;
+            margin-top: 2px;
+            text-align: center;
+            max-width: 80px;
+        }
+        
+        /* Modal de ranking */
+        .city-ranking-modal {
+            z-index: 9999 !important;
+        }
+        
+        .city-ranking-modal .modal-content {
+            max-width: 420px;
+            border-radius: 20px;
+            z-index: 10000 !important;
+        }
+        
+        .city-ranking-modal.open {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        
+        .city-ranking-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #F2F2F7;
+        }
+        
+        .city-ranking-item:last-child {
+            border-bottom: none;
+        }
+        
+        .city-ranking-pos {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+        
+        .city-ranking-pos.gold { background: #FCD34D; color: #92400E; }
+        .city-ranking-pos.silver { background: #D1D5DB; color: #374151; }
+        .city-ranking-pos.bronze { background: #FBBF24; color: #78350F; }
+        
+        .city-ranking-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .city-ranking-info {
+            flex: 1;
+        }
+        
+        .city-ranking-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #1C1C1E;
+        }
+        
+        .city-ranking-points {
+            font-weight: 700;
+            color: #4F46E5;
+            font-size: 0.9rem;
+        }
+        
+        /* Loading */
+        .map-loading {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(242,242,247,0.95);
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="app-page map-page">
+    <header class="app-header">
+        <button class="icon-btn" onclick="history.back()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="app-title">🗺️ Mapa de Conquistas</h1>
+        <div></div>
+    </header>
+
+    <div id="mapContainer">
+        <div class="map-loading" id="mapLoading">
+            <img src="logo.png" alt="Carregando" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px;opacity:0.5;">
+            <p style="color:#8E8E93;">Carregando mapa...</p>
+        </div>
+    </div>
+
+    <!-- Modal de Ranking da Cidade -->
+    <div class="modal city-ranking-modal" id="cityRankingModal">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                <h3 id="cityRankingTitle">Ranking da Cidade</h3>
+                <button class="icon-btn modal-close" onclick="document.getElementById('cityRankingModal').classList.remove('open')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;" id="cityRankingBody">
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js?v=1.0.15"></script>
+    <script src="app.js?v=1.0.15"></script>
+</body>
+</html>

@@ -6934,3 +6934,269 @@ async function notifyComment(activityId, commenterId, ownerId, comment) {
         }
     );
 }
+
+
+// ============================================
+// PÁGINA: map.html - MAPA DE CONQUISTAS
+// ============================================
+
+if (window.location.pathname.includes('map')) {
+    document.addEventListener('DOMContentLoaded', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+        await setupMapPage();
+    });
+}
+
+let map = null;
+let cityRankings = {};
+
+async function setupMapPage() {
+    const loading = document.getElementById('mapLoading');
+    
+    try {
+        map = L.map('mapContainer').setView([-15.793, -47.882], 4);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 18
+        }).addTo(map);
+        
+        const { data: activities } = await db.from('daily_activities')
+            .select('*, profiles:user_id(name, avatar_url)')
+            .not('location', 'is', null)
+            .eq('status', 'valid')
+            .order('created_at', { ascending: false });
+        
+        if (!activities || activities.length === 0) {
+            loading.innerHTML = '<div class="empty-state"><i class="fas fa-map-marker-alt fa-2x"></i><p>Nenhuma atividade com localização</p></div>';
+            return;
+        }
+        
+        // Agrupa pontos próximos (10km = 0.1 graus ≈ 11km)
+        const clusters = [];
+        
+        for (const activity of activities) {
+            if (!activity.location?.lat || !activity.location?.lng) continue;
+            
+            const lat = activity.location.lat;
+            const lng = activity.location.lng;
+            
+            // Procura um cluster existente próximo
+            let found = false;
+            for (const cluster of clusters) {
+                const dist = Math.sqrt(
+                    Math.pow(lat - cluster.lat, 2) + Math.pow(lng - cluster.lng, 2)
+                );
+                
+                if (dist < 0.1) { // ≈ 10km
+                    cluster.points.push({ lat, lng, userId: activity.user_id, name: activity.profiles?.name, avatar: activity.profiles?.avatar_url });
+                    cluster.lat = cluster.points.reduce((s, p) => s + p.lat, 0) / cluster.points.length;
+                    cluster.lng = cluster.points.reduce((s, p) => s + p.lng, 0) / cluster.points.length;
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                clusters.push({
+                    lat,
+                    lng,
+                    points: [{ lat, lng, userId: activity.user_id, name: activity.profiles?.name, avatar: activity.profiles?.avatar_url }]
+                });
+            }
+        }
+        
+        // Para cada cluster, calcula o líder e cria o marcador
+        for (const cluster of clusters) {
+            // Calcula ranking do cluster
+                     // Calcula ranking do cluster (conta DIAS ÚNICOS, não atividades duplicadas)
+            const userPoints = {};
+            const userDays = {}; // Controla dias únicos por usuário
+            
+            for (const p of cluster.points) {
+                if (!userPoints[p.userId]) {
+                    userPoints[p.userId] = { name: p.name, avatar: p.avatar, points: 0 };
+                    userDays[p.userId] = new Set();
+                }
+                
+                // Usa a data da atividade para contar dias únicos
+                const dayKey = p.activityDate || p.lat.toFixed(4); // Fallback se não tiver data
+                if (!userDays[p.userId].has(dayKey)) {
+                    userDays[p.userId].add(dayKey);
+                    userPoints[p.userId].points++;
+                }
+            }
+            
+            const sortedUsers = Object.entries(userPoints).sort((a, b) => b[1].points - a[1].points);
+            const leader = sortedUsers[0][1];
+            
+            // Guarda para o modal (usa a chave da cidade como coordenada central)
+            const cityKey = `${cluster.lat.toFixed(4)},${cluster.lng.toFixed(4)}`;
+            cityRankings[cityKey] = {
+                displayName: `📍 ${cluster.lat.toFixed(2)}, ${cluster.lng.toFixed(2)}`,
+                users: userPoints
+            };
+            
+            // Círculo de 10km
+            L.circle([cluster.lat, cluster.lng], {
+                radius: 10000,
+                color: '#ffcc00',
+                fillColor: '#ffcc00',
+                fillOpacity: 0.1,
+                weight: 2,
+                dashArray: '6 4',
+                interactive: true
+            })
+            .addTo(map)
+            .on('click', () => openCityRanking(cityKey));
+            
+            // Foto do líder no centro (apenas foto, sem texto)
+            const markerHtml = `
+                <div class="city-marker" onclick="openCityRanking('${cityKey}')" style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                ">
+                    <div style="
+                        width: 48px;
+                        height: 48px;
+                        border-radius: 50%;
+                        border: 3px solid #ffcc00;
+                        box-shadow: 0 0 16px rgba(255,204,0,0.4);
+                        overflow: hidden;
+                        background: #fff;
+                    ">
+                        <img src="${leader.avatar || 'perfil_padrao.png'}" 
+                             style="width:100%;height:100%;object-fit:cover;"
+                             onerror="this.src='perfil_padrao.png'">
+                    </div>
+                </div>
+            `;
+            
+            const icon = L.divIcon({
+                html: markerHtml,
+                className: 'city-leader-marker',
+                iconSize: [48, 48],
+                iconAnchor: [24, 24]
+            });
+            
+            L.marker([cluster.lat, cluster.lng], { icon, interactive: true })
+                .addTo(map)
+                .on('click', () => openCityRanking(cityKey));
+        }
+        
+        if (loading) loading.style.display = 'none';
+        
+    } catch (e) {
+        console.error('Erro ao carregar mapa:', e);
+        if (loading) loading.innerHTML = '<p class="text-muted">Erro ao carregar mapa</p>';
+    }
+}
+
+// Abre modal com ranking
+function openCityRanking(cityKey) {
+    const cityData = cityRankings[cityKey];
+    if (!cityData) return;
+    
+    const sortedUsers = Object.entries(cityData.users)
+        .sort((a, b) => b[1].points - a[1].points);
+    
+    const modal = document.getElementById('cityRankingModal');
+    const title = document.getElementById('cityRankingTitle');
+    const body = document.getElementById('cityRankingBody');
+    
+    title.textContent = cityData.displayName;
+    
+    body.innerHTML = sortedUsers.map(([userId, user], index) => {
+        const posClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        
+        return `
+            <div class="city-ranking-item">
+                <div class="city-ranking-pos ${posClass}">${index + 1}</div>
+                <img src="${user.avatar || 'perfil_padrao.png'}" class="city-ranking-avatar" onerror="this.src='perfil_padrao.png'">
+                <div class="city-ranking-info">
+                    <div class="city-ranking-name">${medal} ${escapeHtml(user.name)}</div>
+                </div>
+                <div class="city-ranking-points">${user.points} pts</div>
+            </div>
+        `;
+    }).join('');
+    
+    modal.classList.add('open');
+}
+
+window.openCityRanking = openCityRanking;
+
+// Abre modal com ranking da cidade
+function openCityRanking(cityKey) {
+    const cityData = cityRankings[cityKey];
+    if (!cityData) return;
+    
+    const sortedUsers = Object.entries(cityData.users)
+        .sort((a, b) => b[1].points - a[1].points);
+    
+    const modal = document.getElementById('cityRankingModal');
+    const title = document.getElementById('cityRankingTitle');
+    const body = document.getElementById('cityRankingBody');
+    
+    title.textContent = `📍 ${cityData.displayName}`;
+    
+    body.innerHTML = sortedUsers.map(([userId, user], index) => {
+        const posClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        
+        return `
+            <div class="city-ranking-item">
+                <div class="city-ranking-pos ${posClass}">${index + 1}</div>
+                <img src="${user.avatar || 'perfil_padrao.png'}" class="city-ranking-avatar" onerror="this.src='perfil_padrao.png'">
+                <div class="city-ranking-info">
+                    <div class="city-ranking-name">${medal} ${escapeHtml(user.name)}</div>
+                </div>
+                <div class="city-ranking-points">${user.points} pts</div>
+            </div>
+        `;
+    }).join('');
+    
+    modal.classList.add('open');
+}
+
+window.openCityRanking = openCityRanking;
+
+// Abre modal com ranking da cidade
+function openCityRanking(cityKey) {
+    const cityData = cityRankings[cityKey];
+    if (!cityData) return;
+    
+    const sortedUsers = Object.entries(cityData.users)
+        .sort((a, b) => b[1].points - a[1].points);
+    
+    const modal = document.getElementById('cityRankingModal');
+    const title = document.getElementById('cityRankingTitle');
+    const body = document.getElementById('cityRankingBody');
+    
+    title.textContent = `📍 ${cityData.displayName || cityData.cityName}`;
+    
+    body.innerHTML = sortedUsers.map(([userId, user], index) => {
+        const posClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        
+        return `
+            <div class="city-ranking-item">
+                <div class="city-ranking-pos ${posClass}">${index + 1}</div>
+                <img src="${user.avatar || 'perfil_padrao.png'}" class="city-ranking-avatar" onerror="this.src='perfil_padrao.png'">
+                <div class="city-ranking-info">
+                    <div class="city-ranking-name">${medal} ${escapeHtml(user.name)}</div>
+                </div>
+                <div class="city-ranking-points">${user.points} pts</div>
+            </div>
+        `;
+    }).join('');
+    
+    modal.classList.add('open');
+}
+
+// Fechar modal
+window.openCityRanking = openCityRanking;
