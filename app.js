@@ -1640,8 +1640,18 @@ async function startCameraFullscreen() {
     
     // Verifica se é premium para habilitar vídeo
     const user = await getCurrentUser();
-    const { data: profile } = await db.from('profiles').select('is_premium').eq('id', user.id).single();
+    const { data: profile } = await db.from('profiles')
+        .select('is_premium, allow_gallery')
+        .eq('id', user.id).single();
+    
     const isPremium = profile?.is_premium || false;
+    const allowGallery = profile?.allow_gallery || false;
+    
+    // Mostra/esconde botão de galeria
+    const galleryBtn = document.getElementById('galleryBtn');
+    if (galleryBtn) {
+        galleryBtn.style.display = allowGallery ? 'flex' : 'none';
+    }
     
     const videoBtn = document.getElementById('videoModeBtn');
     if (videoBtn) {
@@ -1669,6 +1679,14 @@ async function startCameraFullscreen() {
         video.srcObject = stream;
         video.muted = true;
         await video.play();
+        
+        // Corrige espelho da câmera frontal
+        if (currentFacingMode === 'user') {
+            video.style.transform = 'scaleX(-1)';
+        } else {
+            video.style.transform = 'scaleX(1)';
+        }
+        
         console.log('✅ Câmera iniciada');
     } catch (e) { 
         console.error('❌ Erro câmera:', e);
@@ -1677,7 +1695,53 @@ async function startCameraFullscreen() {
     
     setupCameraMode();
     document.getElementById('flipCameraBtn')?.addEventListener('click', flipCamera);
+    
+    // Evento do botão de galeria
+    document.getElementById('galleryBtn')?.addEventListener('click', openGallery);
 }
+
+// Abre a galeria para escolher foto/vídeo
+function openGallery() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Verifica tamanho
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Arquivo muito grande. Máximo 5MB.', 'error');
+            return;
+        }
+        
+        // Verifica tipo
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+            showToast('Formato não suportado. Use foto ou vídeo.', 'error');
+            return;
+        }
+        
+        activityPhotoFile = file;
+        
+        // Mostra preview
+        if (file.type.startsWith('video/')) {
+            const url = URL.createObjectURL(file);
+            showVideoPreview(url);
+        } else {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                document.getElementById('photoPreview').src = ev.target.result;
+                document.getElementById('photoThumb').src = ev.target.result;
+                showPreview(ev.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+    
+    input.click();
+}
+
 
 let pressStartTime = 0;
 let isLongPress = false;
@@ -2063,20 +2127,16 @@ document.getElementById('videoModeBtn')?.addEventListener('click', async () => {
 function flipCamera() {
     console.log('🔄 Invertendo câmera...');
     
-    // Alterna entre frontal e traseira
     currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
     
-    // Reinicia a câmera com o novo modo
-    startCameraFullscreen();
-    
-    // Pequena animação no botão
     const btn = document.getElementById('flipCameraBtn');
     if (btn) {
         btn.style.transform = 'rotate(180deg)';
         setTimeout(() => { btn.style.transform = 'rotate(0deg)'; }, 300);
     }
+    
+    startCameraFullscreen();
 }
-
 function addCameraBackButton() {
     // O botão voltar já está no HTML, não precisa criar dinamicamente
     // Mas se quiser manter, pode deixar vazio
@@ -2278,11 +2338,26 @@ async function reverseGeocode(lat, lng) {
 
 async function submitActivity(e) {
     e.preventDefault();
-    if (!activityPhotoFile) { showToast('Tire uma foto ou grave um vídeo primeiro!', 'error'); return; }
+    
+    // 🔒 TRAVA ANTI-DUPLO-CLIQUE
+    if (window._isSubmitting) {
+        console.log('⏳ Envio já em andamento, ignorando...');
+        return;
+    }
+    
+    if (!activityPhotoFile) { 
+        showToast('Tire uma foto ou grave um vídeo primeiro!', 'error'); 
+        return; 
+    }
+    
+    window._isSubmitting = true;
+    
     const user = await getCurrentUser();
     const btn = document.getElementById('submitBtn');
     const originalText = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    
     const comment = document.getElementById('activityComment')?.value?.trim() || null;
     
     // Pega o tipo de treino
@@ -2345,9 +2420,9 @@ async function submitActivity(e) {
         showToast('Erro ao registrar', 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
+        window._isSubmitting = false;
     }
 }
-
 // Funções auxiliares da activity page (fallback)
 if (typeof skipLocation === 'undefined') {
     function skipLocation() {

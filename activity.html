@@ -2,17 +2,14 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#4F46E5">
     <meta name="mobile-web-app-capable" content="yes">
-            <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
     <title>FATFIT - Registrar Atividade</title>
-    <link rel="stylesheet" href="style.css?v=1.0.6">
+    <link rel="stylesheet" href="style.css?v=1.0.15">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="manifest" href="manifest.json">
@@ -29,28 +26,30 @@
     <div id="cameraState" class="camera-fullscreen">
         <video id="cameraPreview" autoplay playsinline></video>
         
-        <!-- Botão voltar -->
         <button class="camera-back-btn" onclick="window.location.href='home.html'">
             <i class="fas fa-arrow-left"></i>
         </button>
         
-        <!-- Botão inverter câmera -->
         <button class="camera-flip-btn" id="flipCameraBtn" title="Inverter câmera">
             <i class="fas fa-sync-alt"></i>
         </button>
         
-        <!-- Botão capturar -->
+        <!-- NOVO: Botão de Galeria -->
+        <button class="camera-gallery-btn" id="galleryBtn" style="display:none;" title="Escolher da galeria">
+            <i class="fas fa-images"></i>
+        </button>
+
         <div class="camera-controls">
             <button class="camera-capture-btn" id="captureBtn">
                 <div class="capture-ring"></div>
             </button>
         </div>
+        
         <!-- Indicador de modo (Foto/Vídeo) -->
         <div class="camera-mode-indicator" id="cameraModeIndicator">
             <button class="camera-mode-btn active" id="photoModeBtn">📸 Foto</button>
             <button class="camera-mode-btn" id="videoModeBtn" disabled>🎥 Vídeo 🔒</button>
         </div>
-
     </div>
 
     <!-- ESTADO 2: PRÉ-VISUALIZAÇÃO -->
@@ -66,7 +65,7 @@
         </div>
     </div>
 
-    <!-- ESTADO 3: DETALHES (APPLE HEALTH STYLE) -->
+    <!-- ESTADO 3: DETALHES -->
     <div id="detailsState" style="display:none; overflow-y:auto; height:100vh; background:#F2F2F7;">
         <header class="app-header" style="background:#FFFFFF;color:#1C1C1E;border-bottom:1px solid #E5E5EA;">
             <button class="icon-btn" onclick="goBackToCamera()" style="color:#1C1C1E;">
@@ -92,7 +91,8 @@
             <!-- Tipo de Treino -->
             <div class="body-card">
                 <div class="body-card-subtitle">🏋️ Tipo de Treino</div>
-                <select id="workoutType" class="workout-type-select">
+                <select id="workoutType" class="workout-type-select" 
+        style="font-size:16px; padding:12px; -webkit-appearance:listbox; appearance:listbox; cursor:pointer;">
                     <option value="">Selecione o tipo (opcional)</option>
                     <option value="Academia">🏋️ Academia</option>
                     <option value="Corrida">🏃 Corrida</option>
@@ -104,8 +104,6 @@
                        placeholder="Descreva o treino..." 
                        style="display:none;margin-top:8px;">
             </div>
-
-
 
             <!-- Localização -->
             <div class="body-card">
@@ -143,21 +141,20 @@
     <div class="toast-container" id="toastContainerFixed" style="position:fixed;top:20px;left:20px;right:20px;z-index:9999;"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
-    <script src="supabase-config.js?v=1.0.6"></script>
-<script src="app.js?v=1.0.6"></script>
+    <script src="supabase-config.js?v=1.0.15"></script>
+    <script src="app.js?v=1.0.15"></script>
 
-<script>
-    // Mostra/esconde campo de treino customizado
-    document.getElementById('workoutType')?.addEventListener('change', function() {
-        const customInput = document.getElementById('workoutTypeCustom');
-        if (this.value === 'Outro') {
-            customInput.style.display = 'block';
-            customInput.focus();
-        } else {
-            customInput.style.display = 'none';
-        }
-    });
-</script>
-
+    <script>
+        // Mostra/esconde campo de treino customizado
+        document.getElementById('workoutType')?.addEventListener('change', function() {
+            const customInput = document.getElementById('workoutTypeCustom');
+            if (this.value === 'Outro') {
+                customInput.style.display = 'block';
+                customInput.focus();
+            } else {
+                customInput.style.display = 'none';
+            }
+        });
+    </script>
 </body>
 </html>

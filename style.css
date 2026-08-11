@@ -4318,3 +4318,32 @@ body.chat-open .fab {
 .city-label-tooltip::before {
     border-top-color: #ffcc00 !important;
 }
+
+/* Botão de galeria (abaixo do flip) */
+.camera-gallery-btn {
+    position: absolute;
+    bottom: 80px;
+    right: 24px;
+    z-index: 20;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: 2px solid rgba(255,255,255,0.6);
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    -webkit-appearance: none;
+    appearance: none;
+        -webkit-appearance: none;
+    appearance: none;
+}
+
+.camera-gallery-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
