@@ -1646,6 +1646,9 @@ async function startCameraFullscreen() {
     
     const isPremium = profile?.is_premium || false;
     const allowGallery = profile?.allow_gallery || false;
+
+        // Libera vídeo se for premium OU tiver allow_gallery
+    const canUseVideo = isPremium || allowGallery;
     
     // Mostra/esconde botão de galeria
     const galleryBtn = document.getElementById('galleryBtn');
