@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Conectando ao Strava...</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #F2F2F7;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 20px;
+        }
+        .callback-container {
+            text-align: center;
+            padding: 40px 30px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #E5E5EA;
+            border-top-color: #4F46E5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .success-icon {
+            font-size: 48px;
+            color: #10B981;
+            margin: 10px 0;
+        }
+        .error-icon {
+            font-size: 48px;
+            color: #EF4444;
+            margin: 10px 0;
+        }
+        .strava-logo {
+            width: 60px;
+            height: 60px;
+            background: #FC4C02;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            color: white;
+            font-size: 28px;
+            font-weight: 900;
+        }
+        .btn-primary {
+            margin-top: 16px;
+            padding: 12px 24px;
+            background: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background: #3730A3;
+        }
+        .text-muted {
+            color: #8E8E93;
+            font-size: 0.9rem;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="callback-container">
+        <!-- Loading -->
+        <div id="loadingState">
+            <div class="strava-logo">🏃</div>
+            <div class="spinner"></div>
+            <h2>Conectando ao Strava...</h2>
+            <p class="text-muted">Aguarde um momento enquanto autenticamos</p>
+        </div>
+        
+        <!-- Sucesso -->
+        <div id="successState" class="hidden">
+            <div class="success-icon">✅</div>
+            <h2>Conectado com Sucesso!</h2>
+            <p class="text-muted">Seus treinos do Strava agora serão sincronizados automaticamente</p>
+            <button class="btn-primary" onclick="goToProfile()">
+                Ir para o Perfil
+            </button>
+        </div>
+        
+        <!-- Erro -->
+        <div id="errorState" class="hidden">
+            <div class="error-icon">❌</div>
+            <h2>Erro na Conexão</h2>
+            <p id="errorMessage" class="text-muted">Ocorreu um erro ao conectar com Strava</p>
+            <button class="btn-primary" onclick="goToProfile()">
+                Voltar ao Perfil
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js"></script>
+    <script>
+        // ============================================
+        // Processa o callback do Strava
+        // ============================================
+        
+        async function handleStravaCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+            
+            // Verifica se houve erro
+            if (error) {
+                showError('Usuário cancelou a autorização ou ocorreu um erro');
+                return;
+            }
+            
+            // Valida o state (segurança)
+            const savedState = localStorage.getItem('strava_oauth_state');
+            if (state && state !== savedState) {
+                showError('Erro de segurança. Tente novamente.');
+                return;
+            }
+            
+            if (!code) {
+                showError('Código de autorização não encontrado');
+                return;
+            }
+            
+            try {
+                // Pega o token do usuário atual
+                const { data } = await window.db.auth.getSession();
+                const userToken = data.session?.access_token;
+                
+                if (!userToken) {
+                    showError('Usuário não autenticado. Faça login novamente.');
+                    return;
+                }
+                
+                // Chama a Edge Function
+                const response = await fetch(
+                    `${SUPABASE_URL}/functions/v1/strava-auth?code=${code}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${userToken}`
+                        }
+                    }
+                );
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    showSuccess(result);
+                } else {
+                    showError(result.error || 'Erro ao processar autenticação');
+                }
+                
+            } catch (err) {
+                console.error('Erro:', err);
+                showError('Erro ao conectar com o servidor. Tente novamente.');
+            }
+        }
+        
+        function showSuccess(result) {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('successState').classList.remove('hidden');
+            
+            // Mostra o nome do atleta se disponível
+            if (result.athlete?.name) {
+                document.querySelector('#successState .text-muted').textContent = 
+                    `Bem-vindo, ${result.athlete.name}! Seus treinos serão sincronizados.`;
+            }
+            
+            localStorage.setItem('strava_connected', 'true');
+        }
+        
+        function showError(message) {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('errorState').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+        }
+        
+        function goToProfile() {
+            window.location.href = 'profile.html';
+        }
+        
+        // Inicia o processamento quando a página carrega
+        document.addEventListener('DOMContentLoaded', handleStravaCallback);
+    </script>
+</body>
+</html>

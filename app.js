@@ -252,6 +252,9 @@ function setupAuthForms() {
 // ============================================
 // PÁGINA: profile.html
 // ============================================
+// ============================================
+// PÁGINA: profile.html
+// ============================================
 if (window.location.pathname.includes('profile')) {
     document.addEventListener('DOMContentLoaded', async () => {
         const session = await requireAuth();
@@ -299,6 +302,68 @@ async function setupProfile(session) {
         // Renderiza o card de gamificação
         const gamificationCard = await renderGamificationCard(user.id);
         
+        // ===== CARD STRAVA (HTML) =====
+        const stravaCardHTML = `
+        <div class="profile-card" id="stravaCard">
+            <div class="profile-card-title">
+                <i class="fab fa-strava" style="color:#FC4C02;"></i>
+                <span>Strava</span>
+            </div>
+            
+            <!-- Estado: Desconectado -->
+            <div id="stravaDisconnected">
+                <p style="font-size:0.85rem;color:#8E8E93;margin-bottom:12px;">
+                    Conecte sua conta do Strava para sincronizar seus treinos automaticamente e ganhar pontos!
+                </p>
+                <button class="btn-strava" onclick="connectStrava()">
+                    <i class="fab fa-strava"></i> Conectar com Strava
+                </button>
+            </div>
+            
+            <!-- Estado: Conectado -->
+            <div id="stravaConnected" style="display:none;">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                    <div style="width:48px;height:48px;background:#FC4C02;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;font-weight:900;">
+                        🏃
+                    </div>
+                    <div>
+                        <div style="font-weight:600;color:#1C1C1E;" id="stravaAthleteName">Atleta Strava</div>
+                        <div style="font-size:0.8rem;color:#8E8E93;">✅ Conectado</div>
+                    </div>
+                </div>
+                
+                <!-- Estatísticas -->
+                <div class="strava-stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+                    <div style="background:#F9FAFB;border-radius:10px;padding:12px;text-align:center;">
+                        <div style="font-size:0.6rem;color:#8E8E93;text-transform:uppercase;">Atividades</div>
+                        <div style="font-size:1.2rem;font-weight:700;color:#1C1C1E;" id="stravaTotalActivities">0</div>
+                    </div>
+                    <div style="background:#F9FAFB;border-radius:10px;padding:12px;text-align:center;">
+                        <div style="font-size:0.6rem;color:#8E8E93;text-transform:uppercase;">Distância</div>
+                        <div style="font-size:1.2rem;font-weight:700;color:#1C1C1E;" id="stravaTotalDistance">0 km</div>
+                    </div>
+                    <div style="background:#F9FAFB;border-radius:10px;padding:12px;text-align:center;">
+                        <div style="font-size:0.6rem;color:#8E8E93;text-transform:uppercase;">Pontos</div>
+                        <div style="font-size:1.2rem;font-weight:700;color:#4F46E5;" id="stravaTotalPoints">0</div>
+                    </div>
+                </div>
+                
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-outline btn-sm" onclick="syncStrava()" style="flex:1;">
+                        <i class="fas fa-sync-alt"></i> Sincronizar
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="disconnectStrava()" style="flex:0.5;">
+                        <i class="fas fa-unlink"></i>
+                    </button>
+                </div>
+                
+                <p style="font-size:0.7rem;color:#8E8E93;margin-top:8px;">
+                    Última sincronização: <span id="stravaLastSync">Nunca</span>
+                </p>
+            </div>
+        </div>
+        `;
+        
         container.innerHTML = `
             <!-- Header com capa -->
             <div class="profile-header">
@@ -321,6 +386,9 @@ async function setupProfile(session) {
             
             <!-- GAMIFICAÇÃO CARD -->
             ${gamificationCard}
+            
+            <!-- ===== STRAVA CARD ===== -->
+            ${stravaCardHTML}
             
             <!-- Calendário de Atividades -->
             <div class="profile-card">
@@ -418,6 +486,11 @@ async function setupProfile(session) {
     
     // Carrega estatísticas
     await loadProfileStats(user);
+    
+    // ===== INICIALIZA STRAVA =====
+    // Carrega o status da conexão com Strava
+    await loadStravaStatus();
+    await loadStravaStats();
     
     // Evento de upload de avatar
     document.getElementById('avatarUploadBtn')?.addEventListener('click', () => {
@@ -7278,3 +7351,264 @@ function openCityRanking(cityKey) {
 
 // Fechar modal
 window.openCityRanking = openCityRanking;
+
+// ============================================
+// STRAVA INTEGRATION
+// ============================================
+
+// ============================================
+// CONECTAR STRAVA
+// ============================================
+async function connectStrava() {
+    try {
+        const user = await getCurrentUser();
+        if (!user) {
+            showToast('Faça login primeiro', 'error');
+            return;
+        }
+        
+        // Gera um estado aleatório para segurança
+        const state = Math.random().toString(36).substring(7);
+        localStorage.setItem('strava_oauth_state', state);
+        
+        // Configurações do Strava (pegue do seu .env ou coloque diretamente)
+        const STRAVA_CLIENT_ID = '277649'; // Substitua!
+        const REDIRECT_URI = encodeURIComponent(
+            window.location.origin + '/fatfitapp/strava-callback.html'
+        );
+        const SCOPE = 'activity:read_all,read';
+        
+        // Constrói a URL de autorização
+        const authUrl = 
+            `https://www.strava.com/oauth/authorize?` +
+            `client_id=${STRAVA_CLIENT_ID}` +
+            `&response_type=code` +
+            `&redirect_uri=${REDIRECT_URI}` +
+            `&approval_prompt=auto` +
+            `&scope=${SCOPE}` +
+            `&state=${state}`;
+        
+        // Redireciona para o Strava
+        window.location.href = authUrl;
+        
+    } catch (error) {
+        console.error('Erro ao conectar Strava:', error);
+        showToast('Erro ao conectar com Strava', 'error');
+    }
+}
+
+// ============================================
+// SINCRONIZAR STRAVA
+// ============================================
+async function syncStrava() {
+    try {
+        const user = await getCurrentUser();
+        if (!user) {
+            showToast('Faça login primeiro', 'error');
+            return;
+        }
+        
+        showToast('🔄 Sincronizando com Strava...', 'info');
+        
+        const { data } = await window.db.auth.getSession();
+        const userToken = data.session?.access_token;
+        
+        if (!userToken) {
+            showToast('Erro de autenticação', 'error');
+            return;
+        }
+        
+        const response = await fetch(
+            `${SUPABASE_URL}/functions/v1/strava-sync`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userToken}`
+                }
+            }
+        );
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            showToast(`✅ ${result.imported || 0} novas atividades importadas!`, 'success');
+            // Atualiza o perfil
+            await loadStravaStatus();
+            // Recarrega a timeline se estiver na home
+            if (window.loadTimeline) {
+                await loadTimeline();
+            }
+        } else {
+            showToast(result.error || 'Erro na sincronização', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao sincronizar:', error);
+        showToast('Erro ao sincronizar com Strava', 'error');
+    }
+}
+
+// ============================================
+// DESCONECTAR STRAVA
+// ============================================
+async function disconnectStrava() {
+    if (!confirm('Tem certeza que deseja desconectar o Strava?\n\nIsso não apaga suas atividades importadas.')) {
+        return;
+    }
+    
+    try {
+        const user = await getCurrentUser();
+        if (!user) return;
+        
+        // Remove os tokens do banco
+        await window.db.from('profiles')
+            .update({
+                strava_access_token: null,
+                strava_refresh_token: null,
+                strava_token_expires_at: null,
+                strava_athlete_id: null,
+                strava_connected: false
+            })
+            .eq('id', user.id);
+        
+        localStorage.removeItem('strava_connected');
+        
+        showToast('Strava desconectado com sucesso', 'info');
+        
+        // Atualiza a interface
+        await loadStravaStatus();
+        
+    } catch (error) {
+        console.error('Erro ao desconectar:', error);
+        showToast('Erro ao desconectar Strava', 'error');
+    }
+}
+
+// ============================================
+// CARREGAR STATUS DO STRAVA
+// ============================================
+async function loadStravaStatus() {
+    try {
+        const user = await getCurrentUser();
+        if (!user) return;
+        
+        // Busca o perfil
+        const { data: profile } = await window.db
+            .from('profiles')
+            .select('strava_connected, strava_athlete_id')
+            .eq('id', user.id)
+            .single();
+        
+        const disconnected = document.getElementById('stravaDisconnected');
+        const connected = document.getElementById('stravaConnected');
+        
+        if (profile?.strava_connected) {
+            // Mostra estado conectado
+            if (disconnected) disconnected.style.display = 'none';
+            if (connected) connected.style.display = 'block';
+            
+            // Busca estatísticas
+            await loadStravaStats();
+            
+            // Busca última sincronização
+            const { data: lastSync } = await window.db
+                .from('strava_sync_log')
+                .select('synced_at')
+                .eq('user_id', user.id)
+                .order('synced_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            
+            const lastSyncEl = document.getElementById('stravaLastSync');
+            if (lastSyncEl && lastSync) {
+                const date = new Date(lastSync.synced_at);
+                lastSyncEl.textContent = date.toLocaleString('pt-BR');
+            }
+            
+            // Nome do atleta (se tiver, senão usa "Atleta Strava")
+            const nameEl = document.getElementById('stravaAthleteName');
+            if (nameEl && profile.strava_athlete_id) {
+                nameEl.textContent = 'Atleta Strava';
+                // Opcional: buscar nome do atleta via API
+            }
+            
+        } else {
+            // Mostra estado desconectado
+            if (disconnected) disconnected.style.display = 'block';
+            if (connected) connected.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar status:', error);
+    }
+}
+
+// ============================================
+// CARREGAR ESTATÍSTICAS DO STRAVA
+// ============================================
+async function loadStravaStats() {
+    try {
+        const user = await getCurrentUser();
+        if (!user) return;
+        
+        // Conta atividades importadas do Strava
+        const { data: activities, error } = await window.db
+            .from('daily_activities')
+            .select('id, strava_id')
+            .eq('user_id', user.id)
+            .not('strava_id', 'is', null);
+        
+        if (error) {
+            console.error('Erro ao buscar estatísticas:', error);
+            return;
+        }
+        
+        const total = activities?.length || 0;
+        
+        // Atualiza contador
+        const totalEl = document.getElementById('stravaTotalActivities');
+        if (totalEl) totalEl.textContent = total;
+        
+        // Calcula distância total aproximada (se tiver)
+        // Nota: A distância não está na tabela, então estimamos
+        const distanceEl = document.getElementById('stravaTotalDistance');
+        if (distanceEl) {
+            // Estima 5km por atividade (ou poderia calcular melhor)
+            const estimatedKm = total * 5;
+            distanceEl.textContent = total > 0 ? `${estimatedKm}+ km` : '0 km';
+        }
+        
+        // Pontos (FATCoins ganhos)
+        const { data: profile } = await window.db
+            .from('profiles')
+            .select('fatcoins')
+            .eq('id', user.id)
+            .single();
+        
+        const pointsEl = document.getElementById('stravaTotalPoints');
+        if (pointsEl && profile) {
+            // Estima que cada atividade rendeu ~10 pontos
+            const estimatedPoints = total * 10;
+            pointsEl.textContent = estimatedPoints;
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar estatísticas:', error);
+    }
+}
+
+// ============================================
+// INICIALIZAR INTERFACE STRAVA
+// ============================================
+// Chama essa função no setupProfile()
+async function initStravaUI() {
+    await loadStravaStatus();
+}
+
+// Torna funções globais
+window.connectStrava = connectStrava;
+window.syncStrava = syncStrava;
+window.disconnectStrava = disconnectStrava;
+window.loadStravaStatus = loadStravaStatus;
+window.initStravaUI = initStravaUI;
