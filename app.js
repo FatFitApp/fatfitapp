@@ -1018,19 +1018,55 @@ async function loadTimeline() {
     
     feed.innerHTML = '<div class="loading-state"><img src="logo.png" alt="Carregando" class="loading-mini-logo"><p>Carregando atividades...</p></div>';
     
-    // Renderiza a barra de level e stories primeiro
     await renderLevelBar();
     
+    // ===== 1. BUSCA ATIVIDADES DOS DESAFIOS DO GRUPO =====
     const { data: challengeIds } = await db.from('challenges').select('id').eq('group_id', loadingGroupId);
-    if (!challengeIds || challengeIds.length === 0) {
-        feed.innerHTML = '<div class="empty-state"><i class="fas fa-camera-retro fa-2x"></i><p>Nenhum desafio no grupo</p></div>';
-        return;
+    
+    let activities = [];
+    
+    if (challengeIds && challengeIds.length > 0) {
+        const { data: challengeActivities } = await db.from('daily_activities')
+            .select('*, profiles:user_id(name, avatar_url, user_level), challenges:challenge_id(name)')
+            .in('challenge_id', challengeIds.map(c => c.id))
+            .eq('status', 'valid')
+            .order('created_at', { ascending: false })
+            .limit(30);
+        
+        if (challengeActivities) {
+            activities = challengeActivities;
+        }
     }
     
-    const { data: activities } = await db.from('daily_activities')
-        .select('*, profiles:user_id(name, avatar_url, user_level), challenges:challenge_id(name)')
-        .in('challenge_id', challengeIds.map(c => c.id)).eq('status', 'valid')
-        .order('created_at', { ascending: false }).limit(30);
+    // ===== 2. 🔥 BUSCA ATIVIDADES DO STRAVA (sem challenge_id) =====
+    const user = await getCurrentUser();
+    
+    const { data: stravaActivities } = await db.from('daily_activities')
+        .select('*, profiles:user_id(name, avatar_url, user_level)')
+        .eq('user_id', user.id)
+        .not('strava_id', 'is', null)
+        .eq('status', 'valid')
+        .order('created_at', { ascending: false })
+        .limit(30);
+    
+    // Combina as atividades
+    if (stravaActivities && stravaActivities.length > 0) {
+        activities = [...activities, ...stravaActivities];
+        
+        // Ordena por created_at (mais recentes primeiro)
+        activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        // Remove duplicatas
+        const seen = new Set();
+        activities = activities.filter(a => {
+            const key = a.id;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        
+        activities = activities.slice(0, 30);
+    }
     
     if (currentGroup.id !== loadingGroupId) {
         console.log('⚠️ Grupo mudou durante carregamento, ignorando...');
@@ -1043,16 +1079,18 @@ async function loadTimeline() {
     }
     
     feed.innerHTML = '';
-    const user = await getCurrentUser();
     
     for (const a of activities) {
         const isExtra = a.is_extra === true;
         const isVideo = a.photo_url && (a.photo_url.endsWith('.webm') || a.photo_url.includes('video'));
+        const isStrava = a.strava_id !== null;
         const userLevel = a.profiles?.user_level || 0;
         
         const { count: likesCount } = await db.from('activity_likes').select('*', { count: 'exact', head: true }).eq('activity_id', a.id);
         const { data: userLiked } = await db.from('activity_likes').select('id').eq('activity_id', a.id).eq('user_id', user.id).maybeSingle();
         const { data: comments } = await db.from('activity_comments').select('*, profiles:user_id(name, avatar_url)').eq('activity_id', a.id).order('created_at', { ascending: true }).limit(3);
+        
+        const stravaBadge = isStrava ? '<span class="badge badge-strava" style="background:#FC4C02;color:#fff;font-size:0.6rem;padding:2px 8px;border-radius:12px;margin-left:4px;">🏅 Strava</span>' : '';
         
         let mediaHtml = '';
         if (isVideo) {
@@ -1071,11 +1109,11 @@ async function loadTimeline() {
             escapeHtml(a.profiles?.name || 'Usuário') + 
             ' <span class="badge badge-info" style="font-size:0.6rem;">Nv.' + userLevel + '</span>' +
             (isExtra ? ' <span class="badge badge-warning" style="font-size:0.6rem;">Extra</span>' : '') +
+            stravaBadge +
             (a.workout_type ? ' <span class="badge badge-secondary" style="font-size:0.6rem;">' + escapeHtml(a.workout_type) + '</span>' : '') +
             '</div>' +
-            '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + escapeHtml(a.challenges?.name || 'Desafio') + (isVideo ? ' 🎥' : '') + '</div>' +
+            '<div class="timeline-date">📅 ' + formatDate(a.activity_date) + ' • ' + (a.challenges?.name || (isStrava ? 'Strava' : 'Desafio')) + (isVideo ? ' 🎥' : '') + '</div>' +
             '</div>' +
-            (isExtra ? '<span class="badge badge-secondary" style="font-size:0.7rem;">+0</span>' : '<span class="badge badge-success" style="font-size:0.7rem;">+1 pt</span>') +
             '</div>' +
             mediaHtml +
             (a.comment ? '<div class="timeline-body">💬 ' + escapeHtml(a.comment) + '</div>' : '') +
@@ -1562,73 +1600,57 @@ async function createGroup(e) {
 // ============================================
 
 async function openRegisterModal() {
+    // Verifica se o usuário está logado
     const user = await getCurrentUser();
-    if (!user) { showToast('Erro: faça login novamente', 'error'); return; }
-    const { data: memberships } = await db.from('group_members').select('group_id, groups:group_id(id, name)').eq('user_id', user.id);
-    if (!memberships || memberships.length === 0) { showToast('Você não está em nenhum grupo', 'warning'); return; }
-    
-    if (memberships.length === 1) {
-        const groupId = memberships[0].group_id;
-        const { data: challenge } = await db.from('challenges').select('id').eq('group_id', groupId).order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (challenge) { window.location.href = 'activity.html?challenge=' + challenge.id; }
-        else { showToast('Crie um desafio primeiro', 'warning'); }
+    if (!user) {
+        showToast('Faça login primeiro', 'error');
         return;
     }
     
-    const modal = document.getElementById('registerSelectModal');
-    const container = document.getElementById('groupsChecklist');
-    if (!modal || !container) return;
-    container.innerHTML = '';
-    const today = getToday();
+    // Verifica se o usuário tem grupos
+    const { data: memberships } = await db.from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
     
-    for (const m of memberships) {
-        const g = m.groups;
-        if (!g) continue;
-        const { data: challenge } = await db.from('challenges').select('id, name, status, start_date, end_date').eq('group_id', g.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-        const hasChallenge = !!challenge;
-        const inPeriod = challenge && today >= challenge.start_date && today <= challenge.end_date;
-        const willScore = hasChallenge && inPeriod;
-        
-        let isParticipant = false;
-        if (challenge) { const { data: cp } = await db.from('challenge_participants').select('id').eq('challenge_id', challenge.id).eq('user_id', user.id).maybeSingle(); isParticipant = !!cp; }
-        
-        let statusBadge = '', scoreBadge = '';
-        if (challenge) {
-            if (willScore && isParticipant) { statusBadge = '✅ Pontuando'; scoreBadge = '+1 pt'; }
-            else if (willScore && !isParticipant) { statusBadge = '⚠️ Participe para pontuar'; scoreBadge = '0 pt'; }
-            else if (today < challenge.start_date) { statusBadge = '⏳ Não iniciou'; scoreBadge = 'Sem ponto'; }
-            else { statusBadge = '📋 Encerrado'; scoreBadge = 'Sem ponto'; }
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo', 'warning');
+        return;
+    }
+    
+    // Se o usuário tem Strava conectado, mostra o modal de escolha
+    const { data: profile } = await db
+        .from('profiles')
+        .select('strava_connected')
+        .eq('id', user.id)
+        .single();
+    
+    if (profile?.strava_connected) {
+        // Abre o modal de escolha (foto ou Strava)
+        openRegisterChoice();
+    } else {
+        // Se não tem Strava, vai direto para a câmera
+        // Verifica se tem desafio ativo
+        if (memberships.length === 1) {
+            const groupId = memberships[0].group_id;
+            const { data: challenge } = await db.from('challenges')
+                .select('id')
+                .eq('group_id', groupId)
+                .eq('status', 'active')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            
+            if (challenge) {
+                window.location.href = 'activity.html?challenge=' + challenge.id;
+            } else {
+                showToast('Crie um desafio primeiro', 'warning');
+            }
+        } else {
+            // Mostra o modal de seleção de grupos (já existente)
+            showGroupSelectionModal(memberships);
         }
-        
-        const itemId = g.id.replace(/-/g, '');
-        container.innerHTML += '<div class="group-checkbox-item ' + (hasChallenge ? 'checked' : '') + '" id="check-' + itemId + '" onclick="window.toggleGroupCheck(\'' + itemId + '\', \'' + (challenge?.id || '') + '\', ' + (willScore && isParticipant) + ')" style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;border:2px solid ' + (hasChallenge ? (willScore && isParticipant ? '#10B981' : '#4F46E5') : '#FEE2E2') + ';border-radius:10px;background:' + (hasChallenge ? '#fff' : '#FEF2F2') + ';cursor:' + (hasChallenge ? 'pointer' : 'default') + ';">' +
-        '<div class="check-icon" style="width:24px;height:24px;border:2px solid ' + (hasChallenge ? '#4F46E5' : '#EF4444') + ';border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:' + (hasChallenge ? '#4F46E5' : 'transparent') + ';color:#fff;font-size:0.7rem;">' + (hasChallenge ? '✓' : '') + '</div>' +
-        '<div style="flex:1;"><div style="font-weight:600;font-size:0.95rem;">' + escapeHtml(g.name) + '</div><div style="font-size:0.75rem;color:#6B7280;">' + (challenge ? '🎯 ' + escapeHtml(challenge.name) + ' <span style="font-size:0.65rem;">' + statusBadge + '</span>' : '⚠️ Nenhum desafio') + '</div></div>' +
-        '<span style="font-size:0.7rem;padding:4px 8px;border-radius:12px;font-weight:600;background:' + (willScore && isParticipant ? '#D1FAE5' : '#F3F4F6') + ';color:' + (willScore && isParticipant ? '#065F46' : '#6B7280') + ';">' + scoreBadge + '</span>' +
-        '<input type="checkbox" id="cb-' + itemId + '" value="' + g.id + '" data-challenge="' + (challenge?.id || '') + '" ' + (hasChallenge ? 'checked' : 'disabled') + ' style="display:none;"></div>';
     }
-    
-    const confirmBtn = document.getElementById('confirmRegisterBtn');
-    if (confirmBtn) {
-        const newBtn = confirmBtn.cloneNode(true);
-        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-        newBtn.addEventListener('click', () => {
-            const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
-            const selected = [];
-            checkboxes.forEach(cb => { if (cb.dataset.challenge) selected.push(cb.dataset.challenge); });
-            if (selected.length === 0) { showToast('Selecione pelo menos um grupo', 'warning'); return; }
-            localStorage.setItem('fatfit_register_challenges', JSON.stringify(selected));
-            modal.classList.remove('open');
-            window.location.href = selected.length === 1 ? 'activity.html?challenge=' + selected[0] : 'activity.html?challenges=' + selected.join(',');
-        });
-    }
-    
-    modal.querySelectorAll('.modal-close').forEach(btn => {
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        newBtn.addEventListener('click', () => modal.classList.remove('open'));
-    });
-    modal.classList.add('open');
 }
 
 window.toggleGroupCheck = function(elementId, challengeId, willScore) {
@@ -1645,6 +1667,188 @@ window.toggleGroupCheck = function(elementId, challengeId, willScore) {
         item.style.borderColor = '#D1D5DB'; item.style.background = '#FAFAFA'; item.classList.remove('checked');
     }
 };
+
+// ============================================
+// FUNÇÃO PARA ABRIR O MODAL DE ESCOLHA
+// ============================================
+function openRegisterChoice() {
+    const modal = document.getElementById('registerChoiceModal');
+    if (modal) {
+        modal.classList.add('open');
+    } else {
+        // Fallback: se o modal não existir, vai direto para a câmera
+        console.warn('Modal de escolha não encontrado, indo para câmera');
+        openCameraOnly();
+    }
+}
+
+async function openCameraOnly() {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    const { data: memberships } = await db.from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+    
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo', 'warning');
+        return;
+    }
+    
+    if (memberships.length === 1) {
+        const groupId = memberships[0].group_id;
+        const { data: challenge } = await db.from('challenges')
+            .select('id')
+            .eq('group_id', groupId)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        if (challenge) {
+            window.location.href = 'activity.html?challenge=' + challenge.id;
+        } else {
+            showToast('Crie um desafio primeiro', 'warning');
+        }
+    } else {
+        showGroupSelectionModal(memberships);
+    }
+}
+
+
+async function showGroupSelectionModal(memberships) {
+    const modal = document.getElementById('registerSelectModal');
+    const container = document.getElementById('groupsChecklist');
+    if (!modal || !container) return;
+    
+    container.innerHTML = '';
+    const today = getToday();
+    
+    for (const m of memberships) {
+        const g = m.groups;
+        if (!g) continue;
+        
+        const { data: challenge } = await db.from('challenges')
+            .select('id, name, status, start_date, end_date')
+            .eq('group_id', g.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        const hasChallenge = !!challenge;
+        const inPeriod = challenge && today >= challenge.start_date && today <= challenge.end_date;
+        const willScore = hasChallenge && inPeriod;
+        
+        let isParticipant = false;
+        if (challenge) {
+            const { data: cp } = await db.from('challenge_participants')
+                .select('id')
+                .eq('challenge_id', challenge.id)
+                .eq('user_id', (await getCurrentUser()).id)
+                .maybeSingle();
+            isParticipant = !!cp;
+        }
+        
+        let statusBadge = '', scoreBadge = '';
+        if (challenge) {
+            if (willScore && isParticipant) {
+                statusBadge = '✅ Pontuando';
+                scoreBadge = '+1 pt';
+            } else if (willScore && !isParticipant) {
+                statusBadge = '⚠️ Participe para pontuar';
+                scoreBadge = '0 pt';
+            } else if (today < challenge.start_date) {
+                statusBadge = '⏳ Não iniciou';
+                scoreBadge = 'Sem ponto';
+            } else {
+                statusBadge = '📋 Encerrado';
+                scoreBadge = 'Sem ponto';
+            }
+        }
+        
+        const itemId = g.id.replace(/-/g, '');
+        container.innerHTML += `
+            <div class="group-checkbox-item ${hasChallenge ? 'checked' : ''}" 
+                 id="check-${itemId}" 
+                 onclick="window.toggleGroupCheck('${itemId}', '${challenge?.id || ''}', ${willScore && isParticipant})"
+                 style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;
+                        border:2px solid ${hasChallenge ? (willScore && isParticipant ? '#10B981' : '#4F46E5') : '#FEE2E2'};
+                        border-radius:10px;background:${hasChallenge ? '#fff' : '#FEF2F2'};
+                        cursor:${hasChallenge ? 'pointer' : 'default'};">
+                <div class="check-icon" style="width:24px;height:24px;border:2px solid ${hasChallenge ? '#4F46E5' : '#EF4444'};
+                      border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                      background:${hasChallenge ? '#4F46E5' : 'transparent'};color:#fff;font-size:0.7rem;">
+                    ${hasChallenge ? '✓' : ''}
+                </div>
+                <div style="flex:1;">
+                    <div style="font-weight:600;font-size:0.95rem;">${escapeHtml(g.name)}</div>
+                    <div style="font-size:0.75rem;color:#6B7280;">
+                        ${challenge ? '🎯 ' + escapeHtml(challenge.name) + ' <span style="font-size:0.65rem;">' + statusBadge + '</span>' : '⚠️ Nenhum desafio'}
+                    </div>
+                </div>
+                <span style="font-size:0.7rem;padding:4px 8px;border-radius:12px;font-weight:600;
+                      background:${willScore && isParticipant ? '#D1FAE5' : '#F3F4F6'};
+                      color:${willScore && isParticipant ? '#065F46' : '#6B7280'};">
+                    ${scoreBadge}
+                </span>
+                <input type="checkbox" id="cb-${itemId}" value="${g.id}" data-challenge="${challenge?.id || ''}" 
+                       ${hasChallenge ? 'checked' : 'disabled'} style="display:none;">
+            </div>
+        `;
+    }
+    
+    const confirmBtn = document.getElementById('confirmRegisterBtn');
+    if (confirmBtn) {
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        newBtn.addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.dataset.challenge) selected.push(cb.dataset.challenge);
+            });
+            if (selected.length === 0) {
+                showToast('Selecione pelo menos um grupo', 'warning');
+                return;
+            }
+            localStorage.setItem('fatfit_register_challenges', JSON.stringify(selected));
+            modal.classList.remove('open');
+            
+            // Verifica se o usuário tem Strava conectado
+            getCurrentUser().then(async (u) => {
+                const { data: profile } = await db
+                    .from('profiles')
+                    .select('strava_connected')
+                    .eq('id', u.id)
+                    .single();
+                
+                if (profile?.strava_connected) {
+                    // Mostra o modal de escolha (foto ou Strava)
+                    openRegisterChoice();
+                } else {
+                    // Vai direto para a câmera
+                    window.location.href = 'activity.html?challenges=' + selected.join(',');
+                }
+            });
+        });
+    }
+    
+    modal.querySelectorAll('.modal-close').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', () => modal.classList.remove('open'));
+    });
+    modal.classList.add('open');
+}
+
+// ============================================
+// FUNÇÃO PARA TORNAR FUNÇÕES GLOBAIS
+// ============================================
+window.openRegisterChoice = openRegisterChoice;
+window.openCameraOnly = openCameraOnly;
+window.showGroupSelectionModal = showGroupSelectionModal;
 
 // ============================================
 // PÁGINA: activity.html
@@ -7398,8 +7602,9 @@ async function connectStrava() {
 }
 
 // ============================================
-// SINCRONIZAR STRAVA
+// SINCRONIZAR STRAVA (COM GERAÇÃO DE IMAGENS)
 // ============================================
+
 async function syncStrava() {
     try {
         const user = await getCurrentUser();
@@ -7432,13 +7637,34 @@ async function syncStrava() {
         const result = await response.json();
         
         if (response.ok && result.success) {
-            showToast(`✅ ${result.imported || 0} novas atividades importadas!`, 'success');
+            const imported = result.imported || 0;
+            showToast(`✅ ${imported} novas atividades importadas!`, 'success');
+            
+            // 🔥 SE HOUVER ATIVIDADES IMPORTADAS, GERA IMAGENS
+            if (imported > 0) {
+                console.log('🎨 Gerando imagens para atividades importadas...');
+                
+                // Busca as últimas atividades importadas
+                const { data: newActivities } = await window.db
+                    .from('daily_activities')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .not('strava_id', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(imported);
+                
+                if (newActivities && newActivities.length > 0) {
+                    for (const act of newActivities) {
+                        await generateStravaActivityImage(act.id);
+                    }
+                    console.log(`✅ ${newActivities.length} imagens geradas!`);
+                }
+            }
+            
             // Atualiza o perfil
             await loadStravaStatus();
-            // Recarrega a timeline se estiver na home
-            if (window.loadTimeline) {
-                await loadTimeline();
-            }
+            await loadStravaStats();
+            
         } else {
             showToast(result.error || 'Erro na sincronização', 'error');
         }
@@ -7612,3 +7838,1209 @@ window.syncStrava = syncStrava;
 window.disconnectStrava = disconnectStrava;
 window.loadStravaStatus = loadStravaStatus;
 window.initStravaUI = initStravaUI;
+
+// ============================================
+// STRAVA UPLOAD - Registrar atividade no Strava
+// ============================================
+
+function openStravaUpload() {
+    // Verifica se o usuário tem Strava conectado
+    getCurrentUser().then(async (user) => {
+        if (!user) {
+            showToast('Faça login primeiro', 'error');
+            return;
+        }
+        
+        const { data: profile } = await window.db
+            .from('profiles')
+            .select('strava_connected')
+            .eq('id', user.id)
+            .single();
+        
+        if (!profile?.strava_connected) {
+            showToast('Conecte sua conta Strava primeiro!', 'warning');
+            return;
+        }
+        
+        document.getElementById('stravaUploadModal').classList.add('open');
+    });
+}
+
+function closeStravaUpload() {
+    document.getElementById('stravaUploadModal').classList.remove('open');
+    document.getElementById('stravaActivityForm').reset();
+}
+
+// ============================================
+// ENVIAR ATIVIDADE PARA STRAVA
+// ============================================
+document.getElementById('stravaActivityForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('stravaActivityName').value.trim();
+    const type = document.getElementById('stravaActivityType').value;
+    const distance = parseFloat(document.getElementById('stravaDistance').value);
+    const time = parseInt(document.getElementById('stravaTime').value);
+    const description = document.getElementById('stravaDescription').value.trim();
+    
+    if (!name || !distance || !time) {
+        showToast('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
+    
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    
+    try {
+        const { data } = await window.db.auth.getSession();
+        const userToken = data.session?.access_token;
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-upload`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({
+                name,
+                type,
+                distance_km: distance,
+                time_minutes: time,
+                description
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            showToast('✅ Atividade registrada no Strava!', 'success');
+            closeStravaUpload();
+            // Recarrega a timeline
+            setTimeout(() => {
+                if (window.loadTimeline) loadTimeline();
+            }, 1000);
+        } else {
+            showToast(result.error || 'Erro ao registrar atividade', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Erro:', error);
+        showToast('Erro ao enviar para Strava', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+// Torna funções globais
+window.openStravaUpload = openStravaUpload;
+window.closeStravaUpload = closeStravaUpload;
+
+
+// ============================================
+// IMPORTAR DO STRAVA
+// ============================================
+
+// ============================================
+// ABRIR IMPORTAÇÃO DO STRAVA (COM SELEÇÃO DE GRUPOS)
+// ============================================
+
+async function openStravaImport() {
+    closeRegisterChoice();
+    
+    const user = await getCurrentUser();
+    if (!user) {
+        showToast('Faça login primeiro', 'error');
+        return;
+    }
+    
+    // Verifica se o Strava está conectado
+    const { data: profile } = await window.db
+        .from('profiles')
+        .select('strava_connected')
+        .eq('id', user.id)
+        .single();
+    
+    if (!profile?.strava_connected) {
+        showToast('Conecte sua conta Strava primeiro!', 'warning');
+        return;
+    }
+    
+    // 🔥 Busca os grupos do usuário
+    const { data: memberships, error } = await window.db
+        .from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+    
+    if (error) {
+        console.error('❌ Erro ao buscar grupos:', error);
+        showToast('Erro ao carregar grupos', 'error');
+        return;
+    }
+    
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo. Crie ou entre em um grupo primeiro.', 'warning');
+        return;
+    }
+    
+    // 🔥 Mostra o modal de seleção de grupos
+    // Depois que selecionar, vai para a lista do Strava
+    await showGroupSelectionModalForStrava(memberships);
+}
+
+function closeStravaImport() {
+    document.getElementById('stravaImportModal').classList.remove('open');
+}
+
+async function loadStravaActivities() {
+    const container = document.getElementById('stravaActivitiesList');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Carregando atividades...</p></div>';
+    
+    try {
+        const { data } = await window.db.auth.getSession();
+        const userToken = data.session?.access_token;
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-list`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${userToken}`
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok || !result.success) {
+            container.innerHTML = `<div class="empty-state"><p>${result.error || 'Erro ao carregar'}</p></div>`;
+            return;
+        }
+        
+        if (result.activities.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-check-circle" style="font-size:2rem;color:#10B981;"></i>
+                    <p>Todas as atividades já foram importadas!</p>
+                    <small style="color:#8E8E93;">Nenhuma nova atividade disponível</small>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = result.activities.map(a => `
+            <div class="strava-activity-item" style="
+                display:flex;
+                align-items:center;
+                gap:12px;
+                padding:14px;
+                border:1px solid #E5E5EA;
+                border-radius:12px;
+                margin-bottom:10px;
+                cursor:pointer;
+                transition:all 0.2s;
+            " onclick="importStravaActivity('${a.id}')">
+                <div style="
+                    width:48px;
+                    height:48px;
+                    border-radius:50%;
+                    background:${a.type === 'Run' ? '#FC4C02' : a.type === 'Ride' ? '#00BCD4' : '#4F46E5'};
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    color:white;
+                    font-size:1.2rem;
+                ">
+                    ${a.type === 'Run' ? '🏃' : a.type === 'Ride' ? '🚴' : '🏋️'}
+                </div>
+                <div style="flex:1;">
+                    <div style="font-weight:600;color:#1C1C1E;">${escapeHtml(a.name)}</div>
+                    <div style="font-size:0.8rem;color:#8E8E93;">
+                        📊 ${a.distance.toFixed(1)} km • ${a.moving_time} min
+                        ${a.has_photo ? ' 📸' : ''}
+                    </div>
+                    <div style="font-size:0.7rem;color:#C7C7CC;">
+                        ${formatDate(a.start_date)}
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); importStravaActivity('${a.id}')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Erro:', error);
+        container.innerHTML = '<div class="empty-state"><p>Erro ao carregar atividades</p></div>';
+    }
+}
+
+// ============================================
+// IMPORTAR ATIVIDADE DO STRAVA
+// ============================================
+
+// ============================================
+// IMPORTAR ATIVIDADE DO STRAVA (COM IMAGEM AUTOMÁTICA)
+// ============================================
+
+// ============================================
+// IMPORTAR ATIVIDADE DO STRAVA (COM IMAGEM AUTOMÁTICA)
+// ============================================
+
+async function importStravaActivity(activityId) {
+    if (!activityId) {
+        showToast('ID da atividade não fornecido', 'error');
+        return;
+    }
+    
+    showToast('🔄 Importando atividade...', 'info');
+    
+    try {
+        const { data } = await window.db.auth.getSession();
+        const userToken = data.session?.access_token;
+        
+        if (!userToken) {
+            showToast('Erro de autenticação', 'error');
+            return;
+        }
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-import`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({ activity_id: activityId })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            showToast('✅ Atividade importada com sucesso!', 'success');
+            closeStravaImport();
+            
+            // 🔥 AGUARDA 2 SEGUNDOS PARA O BANCO SALVAR
+            console.log('⏳ Aguardando 2s para o banco salvar...');
+            await new Promise(r => setTimeout(r, 2000));
+            
+            // 🔥 BUSCA A ATIVIDADE IMPORTADA
+            console.log('🔍 Buscando atividade importada...');
+            const { data: importedActivity, error: findError } = await window.db
+                .from('daily_activities')
+                .select('id')
+                .eq('strava_id', activityId)
+                .maybeSingle();
+            
+            if (findError) {
+                console.error('❌ Erro ao buscar atividade:', findError);
+                showToast('Erro ao gerar imagem', 'error');
+                return;
+            }
+            
+            if (!importedActivity) {
+                console.error('❌ Atividade não encontrada no banco!');
+                showToast('Erro: atividade não encontrada', 'error');
+                return;
+            }
+            
+            console.log('✅ Atividade encontrada! ID:', importedActivity.id);
+            console.log('🎨 Gerando imagem...');
+            
+            // 🔥 GERA A IMAGEM
+            await generateStravaActivityImage(importedActivity.id);
+            console.log('✅ Imagem gerada com sucesso!');
+            
+            // Recarrega a timeline
+            if (window.loadTimeline) {
+                console.log('🔄 Recarregando timeline...');
+                await window.loadTimeline();
+            }
+            
+            // Recarrega a lista de atividades disponíveis
+            if (window.loadStravaActivities) {
+                await window.loadStravaActivities();
+            }
+            
+            showToast('✅ Atividade com imagem!', 'success');
+            
+        } else {
+            showToast(result.error || 'Erro ao importar atividade', 'error');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro geral:', error);
+        showToast('Erro ao importar atividade', 'error');
+    }
+}
+
+// Torna funções globais
+window.openStravaImport = openStravaImport;
+window.closeStravaImport = closeStravaImport;
+window.loadStravaActivities = loadStravaActivities;
+window.importStravaActivity = importStravaActivity;
+
+// ============================================
+// GERAR IMAGEM APÓS IMPORTAÇÃO DO STRAVA
+// ============================================
+
+// ============================================
+// GERAR IMAGEM DA ATIVIDADE STRAVA
+// ============================================
+
+// ============================================
+// GERAR IMAGEM DA ATIVIDADE STRAVA (COM LOGS)
+// ============================================
+
+async function generateStravaActivityImage(activityId) {
+    console.log('🎨 [INÍCIO] Gerando imagem para atividade:', activityId);
+    
+    try {
+        // Busca a atividade
+        const { data: activity, error } = await window.db
+            .from('daily_activities')
+            .select('*')
+            .eq('id', activityId)
+            .single();
+        
+        if (error) {
+            console.error('❌ Erro ao buscar atividade:', error);
+            return;
+        }
+        
+        if (!activity) {
+            console.error('❌ Atividade não encontrada');
+            return;
+        }
+        
+        console.log('📋 Atividade encontrada:', {
+            id: activity.id,
+            strava_id: activity.strava_id,
+            has_photo: !!activity.photo_url,
+            photo_preview: activity.photo_url?.substring(0, 50)
+        });
+        
+        // Se já tiver imagem base64, mantém
+        if (activity.photo_url && activity.photo_url.startsWith('data:image')) {
+            console.log('✅ Atividade já tem imagem base64');
+            return;
+        }
+        
+        // Busca o token do Strava
+        console.log('🔍 Buscando token do Strava...');
+        const { data: profile, error: profileError } = await window.db
+            .from('profiles')
+            .select('strava_access_token')
+            .eq('id', activity.user_id)
+            .single();
+        
+        if (profileError) {
+            console.error('❌ Erro ao buscar perfil:', profileError);
+        }
+        
+        let polyline = null;
+        
+        if (profile?.strava_access_token) {
+            try {
+                console.log('🔍 Buscando atividade no Strava:', activity.strava_id);
+                const stravaResponse = await fetch(
+                    `https://www.strava.com/api/v3/activities/${activity.strava_id}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${profile.strava_access_token}`
+                        }
+                    }
+                );
+                
+                if (stravaResponse.ok) {
+                    const stravaData = await stravaResponse.json();
+                    polyline = stravaData.map?.summary_polyline || null;
+                    console.log('🗺️ Polyline obtida:', polyline ? '✅ Sim' : '❌ Não');
+                } else {
+                    console.log('⚠️ Erro ao buscar atividade no Strava:', stravaResponse.status);
+                }
+            } catch (e) {
+                console.warn('⚠️ Erro ao buscar polyline:', e);
+            }
+        }
+        
+        // Gera a imagem com Canvas
+        console.log('🎨 Criando imagem com Canvas...');
+        const imageDataUrl = await createStravaImage(activity, polyline);
+        console.log('📸 Imagem criada, tamanho:', Math.round(imageDataUrl.length / 1024), 'KB');
+        
+        // Atualiza a atividade
+        console.log('💾 Salvando imagem no banco...');
+        const { error: updateError } = await window.db
+            .from('daily_activities')
+            .update({ photo_url: imageDataUrl })
+            .eq('id', activity.id);
+        
+        if (updateError) {
+            console.error('❌ Erro ao atualizar imagem:', updateError);
+            return;
+        }
+        
+        console.log('✅ Imagem gerada e salva com sucesso!');
+        
+    } catch (error) {
+        console.error('❌ Erro ao gerar imagem:', error);
+    }
+}
+async function generateStravaImage(activityId) {
+    try {
+        const { data: activity } = await window.db
+            .from('daily_activities')
+            .select('*')
+            .eq('id', activityId)
+            .single();
+        
+        if (!activity) return;
+        if (activity.photo_url?.startsWith('data:image')) return; // Já tem imagem
+        
+        console.log('🎨 Gerando imagem para atividade:', activity.id);
+        
+        // Cria o Canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 400;
+        const ctx = canvas.getContext('2d');
+        
+        // Fundo
+        const gradient = ctx.createLinearGradient(0, 0, 800, 400);
+        gradient.addColorStop(0, '#FC4C02');
+        gradient.addColorStop(0.5, '#F97316');
+        gradient.addColorStop(1, '#FB923C');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 800, 400);
+        
+        // Extrai dados
+        const comment = activity.comment || '';
+        const name = comment.split('\n')[0]?.replace('🏃 ', '') || 'Treino';
+        const distanceMatch = comment.match(/📊 ([0-9.]+) km/);
+        const timeMatch = comment.match(/• ([0-9]+) min/);
+        const paceMatch = comment.match(/📈 Ritmo: ([0-9.]+) min\/km/);
+        
+        const distance = distanceMatch ? distanceMatch[1] : '0';
+        const time = timeMatch ? timeMatch[1] : '0';
+        const pace = paceMatch ? paceMatch[1] : '0';
+        
+        // Título
+        ctx.font = 'bold 32px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('🏃 ' + name, 400, 40);
+        
+        // Box de dados
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 2;
+        const bx = 80, by = 140, bw = 640, bh = 160;
+        roundRect(ctx, bx, by, bw, bh, 16);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Dados
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(distance + ' km', 240, by + 70);
+        ctx.fillText(time + ' min', 420, by + 70);
+        ctx.fillText('⚡ ' + pace + ' min/km', 600, by + 70);
+        
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillText('📊 Distância', 240, by + 120);
+        ctx.fillText('⏱️ Tempo', 420, by + 120);
+        ctx.fillText('📈 Ritmo', 600, by + 120);
+        
+        // Selo Strava
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('🏅 Strava', 750, 380);
+        
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('📅 ' + (activity.activity_date || ''), 40, 380);
+        
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+        
+        // Salva
+        const dataUrl = canvas.toDataURL('image/png');
+        await window.db
+            .from('daily_activities')
+            .update({ photo_url: dataUrl })
+            .eq('id', activity.id);
+        
+        console.log('✅ Imagem gerada e salva!');
+        
+    } catch (error) {
+        console.error('❌ Erro ao gerar imagem:', error);
+    }
+}
+
+// ============================================
+// ATUALIZAR ATIVIDADE COM MAPA (FRONTEND)
+// ============================================
+
+// ============================================
+// ATUALIZAR ATIVIDADE COM MAPA DO STRAVA
+// ============================================
+
+async function updateStravaActivityWithMap(activityId) {
+    console.log('🗺️ Atualizando atividade com mapa...');
+    
+    const { data: activity } = await window.db
+        .from('daily_activities')
+        .select('*')
+        .eq('id', activityId)
+        .single();
+    
+    if (!activity) {
+        console.error('❌ Atividade não encontrada');
+        return;
+    }
+    
+    // Se já tem imagem e não é placeholder, mantém
+    if (activity.photo_url && 
+        !activity.photo_url.includes('placehold') && 
+        activity.photo_url.startsWith('http')) {
+        console.log('✅ Atividade já tem imagem:', activity.photo_url.substring(0, 50));
+        return;
+    }
+    
+    // Busca a atividade no Strava
+    const { data: profile } = await window.db
+        .from('profiles')
+        .select('strava_access_token')
+        .eq('id', '31a6dd44-bc2f-4899-b57a-054d18221189')
+        .single();
+    
+    if (!profile?.strava_access_token) {
+        console.error('❌ Token do Strava não encontrado!');
+        return;
+    }
+    
+    console.log('🔍 Buscando atividade no Strava:', activity.strava_id);
+    
+    const response = await fetch(
+        `https://www.strava.com/api/v3/activities/${activity.strava_id}`,
+        {
+            headers: { 'Authorization': `Bearer ${profile.strava_access_token}` }
+        }
+    );
+    
+    if (!response.ok) {
+        console.error('❌ Erro ao buscar atividade no Strava:', response.status);
+        return;
+    }
+    
+    const stravaData = await response.json();
+    console.log('✅ Dados obtidos do Strava');
+    
+    // ============================================
+    // PRIORIDADE 1: Usar o mapa do Strava
+    // ============================================
+    let photoUrl = null;
+    
+    if (stravaData.route_map_image_url) {
+        photoUrl = stravaData.route_map_image_url;
+        console.log('🗺️ Usando mapa do Strava');
+    } 
+    // ============================================
+    // PRIORIDADE 2: Gerar imagem com dados (Canvas)
+    // ============================================
+    else {
+        console.log('🎨 Gerando imagem com Canvas (sem mapa)');
+        
+        const distanceKm = (stravaData.distance / 1000).toFixed(2);
+        const timeMinutes = Math.round(stravaData.moving_time / 60);
+        const paceMinKm = timeMinutes > 0 ? (timeMinutes / parseFloat(distanceKm)).toFixed(2) : '0.00';
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 400;
+        const ctx = canvas.getContext('2d');
+        
+        // Fundo
+        const gradient = ctx.createLinearGradient(0, 0, 800, 400);
+        gradient.addColorStop(0, '#FC4C02');
+        gradient.addColorStop(0.5, '#F97316');
+        gradient.addColorStop(1, '#FB923C');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 800, 400);
+        
+        // Título
+        ctx.font = 'bold 32px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('🏃 ' + (stravaData.name || 'Treino'), 400, 40);
+        
+        // Box de dados
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 2;
+        const bx = 80, by = 140, bw = 640, bh = 160;
+        roundRect(ctx, bx, by, bw, bh, 16);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Dados
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(distanceKm + ' km', 240, by + 70);
+        ctx.fillText(timeMinutes + ' min', 420, by + 70);
+        ctx.fillText('⚡ ' + paceMinKm + ' min/km', 600, by + 70);
+        
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillText('📊 Distância', 240, by + 120);
+        ctx.fillText('⏱️ Tempo', 420, by + 120);
+        ctx.fillText('📈 Ritmo', 600, by + 120);
+        
+        // Selo Strava
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('🏅 Strava', 750, 380);
+        
+        // Data
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('📅 ' + (activity.activity_date || ''), 40, 380);
+        
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+        
+        photoUrl = canvas.toDataURL('image/png');
+        console.log('✅ Imagem Canvas gerada');
+    }
+    
+    // ============================================
+    // SALVA NO BANCO
+    // ============================================
+    if (photoUrl) {
+        const { error: updateError } = await window.db
+            .from('daily_activities')
+            .update({ photo_url: photoUrl })
+            .eq('id', activity.id);
+        
+        if (updateError) {
+            console.error('❌ Erro ao atualizar:', updateError);
+            return;
+        }
+        
+        console.log('✅ Atividade atualizada com imagem!');
+        
+        // Recarrega a timeline
+        if (window.loadTimeline) {
+            await window.loadTimeline();
+        }
+    } else {
+        console.log('⚠️ Nenhuma imagem disponível');
+    }
+}
+
+// ============================================
+// CRIAR IMAGEM DA ATIVIDADE COM CANVAS
+// ============================================
+
+// ============================================
+// CRIAR IMAGEM DA ATIVIDADE COM CANVAS (DESIGN MELHORADO)
+// ============================================
+
+async function createStravaImage(activity, polyline) {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 500; // Aumentei para dar mais espaço
+        const ctx = canvas.getContext('2d');
+        
+        // ===== FUNDO ESCURO (mais elegante) =====
+        const gradient = ctx.createLinearGradient(0, 0, 0, 500);
+        gradient.addColorStop(0, '#1a1a2e');
+        gradient.addColorStop(0.5, '#16213e');
+        gradient.addColorStop(1, '#0f3460');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 800, 500);
+        
+        // ===== DECORAÇÃO: CÍRCULO SUTIL =====
+        ctx.beginPath();
+        ctx.arc(700, 80, 150, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(252, 76, 2, 0.08)';
+        ctx.fill();
+        
+        // ===== SELO STRAVA (topo direito) =====
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#FC4C02';
+        ctx.fillText('🏅 STRAVA', 760, 20);
+        
+        // ===== TÍTULO =====
+        const comment = activity.comment || '';
+        const nameMatch = comment.match(/🏃 ([^\n]+)/);
+        const name = nameMatch ? nameMatch[1] : 'Treino';
+        
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('🏃 ' + name, 40, 20);
+        
+        // ===== TIPO DO TREINO =====
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.textBaseline = 'top';
+        ctx.fillText(activity.workout_type || 'Corrida', 40, 58);
+        
+        // ===== DATA =====
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillText('📅 ' + (activity.activity_date || ''), 760, 58);
+        
+        // ===== MAPA (se tiver polyline) =====
+        if (polyline) {
+            // Fundo do mapa
+            const mapX = 40, mapY = 100, mapW = 720, mapH = 220;
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1;
+            
+            // Arredondado
+            const r = 12;
+            ctx.beginPath();
+            ctx.moveTo(mapX + r, mapY);
+            ctx.lineTo(mapX + mapW - r, mapY);
+            ctx.quadraticCurveTo(mapX + mapW, mapY, mapX + mapW, mapY + r);
+            ctx.lineTo(mapX + mapW, mapY + mapH - r);
+            ctx.quadraticCurveTo(mapX + mapW, mapY + mapH, mapX + mapW - r, mapY + mapH);
+            ctx.lineTo(mapX + r, mapY + mapH);
+            ctx.quadraticCurveTo(mapX, mapY + mapH, mapX, mapY + mapH - r);
+            ctx.lineTo(mapX, mapY + r);
+            ctx.quadraticCurveTo(mapX, mapY, mapX + r, mapY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Percurso (simulado com polyline)
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(252, 76, 2, 0.7)';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = 'rgba(252, 76, 2, 0.3)';
+            ctx.shadowBlur = 10;
+            
+            const startX = mapX + 40, startY = mapY + mapH - 30;
+            const endX = mapX + mapW - 40, endY = mapY + 30;
+            
+            ctx.moveTo(startX, startY);
+            
+            // Gera um percurso sinuoso baseado na polyline (se disponível)
+            const points = 20;
+            for (let i = 0; i <= points; i++) {
+                const t = i / points;
+                const x = startX + (endX - startX) * t;
+                // Usa a polyline para gerar a forma
+                const wave = Math.sin(t * 4.5) * 30 + Math.sin(t * 7.2) * 15 + Math.sin(t * 1.3) * 20;
+                const y = startY + (endY - startY) * t + wave * (1 - Math.abs(t - 0.5) * 1.5);
+                ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Marcador de início (verde)
+            ctx.fillStyle = '#34C759';
+            ctx.shadowColor = 'rgba(52, 199, 89, 0.5)';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(startX, startY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Marcador de fim (vermelho)
+            ctx.fillStyle = '#FF3B30';
+            ctx.shadowColor = 'rgba(255, 59, 48, 0.5)';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(endX, endY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Labels do mapa
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillText('🏁 Início', startX - 10, startY - 14);
+            
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('🏁 Fim', endX + 10, endY - 14);
+            
+            // Legenda
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillText('🗺️ Percurso • ' + (activity.workout_type || 'Corrida'), mapX + mapW - 10, mapY + mapH - 10);
+        }
+        
+        // ===== CARD DE DADOS =====
+        const cardY = polyline ? 340 : 120;
+        const cardX = 40, cardW = 720, cardH = 100;
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath();
+        const r2 = 12;
+        ctx.moveTo(cardX + r2, cardY);
+        ctx.lineTo(cardX + cardW - r2, cardY);
+        ctx.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + r2);
+        ctx.lineTo(cardX + cardW, cardY + cardH - r2);
+        ctx.quadraticCurveTo(cardX + cardW, cardY + cardH, cardX + cardW - r2, cardY + cardH);
+        ctx.lineTo(cardX + r2, cardY + cardH);
+        ctx.quadraticCurveTo(cardX, cardY + cardH, cardX, cardY + cardH - r2);
+        ctx.lineTo(cardX, cardY + r2);
+        ctx.quadraticCurveTo(cardX, cardY, cardX + r2, cardY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // ===== EXTRAI DADOS =====
+        const distanceMatch = comment.match(/📊 ([0-9.]+) km/);
+        const timeMatch = comment.match(/• ([0-9]+) min/);
+        const paceMatch = comment.match(/📈 Ritmo: ([0-9.]+) min\/km/);
+        
+        const distance = distanceMatch ? distanceMatch[1] : '0';
+        const time = timeMatch ? timeMatch[1] : '0';
+        const pace = paceMatch ? paceMatch[1] : '0';
+        
+        // ===== DADOS (3 colunas) =====
+        const colWidth = cardW / 3;
+        const dataY = cardY + 30;
+        
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        
+        // Distância
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(distance + ' km', cardX + colWidth / 2, dataY);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('📊 DISTÂNCIA', cardX + colWidth / 2, dataY + 38);
+        
+        // Tempo
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(time + ' min', cardX + colWidth / 2 + colWidth, dataY);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('⏱️ TEMPO', cardX + colWidth / 2 + colWidth, dataY + 38);
+        
+        // Ritmo
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText('⚡ ' + pace + ' min/km', cardX + colWidth / 2 + colWidth * 2, dataY);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('📈 RITMO', cardX + colWidth / 2 + colWidth * 2, dataY + 38);
+        
+        // ===== RODAPÉ =====
+        const footerY = 465;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillText('FATFIT • Treino importado do Strava', 40, footerY);
+        
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillText('🏅 Strava', 760, footerY);
+        
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+
+
+// ============================================
+// GERAR IMAGENS PARA TODAS AS ATIVIDADES STRAVA
+// ============================================
+
+async function generateAllStravaImages() {
+    console.log('🗺️ Gerando imagens para todas as atividades Strava...');
+    
+    const user = await getCurrentUser();
+    if (!user) {
+        console.error('❌ Usuário não encontrado');
+        return;
+    }
+    
+    const { data: activities } = await window.db
+        .from('daily_activities')
+        .select('id')
+        .eq('user_id', user.id)
+        .not('strava_id', 'is', null)
+        .order('created_at', { ascending: false });
+    
+    console.log(`📊 Encontradas ${activities?.length || 0} atividades`);
+    
+    if (!activities || activities.length === 0) {
+        console.log('❌ Nenhuma atividade Strava encontrada');
+        return;
+    }
+    
+    let count = 0;
+    for (const activity of activities) {
+        console.log(`🔄 Processando atividade ${count + 1}/${activities.length}...`);
+        await generateStravaActivityImage(activity.id);
+        count++;
+        // Pequeno delay para não sobrecarregar
+        await new Promise(r => setTimeout(r, 500));
+    }
+    
+    console.log(`✅ ${count} imagens geradas com sucesso!`);
+    
+    if (window.loadTimeline) {
+        await window.loadTimeline();
+    }
+}
+
+// ============================================
+// MOSTRAR SELEÇÃO DE GRUPOS PARA STRAVA
+// ============================================
+
+async function showGroupSelectionModalForStrava(memberships) {
+    const modal = document.getElementById('registerSelectModal');
+    const container = document.getElementById('groupsChecklist');
+    const confirmBtn = document.getElementById('confirmRegisterBtn');
+    
+    if (!modal || !container) {
+        console.error('❌ Modal de seleção não encontrado');
+        showToast('Erro ao abrir seleção de grupos', 'error');
+        return;
+    }
+    
+    container.innerHTML = '';
+    const today = getToday();
+    const user = await getCurrentUser();
+    
+    // Guarda os grupos selecionados
+    let selectedGroups = [];
+    
+    for (const m of memberships) {
+        const g = m.groups;
+        if (!g) continue;
+        
+        const { data: challenge } = await window.db
+            .from('challenges')
+            .select('id, name, status, start_date, end_date')
+            .eq('group_id', g.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        const hasChallenge = !!challenge;
+        const inPeriod = challenge && today >= challenge.start_date && today <= challenge.end_date;
+        const willScore = hasChallenge && inPeriod;
+        
+        let isParticipant = false;
+        if (challenge) {
+            const { data: cp } = await window.db
+                .from('challenge_participants')
+                .select('id')
+                .eq('challenge_id', challenge.id)
+                .eq('user_id', user.id)
+                .maybeSingle();
+            isParticipant = !!cp;
+        }
+        
+        let statusBadge = '';
+        if (challenge) {
+            if (willScore && isParticipant) {
+                statusBadge = '✅ Pontuando';
+            } else if (willScore && !isParticipant) {
+                statusBadge = '⚠️ Participe para pontuar';
+            } else if (today < challenge.start_date) {
+                statusBadge = '⏳ Não iniciou';
+            } else {
+                statusBadge = '📋 Encerrado';
+            }
+        }
+        
+        const itemId = g.id.replace(/-/g, '');
+        const isChecked = hasChallenge;
+        
+        container.innerHTML += `
+            <div class="group-checkbox-item ${isChecked ? 'checked' : ''}" 
+                 id="check-${itemId}" 
+                 onclick="window.toggleGroupCheck('${itemId}', '${challenge?.id || ''}', ${willScore && isParticipant})"
+                 style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;
+                        border:2px solid ${isChecked ? '#4F46E5' : '#E5E5EA'};
+                        border-radius:12px;background:${isChecked ? '#F5F3FF' : '#FFFFFF'};
+                        cursor:pointer;transition:all 0.2s;">
+                <div class="check-icon" style="width:24px;height:24px;border:2px solid ${isChecked ? '#4F46E5' : '#D1D5DB'};
+                      border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                      background:${isChecked ? '#4F46E5' : 'transparent'};color:#fff;font-size:0.7rem;">
+                    ${isChecked ? '✓' : ''}
+                </div>
+                <div style="flex:1;">
+                    <div style="font-weight:600;font-size:0.95rem;color:#1C1C1E;">${escapeHtml(g.name)}</div>
+                    <div style="font-size:0.75rem;color:#6B7280;">
+                        ${challenge ? '🎯 ' + escapeHtml(challenge.name) + ' <span style="font-size:0.65rem;">' + statusBadge + '</span>' : '⚠️ Nenhum desafio'}
+                    </div>
+                </div>
+                <input type="checkbox" id="cb-${itemId}" value="${g.id}" data-challenge="${challenge?.id || ''}" 
+                       ${isChecked ? 'checked' : ''} style="display:none;">
+            </div>
+        `;
+    }
+    
+    // Atualiza o botão para chamar a importação do Strava
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    
+    newBtn.innerHTML = '<i class="fab fa-strava"></i> Importar do Strava';
+    newBtn.className = 'btn btn-primary btn-block mt-2';
+    newBtn.style.borderRadius = '10px';
+    newBtn.style.padding = '14px';
+    newBtn.style.fontSize = '1rem';
+    
+    newBtn.addEventListener('click', async () => {
+        const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
+        const selected = [];
+        checkboxes.forEach(cb => {
+            if (cb.dataset.challenge) {
+                selected.push(cb.dataset.challenge);
+            }
+        });
+        
+        if (selected.length === 0) {
+            showToast('Selecione pelo menos um grupo', 'warning');
+            return;
+        }
+        
+        modal.classList.remove('open');
+        
+        // 🔥 Abre a lista de atividades do Strava
+        document.getElementById('stravaImportModal').classList.add('open');
+        await loadStravaActivities();
+    });
+    
+    modal.querySelectorAll('.modal-close').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', () => modal.classList.remove('open'));
+    });
+    
+    modal.classList.add('open');
+}
+
+
+// ============================================
+// ABRIR CÂMERA (COM SELEÇÃO DE GRUPOS)
+// ============================================
+
+async function openCameraRegister() {
+    closeRegisterChoice();
+    
+    const user = await getCurrentUser();
+    if (!user) {
+        showToast('Faça login primeiro', 'error');
+        return;
+    }
+    
+    // Busca os grupos do usuário
+    const { data: memberships, error } = await window.db
+        .from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+    
+    if (error) {
+        console.error('❌ Erro ao buscar grupos:', error);
+        showToast('Erro ao carregar grupos', 'error');
+        return;
+    }
+    
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo. Crie ou entre em um grupo primeiro.', 'warning');
+        return;
+    }
+    
+    // Se tem apenas um grupo, vai direto
+    if (memberships.length === 1) {
+        const groupId = memberships[0].group_id;
+        const { data: challenge } = await window.db
+            .from('challenges')
+            .select('id')
+            .eq('group_id', groupId)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        if (challenge) {
+            window.location.href = `activity.html?challenge=${challenge.id}`;
+        } else {
+            showToast('Nenhum desafio ativo neste grupo', 'warning');
+        }
+        return;
+    }
+    
+    // 🔥 Múltiplos grupos: mostra o modal de seleção
+    await showGroupSelectionModal(memberships);
+}
+
+
+// No final do app.js
+
+window.openCameraRegister = openCameraRegister;
+window.openStravaImport = openStravaImport;
+window.showGroupSelectionModalForStrava = showGroupSelectionModalForStrava;
+window.importStravaActivity = importStravaActivity;
+window.generateStravaActivityImage = generateStravaActivityImage;
+window.createStravaImage = createStravaImage;
+window.generateAllStravaImages = generateAllStravaImages;
+window.syncStrava = syncStrava;

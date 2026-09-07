@@ -18,11 +18,116 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; }
+        
+        /* Estilos para o modal do Strava */
+        .strava-upload-modal .modal-content {
+            max-width: 480px;
+            border-radius: 20px;
+            background: #FFFFFF;
+        }
+        
+        .strava-upload-modal .modal-body {
+            padding: 20px;
+        }
+        
+        .strava-option-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            border: 2px solid #E5E5EA;
+            border-radius: 12px;
+            background: #FFFFFF;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+            width: 100%;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1C1C1E;
+        }
+        
+        .strava-option-btn:hover {
+            border-color: #4F46E5;
+            background: #F9FAFB;
+            transform: translateY(-2px);
+        }
+        
+        .strava-option-btn i {
+            font-size: 1.5rem;
+            width: 32px;
+            text-align: center;
+        }
+        
+        .strava-option-btn .fa-strava {
+            color: #FC4C02;
+        }
+        
+        .strava-option-btn .fa-camera {
+            color: #4F46E5;
+        }
+        
+        .strava-option-desc {
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: #8E8E93;
+            margin-top: 2px;
+        }
+        
+        .btn-strava-submit {
+            background: #FC4C02;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-strava-submit:hover {
+            background: #E04400;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(252, 76, 2, 0.3);
+        }
+        
+        .btn-strava-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .strava-badge {
+            display: inline-block;
+            background: #FC4C02;
+            color: #FFFFFF;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+        
+        .activity-options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 16px 0;
+        }
+        
+        @media (max-width: 400px) {
+            .activity-options-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body class="activity-page">
     
-    <!-- ESTADO 1: CÂMERA FULLSCREEN -->
+    <!-- ============================================
+    ESTADO 1: CÂMERA FULLSCREEN
+    ============================================ -->
     <div id="cameraState" class="camera-fullscreen">
         <video id="cameraPreview" autoplay playsinline></video>
         
@@ -34,7 +139,6 @@
             <i class="fas fa-sync-alt"></i>
         </button>
         
-        <!-- NOVO: Botão de Galeria -->
         <button class="camera-gallery-btn" id="galleryBtn" style="display:none;" title="Escolher da galeria">
             <i class="fas fa-images"></i>
         </button>
@@ -45,14 +149,15 @@
             </button>
         </div>
         
-        <!-- Indicador de modo (Foto/Vídeo) -->
         <div class="camera-mode-indicator" id="cameraModeIndicator">
             <button class="camera-mode-btn active" id="photoModeBtn">📸 Foto</button>
             <button class="camera-mode-btn" id="videoModeBtn" disabled>🎥 Vídeo 🔒</button>
         </div>
     </div>
 
-    <!-- ESTADO 2: PRÉ-VISUALIZAÇÃO -->
+    <!-- ============================================
+    ESTADO 2: PRÉ-VISUALIZAÇÃO
+    ============================================ -->
     <div id="previewState" class="preview-fullscreen" style="display:none;">
         <img id="photoPreview" src="" alt="Foto">
         <div class="preview-controls">
@@ -65,7 +170,9 @@
         </div>
     </div>
 
-    <!-- ESTADO 3: DETALHES -->
+    <!-- ============================================
+    ESTADO 3: DETALHES
+    ============================================ -->
     <div id="detailsState" style="display:none; overflow-y:auto; height:100vh; background:#F2F2F7;">
         <header class="app-header" style="background:#FFFFFF;color:#1C1C1E;border-bottom:1px solid #E5E5EA;">
             <button class="icon-btn" onclick="goBackToCamera()" style="color:#1C1C1E;">
@@ -92,7 +199,7 @@
             <div class="body-card">
                 <div class="body-card-subtitle">🏋️ Tipo de Treino</div>
                 <select id="workoutType" class="workout-type-select" 
-        style="font-size:16px; padding:12px; -webkit-appearance:listbox; appearance:listbox; cursor:pointer;">
+                        style="font-size:16px; padding:12px; -webkit-appearance:listbox; appearance:listbox; cursor:pointer;">
                     <option value="">Selecione o tipo (opcional)</option>
                     <option value="Academia">🏋️ Academia</option>
                     <option value="Corrida">🏃 Corrida</option>
@@ -137,6 +244,108 @@
         <div class="toast-container" id="toastContainer"></div>
     </div>
 
+    <!-- ============================================
+    MODAL: ESCOLHER TIPO DE REGISTRO (FOTO OU STRAVA)
+    ============================================ -->
+    <div class="modal strava-upload-modal" id="registerChoiceModal">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                <h3>📸 Registrar Atividade</h3>
+                <button class="icon-btn modal-close" onclick="closeRegisterChoice()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="color:#8E8E93;margin-bottom:16px;font-size:0.9rem;">
+                    Como você quer registrar sua atividade?
+                </p>
+                
+                <button class="strava-option-btn" onclick="openCameraRegister()">
+                    <i class="fas fa-camera" style="color:#4F46E5;"></i>
+                    <div style="text-align:left;">
+                        <div>📸 Tirar Foto</div>
+                        <div class="strava-option-desc">Registre com uma foto do seu treino</div>
+                    </div>
+                </button>
+                
+                <button class="strava-option-btn" onclick="openStravaRegister()">
+                    <i class="fab fa-strava" style="color:#FC4C02;"></i>
+                    <div style="text-align:left;">
+                        <div>🏃 Enviar para Strava <span class="strava-badge">Integrado</span></div>
+                        <div class="strava-option-desc">Registre diretamente no Strava com dados do treino</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+    MODAL: REGISTRAR NO STRAVA
+    ============================================ -->
+    <div class="modal strava-upload-modal" id="stravaUploadModal">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+                <h3><i class="fab fa-strava" style="color:#FC4C02;"></i> Registrar no Strava</h3>
+                <button class="icon-btn modal-close" onclick="closeStravaUpload()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="stravaActivityForm">
+                    <!-- Status da conexão -->
+                    <div id="stravaConnectionStatus" style="margin-bottom:16px;padding:12px;border-radius:10px;background:#F9FAFB;border:1px solid #E5E5EA;display:none;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fab fa-strava" style="color:#FC4C02;"></i>
+                            <span style="font-weight:600;" id="stravaStatusText">✅ Conectado ao Strava</span>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Nome do treino *</label>
+                        <input type="text" id="stravaActivityName" placeholder="Ex: Corrida matinal" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Tipo de treino *</label>
+                        <select id="stravaActivityType" required>
+                            <option value="Corrida">🏃 Corrida</option>
+                            <option value="Ciclismo">🚴 Ciclismo</option>
+                            <option value="Natação">🏊 Natação</option>
+                            <option value="Caminhada">🚶 Caminhada</option>
+                            <option value="Trilha">⛰️ Trilha</option>
+                            <option value="Academia">🏋️ Academia</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="input-group">
+                            <label>Distância (km) *</label>
+                            <input type="number" id="stravaDistance" step="0.1" min="0.1" placeholder="5.0" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Tempo (min) *</label>
+                            <input type="number" id="stravaTime" min="1" placeholder="30" required>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Descrição (opcional)</label>
+                        <textarea id="stravaDescription" rows="2" placeholder="Como foi o treino?" maxlength="500"></textarea>
+                    </div>
+                    
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="closeStravaUpload()" style="flex:0.4;">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn-strava-submit" style="flex:1;">
+                            <i class="fab fa-strava"></i> Enviar para Strava
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <canvas id="photoCanvas" hidden></canvas>
     <div class="toast-container" id="toastContainerFixed" style="position:fixed;top:20px;left:20px;right:20px;z-index:9999;"></div>
 
@@ -145,7 +354,188 @@
     <script src="app.js?v=1.0.15"></script>
 
     <script>
-        // Mostra/esconde campo de treino customizado
+        // ============================================
+        // FUNÇÕES PARA O MODAL DE ESCOLHA
+        // ============================================
+        
+        // Abre o modal de escolha
+        function openRegisterChoice() {
+            document.getElementById('registerChoiceModal').classList.add('open');
+        }
+        
+        function closeRegisterChoice() {
+            document.getElementById('registerChoiceModal').classList.remove('open');
+        }
+        
+        // Abre a câmera para registrar com foto
+        function openCameraRegister() {
+            closeRegisterChoice();
+            // Abre a câmera (já existe na página)
+            // A função já está no app.js
+        }
+        
+        // Abre o modal de registro no Strava
+        function openStravaRegister() {
+            closeRegisterChoice();
+            
+            // Verifica se o usuário tem Strava conectado
+            getCurrentUser().then(async (user) => {
+                if (!user) {
+                    showToast('Faça login primeiro', 'error');
+                    return;
+                }
+                
+                const { data: profile } = await window.db
+                    .from('profiles')
+                    .select('strava_connected')
+                    .eq('id', user.id)
+                    .single();
+                
+                const statusEl = document.getElementById('stravaConnectionStatus');
+                const textEl = document.getElementById('stravaStatusText');
+                
+                if (profile?.strava_connected) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.borderColor = '#10B981';
+                    statusEl.style.background = '#F0FDF4';
+                    textEl.textContent = '✅ Conectado ao Strava';
+                    textEl.style.color = '#065F46';
+                } else {
+                    statusEl.style.display = 'block';
+                    statusEl.style.borderColor = '#F59E0B';
+                    statusEl.style.background = '#FFFBEB';
+                    textEl.textContent = '⚠️ Conecte sua conta Strava nas configurações';
+                    textEl.style.color = '#92400E';
+                    
+                    // Adiciona botão para conectar
+                    if (!document.getElementById('connectStravaFromModal')) {
+                        const connectBtn = document.createElement('button');
+                        connectBtn.id = 'connectStravaFromModal';
+                        connectBtn.className = 'btn btn-primary btn-sm';
+                        connectBtn.style.marginTop = '8px';
+                        connectBtn.innerHTML = '<i class="fab fa-strava"></i> Conectar Strava';
+                        connectBtn.onclick = function() {
+                            closeStravaUpload();
+                            if (window.connectStrava) {
+                                window.connectStrava();
+                            }
+                        };
+                        statusEl.appendChild(connectBtn);
+                    }
+                }
+                
+                document.getElementById('stravaUploadModal').classList.add('open');
+            });
+        }
+        
+        // Fecha o modal do Strava
+        function closeStravaUpload() {
+            document.getElementById('stravaUploadModal').classList.remove('open');
+            document.getElementById('stravaActivityForm').reset();
+        }
+        
+        // ============================================
+        // ENVIAR ATIVIDADE PARA O STRAVA
+        // ============================================
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('stravaActivityForm');
+            if (form) {
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const name = document.getElementById('stravaActivityName').value.trim();
+                    const type = document.getElementById('stravaActivityType').value;
+                    const distance = parseFloat(document.getElementById('stravaDistance').value);
+                    const time = parseInt(document.getElementById('stravaTime').value);
+                    const description = document.getElementById('stravaDescription').value.trim();
+                    
+                    if (!name || !distance || !time) {
+                        showToast('Preencha todos os campos obrigatórios', 'error');
+                        return;
+                    }
+                    
+                    if (distance <= 0 || time <= 0) {
+                        showToast('Distância e tempo devem ser maiores que zero', 'error');
+                        return;
+                    }
+                    
+                    const btn = form.querySelector('button[type="submit"]');
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+                    
+                    try {
+                        const { data } = await window.db.auth.getSession();
+                        const userToken = data.session?.access_token;
+                        
+                        if (!userToken) {
+                            showToast('Erro de autenticação. Faça login novamente.', 'error');
+                            btn.disabled = false;
+                            btn.innerHTML = originalText;
+                            return;
+                        }
+                        
+                        const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-upload`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${userToken}`
+                            },
+                            body: JSON.stringify({
+                                name: name,
+                                type: type,
+                                distance_km: distance,
+                                time_minutes: time,
+                                description: description
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok && result.success) {
+                            showToast('✅ Atividade registrada no Strava!', 'success');
+                            closeStravaUpload();
+                            // Recarrega a timeline após fechar
+                            setTimeout(() => {
+                                window.location.href = 'home.html';
+                            }, 1500);
+                        } else {
+                            showToast(result.error || 'Erro ao registrar atividade', 'error');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Erro:', error);
+                        showToast('Erro ao enviar para Strava', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                });
+            }
+        });
+        
+        // ============================================
+        // TORNA FUNÇÕES GLOBAIS
+        // ============================================
+        window.openRegisterChoice = openRegisterChoice;
+        window.closeRegisterChoice = closeRegisterChoice;
+        window.openCameraRegister = openCameraRegister;
+        window.openStravaRegister = openStravaRegister;
+        window.closeStravaUpload = closeStravaUpload;
+        
+        // ============================================
+        // SOBRESCREVE O ABRIR REGISTRO PARA USAR O MODAL
+        // ============================================
+        // Isso substitui a função original do app.js
+        const originalOpenRegister = window.openRegisterModal;
+        if (typeof originalOpenRegister === 'function') {
+            // Mantém a original para uso interno
+        }
+        
+        // ============================================
+        // MOSTRA/ESCONDE CAMPO DE TREINO CUSTOMIZADO
+        // ============================================
         document.getElementById('workoutType')?.addEventListener('change', function() {
             const customInput = document.getElementById('workoutTypeCustom');
             if (this.value === 'Outro') {
@@ -155,6 +545,26 @@
                 customInput.style.display = 'none';
             }
         });
+        
+        // ============================================
+        // FUNÇÃO PARA VERIFICAR STRAVA CONECTADO
+        // ============================================
+        async function checkStravaConnection() {
+            try {
+                const user = await getCurrentUser();
+                if (!user) return false;
+                
+                const { data: profile } = await window.db
+                    .from('profiles')
+                    .select('strava_connected')
+                    .eq('id', user.id)
+                    .single();
+                
+                return profile?.strava_connected || false;
+            } catch (e) {
+                return false;
+            }
+        }
     </script>
 </body>
 </html>

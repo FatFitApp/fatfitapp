@@ -20,6 +20,133 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <style>
+        /* Estilos extras para os modais */
+        .register-choice-btn {
+            width: 100%;
+            padding: 16px 20px;
+            background: #F9FAFB;
+            border: 2px solid #E5E5EA;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 10px;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+        
+        .register-choice-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .register-choice-btn .btn-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .register-choice-btn .btn-icon.camera {
+            background: #4F46E5;
+        }
+        
+        .register-choice-btn .btn-icon.strava {
+            background: #FC4C02;
+        }
+        
+        .register-choice-btn .btn-text {
+            text-align: left;
+            flex: 1;
+        }
+        
+        .register-choice-btn .btn-text .title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #1C1C1E;
+        }
+        
+        .register-choice-btn .btn-text .subtitle {
+            font-size: 0.75rem;
+            color: #8E8E93;
+        }
+        
+        .register-choice-btn .btn-arrow {
+            color: #C7C7CC;
+            font-size: 0.8rem;
+        }
+        
+        .strava-badge-integrated {
+            background: #FC4C02;
+            color: #fff;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            margin-left: 4px;
+        }
+        
+        .register-choice-btn.camera-btn:hover {
+            border-color: #4F46E5;
+            background: #F5F3FF;
+        }
+        
+        .register-choice-btn.strava-btn:hover {
+            border-color: #FC4C02;
+            background: #FFF5F0;
+        }
+        
+        .modal-header-custom {
+            background: #FFFFFF;
+            border-radius: 24px 24px 0 0;
+            padding: 20px 24px;
+            border-bottom: 1px solid #F2F2F7;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .modal-header-custom h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1C1C1E;
+            margin: 0;
+        }
+        
+        .modal-close-btn {
+            background: #F2F2F7;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .modal-close-btn:hover {
+            background: #E5E5EA;
+        }
+        
+        .modal-close-btn i {
+            color: #8E8E93;
+            font-size: 1rem;
+        }
+        
+        .modal-body-custom {
+            padding: 20px 24px 24px;
+            background: #FFFFFF;
+            border-radius: 0 0 24px 24px;
+        }
+    </style>
 </head>
 <body class="app-page">
     <!-- Loading Screen -->
@@ -63,22 +190,7 @@
             <i class="fas fa-heart-pulse"></i> Avaliação Física
         </a>
         
-        <!-- 💎 COMPRAR FITCOINS 
-        <a href="buy.html" class="sidebar-item" style="background: linear-gradient(135deg, #00BCD4, #0097A7); color: #FFFFFF !important; margin: 4px 8px; border-radius: 10px; font-weight: 600;">
-            <i class="fas fa-gem"></i> Comprar 💎 FitCoins
-        </a> -->
-        
-        <!-- 🏆 BOLÃO DA COPA - DESTAQUE 
-        <a href="bet.html" class="sidebar-item bet-highlight">
-            <i class="fas fa-trophy"></i> Bolão da Copa 🏆
-        </a>
-        
-       <a href="cup.html" class="sidebar-item" style="background: linear-gradient(135deg, #00BCD4, #0097A7); color: #FFFFFF !important; margin: 4px 8px; border-radius: 10px; font-weight: 600;">
-            <i class="fas fa-trophy"></i> Tabela Copa 🏆
-        </a>
-        -->
-
-                <a href="map.html" class="sidebar-item" style="background: linear-gradient(135deg, #00BCD4, #0097A7); color: #FFFFFF !important; margin: 4px 8px; border-radius: 10px; font-weight: 600;">
+        <a href="map.html" class="sidebar-item" style="background: linear-gradient(135deg, #00BCD4, #0097A7); color: #FFFFFF !important; margin: 4px 8px; border-radius: 10px; font-weight: 600;">
             <i class="fas fa-map-marked-alt"></i> Mapa de Conquistas
         </a>
 
@@ -158,7 +270,7 @@
             <i class="fas fa-info-circle"></i>
             <span>Detalhes</span>
         </button>
-        <button class="bottom-nav-item bottom-nav-center" id="btnRegisterNav">
+        <button class="bottom-nav-item bottom-nav-center" onclick="openRegisterChoice()">
             <div class="nav-register-btn">
                 <i class="fas fa-camera"></i>
             </div>
@@ -174,26 +286,107 @@
         </button>
     </nav>
 
+    <!-- ============================================
+    MODAL: ESCOLHER TIPO DE REGISTRO (VISUAL MELHORADO)
+    ============================================ -->
+    <div class="modal" id="registerChoiceModal">
+        <div class="modal-content" style="max-width:480px;border-radius:24px;background:#FFFFFF;overflow:hidden;">
+            <div class="modal-header-custom">
+                <h3>📸 Registrar Atividade</h3>
+                <button class="modal-close-btn" onclick="closeRegisterChoice()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body-custom">
+                <p style="color:#8E8E93;font-size:0.9rem;margin-bottom:16px;text-align:center;">
+                    Como você quer registrar sua atividade?
+                </p>
+                
+                <!-- Botão: Tirar Foto -->
+                <button class="register-choice-btn camera-btn" onclick="openCameraRegister()">
+                    <div class="btn-icon camera">
+                        <i class="fas fa-camera" style="color:#FFFFFF;font-size:1.2rem;"></i>
+                    </div>
+                    <div class="btn-text">
+                        <div class="title">📸 Tirar Foto</div>
+                        <div class="subtitle">Registre com uma foto do seu treino</div>
+                    </div>
+                    <i class="fas fa-chevron-right btn-arrow"></i>
+                </button>
+                
+                <!-- Botão: Importar do Strava -->
+                <button class="register-choice-btn strava-btn" onclick="openStravaImport()">
+                    <div class="btn-icon strava">
+                        <i class="fab fa-strava" style="color:#FFFFFF;font-size:1.2rem;"></i>
+                    </div>
+                    <div class="btn-text">
+                        <div class="title">🏃 Importar do Strava <span class="strava-badge-integrated">Integrado</span></div>
+                        <div class="subtitle">Importe uma atividade já registrada no Strava</div>
+                    </div>
+                    <i class="fas fa-chevron-right btn-arrow"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+    MODAL: IMPORTAR DO STRAVA (LISTA DE ATIVIDADES)
+    ============================================ -->
+    <div class="modal" id="stravaImportModal">
+        <div class="modal-content" style="max-width:500px;border-radius:24px;background:#FFFFFF;overflow:hidden;">
+            <div class="modal-header-custom">
+                <h3><i class="fab fa-strava" style="color:#FC4C02;"></i> Importar do Strava</h3>
+                <button class="modal-close-btn" onclick="closeStravaImport()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body-custom" style="max-height:60vh;overflow-y:auto;">
+                <!-- Status da conexão -->
+                <div id="stravaImportStatus" style="margin-bottom:16px;padding:12px;border-radius:10px;background:#F9FAFB;border:1px solid #E5E5EA;display:none;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <i class="fab fa-strava" style="color:#FC4C02;"></i>
+                        <span style="font-weight:600;" id="stravaImportStatusText">✅ Conectado ao Strava</span>
+                    </div>
+                </div>
+                
+                <!-- Lista de atividades -->
+                <div id="stravaActivitiesList">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando atividades...</p>
+                    </div>
+                </div>
+                
+                <!-- Botão de recarregar -->
+                <button class="btn btn-outline btn-sm btn-block mt-2" onclick="loadStravaActivities()" style="border-radius:10px;">
+                    <i class="fas fa-sync-alt"></i> Recarregar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Criar Grupo -->
     <div class="modal" id="createGroupModal">
-        <div class="modal-content" style="max-width:480px;border-radius:20px;background:#F2F2F7;">
-            <div class="body-header" style="border-radius:20px 20px 0 0;padding:16px 20px;background:#FFFFFF;border-bottom:1px solid #E5E5EA;">
-                <h3 style="font-size:1.1rem;font-weight:700;color:#1C1C1E;margin:0;">Criar Novo Grupo</h3>
-                <button class="icon-btn modal-close" style="background:#F2F2F7;color:#8E8E93;width:32px;height:32px;border-radius:50%;"><i class="fas fa-times"></i></button>
+        <div class="modal-content" style="max-width:480px;border-radius:24px;background:#FFFFFF;overflow:hidden;">
+            <div class="modal-header-custom">
+                <h3>📋 Criar Novo Grupo</h3>
+                <button class="modal-close-btn" onclick="document.getElementById('createGroupModal').classList.remove('open')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div style="padding:20px;background:#FFFFFF;">
+            <div class="modal-body-custom">
                 <form id="createGroupForm">
-                    <div class="body-input-group">
-                        <label>Nome do Grupo *</label>
-                        <input type="text" id="groupName" required maxlength="100" placeholder="Ex: Time Fitness 2026">
+                    <div class="input-group" style="margin-bottom:14px;">
+                        <label style="font-size:0.8rem;font-weight:600;color:#8E8E93;display:block;margin-bottom:4px;">Nome do Grupo *</label>
+                        <input type="text" id="groupName" required maxlength="100" placeholder="Ex: Time Fitness 2026" style="width:100%;padding:12px 14px;border:1px solid #E5E5EA;border-radius:10px;font-size:0.95rem;font-family:inherit;">
                     </div>
-                    <div class="body-input-group">
-                        <label>Descrição</label>
+                    <div class="input-group" style="margin-bottom:14px;">
+                        <label style="font-size:0.8rem;font-weight:600;color:#8E8E93;display:block;margin-bottom:4px;">Descrição</label>
                         <textarea id="groupDescription" rows="3" maxlength="500" placeholder="Descreva o propósito do grupo..." style="width:100%;padding:12px 14px;border:1px solid #E5E5EA;border-radius:10px;font-size:0.95rem;font-family:inherit;resize:vertical;"></textarea>
                     </div>
-                    <div class="body-input-group">
-                        <label>Limite de Membros</label>
-                        <input type="number" id="groupMaxMembers" required min="2" max="100" value="50" placeholder="50">
+                    <div class="input-group" style="margin-bottom:14px;">
+                        <label style="font-size:0.8rem;font-weight:600;color:#8E8E93;display:block;margin-bottom:4px;">Limite de Membros</label>
+                        <input type="number" id="groupMaxMembers" required min="2" max="100" value="50" placeholder="50" style="width:100%;padding:12px 14px;border:1px solid #E5E5EA;border-radius:10px;font-size:0.95rem;font-family:inherit;">
                     </div>
                     <button type="submit" class="btn btn-primary btn-block" style="border-radius:10px;padding:14px;font-size:1rem;margin-top:8px;">
                         <i class="fas fa-plus-circle"></i> Criar Grupo
@@ -203,17 +396,19 @@
         </div>
     </div>
 
-    <!-- Modal de Registro -->
+    <!-- Modal de Registro (seleção de grupos) -->
     <div class="modal" id="registerSelectModal">
-        <div class="modal-content" style="max-width:480px;border-radius:20px;">
-            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+        <div class="modal-content" style="max-width:480px;border-radius:24px;background:#FFFFFF;overflow:hidden;">
+            <div class="modal-header-custom">
                 <h3>📸 Registrar Atividade</h3>
-                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+                <button class="modal-close-btn" onclick="document.getElementById('registerSelectModal').classList.remove('open')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="modal-body" style="background:#FFFFFF;border-radius:0 0 20px 20px;">
+            <div class="modal-body-custom">
                 <p class="text-sm text-muted mb-2">Selecione os grupos para registrar atividade:</p>
                 <div id="groupsChecklist"></div>
-                <button class="btn btn-primary btn-block mt-2" id="confirmRegisterBtn">
+                <button class="btn btn-primary btn-block mt-2" id="confirmRegisterBtn" style="border-radius:10px;padding:14px;font-size:1rem;">
                     <i class="fas fa-camera"></i> Ir para Registro
                 </button>
             </div>
@@ -222,12 +417,14 @@
 
     <!-- Modal de Detalhes do Dia -->
     <div class="modal" id="dayDetailModal">
-        <div class="modal-content" style="border-radius:20px;">
-            <div class="modal-header" style="background:#FFFFFF;border-radius:20px 20px 0 0;">
+        <div class="modal-content" style="max-width:500px;border-radius:24px;background:#FFFFFF;overflow:hidden;">
+            <div class="modal-header-custom">
                 <h3 id="dayDetailTitle">Detalhes do Dia</h3>
-                <button class="icon-btn modal-close"><i class="fas fa-times"></i></button>
+                <button class="modal-close-btn" onclick="document.getElementById('dayDetailModal').classList.remove('open')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="modal-body" id="dayDetailBody" style="background:#FFFFFF;border-radius:0 0 20px 20px;"></div>
+            <div class="modal-body-custom" id="dayDetailBody"></div>
         </div>
     </div>
 
@@ -262,6 +459,519 @@
                 }
             }, 600);
         });
+    </script>
+
+    <!-- ============================================
+    FUNÇÕES DO STRAVA - IMPORTAR ATIVIDADES
+    ============================================ -->
+    <script>
+        // ============================================
+        // FUNÇÕES PARA OS MODAIS
+        // ============================================
+        
+        function openRegisterChoice() {
+            console.log('🔍 Abrindo modal de escolha...');
+            const modal = document.getElementById('registerChoiceModal');
+            if (modal) {
+                modal.classList.add('open');
+                console.log('✅ Modal de escolha aberto');
+            } else {
+                console.error('❌ Modal de escolha não encontrado!');
+                showToast('Erro ao abrir opções de registro', 'error');
+            }
+        }
+        
+        function closeRegisterChoice() {
+            const modal = document.getElementById('registerChoiceModal');
+            if (modal) {
+                modal.classList.remove('open');
+            }
+        }
+        
+        // ============================================
+        // ABRIR CÂMERA (COM SELEÇÃO DE GRUPOS)
+        // ============================================
+        
+// ============================================
+// ABRIR CÂMERA (COM SELEÇÃO DE GRUPOS)
+// ============================================
+
+async function openCameraRegister() {
+    closeRegisterChoice();
+    
+    const user = await getCurrentUser();
+    if (!user) {
+        showToast('Faça login primeiro', 'error');
+        return;
+    }
+    
+    const { data: memberships, error } = await window.db
+        .from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+    
+    if (error) {
+        console.error('❌ Erro ao buscar grupos:', error);
+        showToast('Erro ao carregar grupos', 'error');
+        return;
+    }
+    
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo. Crie ou entre em um grupo primeiro.', 'warning');
+        return;
+    }
+    
+    // Se tem apenas um grupo, vai direto
+    if (memberships.length === 1) {
+        const groupId = memberships[0].group_id;
+        const { data: challenge } = await window.db
+            .from('challenges')
+            .select('id')
+            .eq('group_id', groupId)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        if (challenge) {
+            window.location.href = 'activity.html?challenge=' + challenge.id;
+        } else {
+            showToast('Nenhum desafio ativo neste grupo', 'warning');
+        }
+        return;
+    }
+    
+    // 🔥 Múltiplos grupos: mostra o modal com callback para "Tirar Foto"
+    await showGroupSelectionModal(memberships, { type: 'camera' });
+}
+
+        // ============================================
+        // ABRIR IMPORTAÇÃO DO STRAVA (COM SELEÇÃO DE GRUPOS)
+        // ============================================
+        
+// ============================================
+// ABRIR IMPORTAÇÃO DO STRAVA (COM SELEÇÃO DE GRUPOS)
+// ============================================
+
+async function openStravaImport() {
+    closeRegisterChoice();
+    
+    const user = await getCurrentUser();
+    if (!user) {
+        showToast('Faça login primeiro', 'error');
+        return;
+    }
+    
+    const { data: profile } = await window.db
+        .from('profiles')
+        .select('strava_connected')
+        .eq('id', user.id)
+        .single();
+    
+    if (!profile?.strava_connected) {
+        showToast('Conecte sua conta Strava primeiro!', 'warning');
+        return;
+    }
+    
+    const { data: memberships, error } = await window.db
+        .from('group_members')
+        .select('group_id, groups:group_id(id, name)')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+    
+    if (error) {
+        console.error('❌ Erro ao buscar grupos:', error);
+        showToast('Erro ao carregar grupos', 'error');
+        return;
+    }
+    
+    if (!memberships || memberships.length === 0) {
+        showToast('Você não está em nenhum grupo. Crie ou entre em um grupo primeiro.', 'warning');
+        return;
+    }
+    
+    // 🔥 Mostra seleção de grupos com callback para "Strava"
+    await showGroupSelectionModal(memberships, { type: 'strava' });
+}
+        // ============================================
+        // MOSTRAR SELEÇÃO DE GRUPOS PARA STRAVA
+        // ============================================
+        
+// ============================================
+// MOSTRAR SELEÇÃO DE GRUPOS (COM CALLBACK)
+// ============================================
+
+async function showGroupSelectionModal(memberships, callback) {
+    const modal = document.getElementById('registerSelectModal');
+    const container = document.getElementById('groupsChecklist');
+    const confirmBtn = document.getElementById('confirmRegisterBtn');
+    
+    if (!modal || !container) {
+        console.error('❌ Modal de seleção não encontrado');
+        showToast('Erro ao abrir seleção de grupos', 'error');
+        return;
+    }
+    
+    container.innerHTML = '';
+    const today = getToday();
+    const user = await getCurrentUser();
+    
+    for (const m of memberships) {
+        const g = m.groups;
+        if (!g) continue;
+        
+        const { data: challenge } = await window.db
+            .from('challenges')
+            .select('id, name, status, start_date, end_date')
+            .eq('group_id', g.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        const hasChallenge = !!challenge;
+        const inPeriod = challenge && today >= challenge.start_date && today <= challenge.end_date;
+        const willScore = hasChallenge && inPeriod;
+        
+        let isParticipant = false;
+        if (challenge) {
+            const { data: cp } = await window.db
+                .from('challenge_participants')
+                .select('id')
+                .eq('challenge_id', challenge.id)
+                .eq('user_id', user.id)
+                .maybeSingle();
+            isParticipant = !!cp;
+        }
+        
+        let statusBadge = '';
+        let scoreBadge = '';
+        if (challenge) {
+            if (willScore && isParticipant) {
+                statusBadge = '✅ Pontuando';
+                scoreBadge = '+1 pt';
+            } else if (willScore && !isParticipant) {
+                statusBadge = '⚠️ Participe para pontuar';
+                scoreBadge = '0 pt';
+            } else if (today < challenge.start_date) {
+                statusBadge = '⏳ Não iniciou';
+                scoreBadge = 'Sem ponto';
+            } else {
+                statusBadge = '📋 Encerrado';
+                scoreBadge = 'Sem ponto';
+            }
+        }
+        
+        const itemId = g.id.replace(/-/g, '');
+        const isChecked = hasChallenge;
+        
+        container.innerHTML += `
+            <div class="group-checkbox-item ${isChecked ? 'checked' : ''}" 
+                 id="check-${itemId}" 
+                 onclick="window.toggleGroupCheck('${itemId}', '${challenge?.id || ''}', ${willScore && isParticipant})"
+                 style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;
+                        border:2px solid ${isChecked ? '#4F46E5' : '#E5E5EA'};
+                        border-radius:12px;background:${isChecked ? '#F5F3FF' : '#FFFFFF'};
+                        cursor:${hasChallenge ? 'pointer' : 'default'};
+                        transition:all 0.2s;">
+                <div class="check-icon" style="width:24px;height:24px;border:2px solid ${isChecked ? '#4F46E5' : '#D1D5DB'};
+                      border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                      background:${isChecked ? '#4F46E5' : 'transparent'};color:#fff;font-size:0.7rem;">
+                    ${isChecked ? '✓' : ''}
+                </div>
+                <div style="flex:1;">
+                    <div style="font-weight:600;font-size:0.95rem;color:#1C1C1E;">${escapeHtml(g.name)}</div>
+                    <div style="font-size:0.75rem;color:#6B7280;">
+                        ${challenge ? '🎯 ' + escapeHtml(challenge.name) + ' <span style="font-size:0.65rem;">' + statusBadge + '</span>' : '⚠️ Nenhum desafio'}
+                    </div>
+                </div>
+                <span style="font-size:0.7rem;padding:4px 8px;border-radius:12px;font-weight:600;
+                      background:${willScore && isParticipant ? '#D1FAE5' : '#F3F4F6'};
+                      color:${willScore && isParticipant ? '#065F46' : '#6B7280'};">
+                    ${scoreBadge}
+                </span>
+                <input type="checkbox" id="cb-${itemId}" value="${g.id}" data-challenge="${challenge?.id || ''}" 
+                       ${isChecked ? 'checked' : ''} style="display:none;">
+            </div>
+        `;
+    }
+    
+    // 🔥 CONFIGURA O BOTÃO COM BASE NO CALLBACK
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    
+    // Define o texto e ação do botão
+    if (callback && callback.type === 'strava') {
+        newBtn.innerHTML = '<i class="fab fa-strava"></i> Importar do Strava';
+        newBtn.className = 'btn btn-primary btn-block mt-2';
+        newBtn.style.borderRadius = '10px';
+        newBtn.style.padding = '14px';
+        newBtn.style.fontSize = '1rem';
+        newBtn.style.background = '#FC4C02';
+        
+        newBtn.addEventListener('click', async () => {
+            const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.dataset.challenge) {
+                    selected.push(cb.dataset.challenge);
+                }
+            });
+            
+            if (selected.length === 0) {
+                showToast('Selecione pelo menos um grupo', 'warning');
+                return;
+            }
+            
+            modal.classList.remove('open');
+            
+            // Abre o modal do Strava
+            document.getElementById('stravaImportModal').classList.add('open');
+            await loadStravaActivities();
+        });
+    } else {
+        // 🔥 BOTÃO PARA "TIRAR FOTO" - Ir para Registro
+        newBtn.innerHTML = '<i class="fas fa-camera"></i> Ir para Registro';
+        newBtn.className = 'btn btn-primary btn-block mt-2';
+        newBtn.style.borderRadius = '10px';
+        newBtn.style.padding = '14px';
+        newBtn.style.fontSize = '1rem';
+        newBtn.style.background = '#4F46E5';
+        
+        newBtn.addEventListener('click', async () => {
+            const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.dataset.challenge) {
+                    selected.push(cb.dataset.challenge);
+                }
+            });
+            
+            if (selected.length === 0) {
+                showToast('Selecione pelo menos um grupo', 'warning');
+                return;
+            }
+            
+            modal.classList.remove('open');
+            
+            // 🔥 VAI PARA A PÁGINA DE REGISTRO
+            localStorage.setItem('fatfit_register_challenges', JSON.stringify(selected));
+            window.location.href = selected.length === 1 
+                ? 'activity.html?challenge=' + selected[0] 
+                : 'activity.html?challenges=' + selected.join(',');
+        });
+    }
+    
+    modal.querySelectorAll('.modal-close').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', () => modal.classList.remove('open'));
+    });
+    
+    modal.classList.add('open');
+}  
+
+        // ============================================
+        // FUNÇÕES PARA IMPORTAR DO STRAVA
+        // ============================================
+        
+        function closeStravaImport() {
+            document.getElementById('stravaImportModal').classList.remove('open');
+        }
+        
+        async function loadStravaActivities() {
+            const container = document.getElementById('stravaActivitiesList');
+            if (!container) return;
+            
+            container.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>Carregando atividades...</p></div>';
+            
+            try {
+                const { data } = await window.db.auth.getSession();
+                const userToken = data.session?.access_token;
+                
+                if (!userToken) {
+                    container.innerHTML = '<div class="empty-state"><p>Erro de autenticação</p></div>';
+                    return;
+                }
+                
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-list`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${userToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                console.log('📊 Atividades do Strava:', result);
+                
+                if (!response.ok || !result.success) {
+                    container.innerHTML = `<div class="empty-state"><p>${result.error || 'Erro ao carregar atividades'}</p></div>`;
+                    return;
+                }
+                
+                if (result.activities.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle" style="font-size:2rem;color:#10B981;display:block;margin-bottom:8px;"></i>
+                            <p style="font-weight:600;">Todas as atividades já foram importadas!</p>
+                            <small style="color:#8E8E93;">Nenhuma nova atividade disponível no Strava</small>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = result.activities.map(a => `
+                    <div class="strava-activity-item" style="
+                        display:flex;
+                        align-items:center;
+                        gap:12px;
+                        padding:14px;
+                        border:1px solid #E5E5EA;
+                        border-radius:12px;
+                        margin-bottom:10px;
+                        background:#FFFFFF;
+                        transition:all 0.2s;
+                        cursor:pointer;
+                    " onclick="importStravaActivity('${a.id}')">
+                        <div style="
+                            width:48px;
+                            height:48px;
+                            border-radius:50%;
+                            background:${a.type === 'Run' ? '#FC4C02' : a.type === 'Ride' ? '#00BCD4' : a.type === 'Swim' ? '#2196F3' : '#4F46E5'};
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            color:white;
+                            font-size:1.2rem;
+                            flex-shrink:0;
+                        ">
+                            ${a.type === 'Run' ? '🏃' : a.type === 'Ride' ? '🚴' : a.type === 'Swim' ? '🏊' : '🏋️'}
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;color:#1C1C1E;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                ${escapeHtml(a.name)}
+                            </div>
+                            <div style="font-size:0.75rem;color:#8E8E93;">
+                                📊 ${a.distance.toFixed(1)} km • ${a.moving_time} min
+                                ${a.has_photo ? ' 📸' : ''}
+                            </div>
+                            <div style="font-size:0.65rem;color:#C7C7CC;">
+                                ${formatDate(a.start_date)}
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); importStravaActivity('${a.id}')" style="border-radius:8px;padding:6px 12px;font-size:0.75rem;flex-shrink:0;">
+                            <i class="fas fa-download"></i> Importar
+                        </button>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Erro:', error);
+                container.innerHTML = `<div class="empty-state"><p>Erro ao carregar atividades: ${error.message}</p></div>`;
+            }
+        }
+        
+        async function importStravaActivity(activityId) {
+            if (!activityId) {
+                showToast('ID da atividade não fornecido', 'error');
+                return;
+            }
+            
+            showToast('🔄 Importando atividade...', 'info');
+            
+            try {
+                const { data } = await window.db.auth.getSession();
+                const userToken = data.session?.access_token;
+                
+                if (!userToken) {
+                    showToast('Erro de autenticação', 'error');
+                    return;
+                }
+                
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-import`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${userToken}`
+                    },
+                    body: JSON.stringify({ activity_id: activityId })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    showToast('✅ Atividade importada com sucesso!', 'success');
+                    closeStravaImport();
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    const { data: importedActivity } = await window.db
+                        .from('daily_activities')
+                        .select('id')
+                        .eq('strava_id', activityId)
+                        .maybeSingle();
+                    
+                    if (importedActivity) {
+                        console.log('🎨 Gerando imagem para atividade:', importedActivity.id);
+                        if (window.generateStravaActivityImage) {
+                            await window.generateStravaActivityImage(importedActivity.id);
+                        }
+                    }
+                    
+                    if (window.loadTimeline) {
+                        await window.loadTimeline();
+                    }
+                    
+                    if (window.loadStravaActivities) {
+                        await window.loadStravaActivities();
+                    }
+                    
+                } else {
+                    showToast(result.error || 'Erro ao importar atividade', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Erro:', error);
+                showToast('Erro ao importar atividade', 'error');
+            }
+        }
+        
+        // ============================================
+        // UTILITÁRIOS
+        // ============================================
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('pt-BR');
+        }
+        
+        function getToday() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        
+        // ============================================
+        // TORNA FUNÇÕES GLOBAIS
+        // ============================================
+        window.openRegisterChoice = openRegisterChoice;
+        window.closeRegisterChoice = closeRegisterChoice;
+        window.openCameraRegister = openCameraRegister;
+        window.openStravaImport = openStravaImport;
+        window.closeStravaImport = closeStravaImport;
+        window.loadStravaActivities = loadStravaActivities;
+        window.importStravaActivity = importStravaActivity;
+        window.showGroupSelectionModal = showGroupSelectionModal;
     </script>
 </body>
 </html>
