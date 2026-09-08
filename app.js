@@ -1717,19 +1717,31 @@ async function openCameraOnly() {
 }
 
 
-async function showGroupSelectionModal(memberships) {
+// ============================================
+// MOSTRAR SELEÇÃO DE GRUPOS (COM CALLBACK)
+// ============================================
+
+async function showGroupSelectionModal(memberships, callback) {
     const modal = document.getElementById('registerSelectModal');
     const container = document.getElementById('groupsChecklist');
-    if (!modal || !container) return;
+    const confirmBtn = document.getElementById('confirmRegisterBtn');
+    
+    if (!modal || !container) {
+        console.error('❌ Modal de seleção não encontrado');
+        showToast('Erro ao abrir seleção de grupos', 'error');
+        return;
+    }
     
     container.innerHTML = '';
     const today = getToday();
+    const user = await getCurrentUser();
     
     for (const m of memberships) {
         const g = m.groups;
         if (!g) continue;
         
-        const { data: challenge } = await db.from('challenges')
+        const { data: challenge } = await window.db
+            .from('challenges')
             .select('id, name, status, start_date, end_date')
             .eq('group_id', g.id)
             .eq('status', 'active')
@@ -1743,15 +1755,17 @@ async function showGroupSelectionModal(memberships) {
         
         let isParticipant = false;
         if (challenge) {
-            const { data: cp } = await db.from('challenge_participants')
+            const { data: cp } = await window.db
+                .from('challenge_participants')
                 .select('id')
                 .eq('challenge_id', challenge.id)
-                .eq('user_id', (await getCurrentUser()).id)
+                .eq('user_id', user.id)
                 .maybeSingle();
             isParticipant = !!cp;
         }
         
-        let statusBadge = '', scoreBadge = '';
+        let statusBadge = '';
+        let scoreBadge = '';
         if (challenge) {
             if (willScore && isParticipant) {
                 statusBadge = '✅ Pontuando';
@@ -1769,21 +1783,24 @@ async function showGroupSelectionModal(memberships) {
         }
         
         const itemId = g.id.replace(/-/g, '');
+        const isChecked = hasChallenge;
+        
         container.innerHTML += `
-            <div class="group-checkbox-item ${hasChallenge ? 'checked' : ''}" 
+            <div class="group-checkbox-item ${isChecked ? 'checked' : ''}" 
                  id="check-${itemId}" 
                  onclick="window.toggleGroupCheck('${itemId}', '${challenge?.id || ''}', ${willScore && isParticipant})"
                  style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;
-                        border:2px solid ${hasChallenge ? (willScore && isParticipant ? '#10B981' : '#4F46E5') : '#FEE2E2'};
-                        border-radius:10px;background:${hasChallenge ? '#fff' : '#FEF2F2'};
-                        cursor:${hasChallenge ? 'pointer' : 'default'};">
-                <div class="check-icon" style="width:24px;height:24px;border:2px solid ${hasChallenge ? '#4F46E5' : '#EF4444'};
+                        border:2px solid ${isChecked ? '#4F46E5' : '#E5E5EA'};
+                        border-radius:12px;background:${isChecked ? '#F5F3FF' : '#FFFFFF'};
+                        cursor:${hasChallenge ? 'pointer' : 'default'};
+                        transition:all 0.2s;">
+                <div class="check-icon" style="width:24px;height:24px;border:2px solid ${isChecked ? '#4F46E5' : '#D1D5DB'};
                       border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
-                      background:${hasChallenge ? '#4F46E5' : 'transparent'};color:#fff;font-size:0.7rem;">
-                    ${hasChallenge ? '✓' : ''}
+                      background:${isChecked ? '#4F46E5' : 'transparent'};color:#fff;font-size:0.7rem;">
+                    ${isChecked ? '✓' : ''}
                 </div>
                 <div style="flex:1;">
-                    <div style="font-weight:600;font-size:0.95rem;">${escapeHtml(g.name)}</div>
+                    <div style="font-weight:600;font-size:0.95rem;color:#1C1C1E;">${escapeHtml(g.name)}</div>
                     <div style="font-size:0.75rem;color:#6B7280;">
                         ${challenge ? '🎯 ' + escapeHtml(challenge.name) + ' <span style="font-size:0.65rem;">' + statusBadge + '</span>' : '⚠️ Nenhum desafio'}
                     </div>
@@ -1794,44 +1811,78 @@ async function showGroupSelectionModal(memberships) {
                     ${scoreBadge}
                 </span>
                 <input type="checkbox" id="cb-${itemId}" value="${g.id}" data-challenge="${challenge?.id || ''}" 
-                       ${hasChallenge ? 'checked' : 'disabled'} style="display:none;">
+                       ${isChecked ? 'checked' : ''} style="display:none;">
             </div>
         `;
     }
     
-    const confirmBtn = document.getElementById('confirmRegisterBtn');
-    if (confirmBtn) {
-        const newBtn = confirmBtn.cloneNode(true);
-        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-        newBtn.addEventListener('click', () => {
+    // 🔥 CONFIGURA O BOTÃO COM BASE NO CALLBACK
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    
+    // Define o texto e ação do botão
+    if (callback && callback.type === 'strava') {
+        // ===== BOTÃO PARA STRAVA =====
+        newBtn.innerHTML = '<i class="fab fa-strava"></i> Importar do Strava';
+        newBtn.className = 'btn btn-primary btn-block mt-2';
+        newBtn.style.borderRadius = '10px';
+        newBtn.style.padding = '14px';
+        newBtn.style.fontSize = '1rem';
+        newBtn.style.background = '#FC4C02';
+        
+        newBtn.addEventListener('click', async () => {
             const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
             const selected = [];
             checkboxes.forEach(cb => {
-                if (cb.dataset.challenge) selected.push(cb.dataset.challenge);
+                if (cb.dataset.challenge) {
+                    selected.push(cb.dataset.challenge);
+                }
             });
+            
             if (selected.length === 0) {
                 showToast('Selecione pelo menos um grupo', 'warning');
                 return;
             }
-            localStorage.setItem('fatfit_register_challenges', JSON.stringify(selected));
+            
             modal.classList.remove('open');
             
-            // Verifica se o usuário tem Strava conectado
-            getCurrentUser().then(async (u) => {
-                const { data: profile } = await db
-                    .from('profiles')
-                    .select('strava_connected')
-                    .eq('id', u.id)
-                    .single();
-                
-                if (profile?.strava_connected) {
-                    // Mostra o modal de escolha (foto ou Strava)
-                    openRegisterChoice();
-                } else {
-                    // Vai direto para a câmera
-                    window.location.href = 'activity.html?challenges=' + selected.join(',');
+            // 🔥 GUARDA OS GRUPOS SELECIONADOS PARA USAR NA IMPORTAÇÃO
+            window._selectedGroupsForStrava = selected;
+            
+            // Abre o modal do Strava
+            document.getElementById('stravaImportModal').classList.add('open');
+            await loadStravaActivities();
+        });
+    } else {
+        // ===== BOTÃO PARA CÂMERA =====
+        newBtn.innerHTML = '<i class="fas fa-camera"></i> Ir para Registro';
+        newBtn.className = 'btn btn-primary btn-block mt-2';
+        newBtn.style.borderRadius = '10px';
+        newBtn.style.padding = '14px';
+        newBtn.style.fontSize = '1rem';
+        newBtn.style.background = '#4F46E5';
+        
+        newBtn.addEventListener('click', async () => {
+            const checkboxes = document.querySelectorAll('#groupsChecklist input[type="checkbox"]:checked');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.dataset.challenge) {
+                    selected.push(cb.dataset.challenge);
                 }
             });
+            
+            if (selected.length === 0) {
+                showToast('Selecione pelo menos um grupo', 'warning');
+                return;
+            }
+            
+            modal.classList.remove('open');
+            
+            // 🔥 VAI PARA A PÁGINA DE REGISTRO
+            localStorage.setItem('fatfit_register_challenges', JSON.stringify(selected));
+            window.location.href = selected.length === 1 
+                ? 'activity.html?challenge=' + selected[0] 
+                : 'activity.html?challenges=' + selected.join(',');
         });
     }
     
@@ -1840,6 +1891,7 @@ async function showGroupSelectionModal(memberships) {
         btn.parentNode.replaceChild(newBtn, btn);
         newBtn.addEventListener('click', () => modal.classList.remove('open'));
     });
+    
     modal.classList.add('open');
 }
 
@@ -1848,7 +1900,6 @@ async function showGroupSelectionModal(memberships) {
 // ============================================
 window.openRegisterChoice = openRegisterChoice;
 window.openCameraOnly = openCameraOnly;
-window.showGroupSelectionModal = showGroupSelectionModal;
 
 // ============================================
 // PÁGINA: activity.html
@@ -8080,13 +8131,8 @@ async function loadStravaActivities() {
 // ============================================
 // IMPORTAR ATIVIDADE DO STRAVA
 // ============================================
-
 // ============================================
-// IMPORTAR ATIVIDADE DO STRAVA (COM IMAGEM AUTOMÁTICA)
-// ============================================
-
-// ============================================
-// IMPORTAR ATIVIDADE DO STRAVA (COM IMAGEM AUTOMÁTICA)
+// IMPORTAR ATIVIDADE DO STRAVA (MÚLTIPLOS GRUPOS)
 // ============================================
 
 async function importStravaActivity(activityId) {
@@ -8106,76 +8152,72 @@ async function importStravaActivity(activityId) {
             return;
         }
         
+        // 🔥 PEGA OS GRUPOS SELECIONADOS
+        const selectedGroups = window._selectedGroupsForStrava || [];
+        
+        if (selectedGroups.length === 0) {
+            showToast('Nenhum grupo selecionado', 'warning');
+            return;
+        }
+        
+        console.log('📌 Grupos selecionados para importação:', selectedGroups);
+        
         const response = await fetch(`${SUPABASE_URL}/functions/v1/strava-import`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${userToken}`
             },
-            body: JSON.stringify({ activity_id: activityId })
+            body: JSON.stringify({ 
+                activity_id: activityId,
+                group_ids: selectedGroups
+            })
         });
         
         const result = await response.json();
         
         if (response.ok && result.success) {
-            showToast('✅ Atividade importada com sucesso!', 'success');
+            showToast(`✅ Atividade importada para ${result.imported_count} grupo(s)!`, 'success');
             closeStravaImport();
+            closeRegisterChoice();
             
-            // 🔥 AGUARDA 2 SEGUNDOS PARA O BANCO SALVAR
-            console.log('⏳ Aguardando 2s para o banco salvar...');
-            await new Promise(r => setTimeout(r, 2000));
+            // Fecha o modal de seleção de grupos
+            document.getElementById('registerSelectModal')?.classList.remove('open');
             
-            // 🔥 BUSCA A ATIVIDADE IMPORTADA
-            console.log('🔍 Buscando atividade importada...');
-            const { data: importedActivity, error: findError } = await window.db
+            // Limpa a variável global
+            window._selectedGroupsForStrava = null;
+            
+            // 🔥 GERA A IMAGEM PARA A ATIVIDADE
+            await new Promise(r => setTimeout(r, 1000));
+            
+            const { data: importedActivity } = await window.db
                 .from('daily_activities')
                 .select('id')
                 .eq('strava_id', activityId)
                 .maybeSingle();
             
-            if (findError) {
-                console.error('❌ Erro ao buscar atividade:', findError);
-                showToast('Erro ao gerar imagem', 'error');
-                return;
+            if (importedActivity && window.generateStravaActivityImage) {
+                console.log('🎨 Gerando imagem para atividade:', importedActivity.id);
+                await window.generateStravaActivityImage(importedActivity.id);
             }
-            
-            if (!importedActivity) {
-                console.error('❌ Atividade não encontrada no banco!');
-                showToast('Erro: atividade não encontrada', 'error');
-                return;
-            }
-            
-            console.log('✅ Atividade encontrada! ID:', importedActivity.id);
-            console.log('🎨 Gerando imagem...');
-            
-            // 🔥 GERA A IMAGEM
-            await generateStravaActivityImage(importedActivity.id);
-            console.log('✅ Imagem gerada com sucesso!');
             
             // Recarrega a timeline
             if (window.loadTimeline) {
-                console.log('🔄 Recarregando timeline...');
-                await window.loadTimeline();
+                setTimeout(() => window.loadTimeline(), 500);
             }
-            
-            // Recarrega a lista de atividades disponíveis
-            if (window.loadStravaActivities) {
-                await window.loadStravaActivities();
-            }
-            
-            showToast('✅ Atividade com imagem!', 'success');
             
         } else {
             showToast(result.error || 'Erro ao importar atividade', 'error');
         }
         
     } catch (error) {
-        console.error('❌ Erro geral:', error);
+        console.error('Erro:', error);
         showToast('Erro ao importar atividade', 'error');
     }
 }
 
 // Torna funções globais
+window.showGroupSelectionModal = showGroupSelectionModal;
 window.openStravaImport = openStravaImport;
 window.closeStravaImport = closeStravaImport;
 window.loadStravaActivities = loadStravaActivities;
